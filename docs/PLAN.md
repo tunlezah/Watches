@@ -299,15 +299,17 @@ Phone navigation is a bottom bar with **Collection · Lookup · Service · Setti
 
 ## 8. Visual directions
 
-Three directions are mocked up on a canvas, each as an intro board plus collection grid, detail spec sheet (dark) and detail spec sheet (light). Link: see the message this plan came with.
+Three directions are mocked up on a canvas: <https://claude.ai/artifact/BSSuH2D5Q6dp5aamMcdh3Y> (private to your account). Each direction has a style tile, the collection grid, and the watch detail spec sheet in dark and light. The grid and detail boards have **Theme** and **Accent** tweaks, so you can try all seven accents. The watch drawings stand in for your photos.
 
 | | A · Atelier | B · Instrument | C · Gallery |
 | --- | --- | --- | --- |
 | Mood | Auction-house catalogue: quiet, warm and editorial | Tool-watch data sheet: precise, technical, OLED black | Scandinavian minimal: airy, soft, Bauhaus calm |
 | Display face | Cormorant Garamond | Archivo (expanded) | Manrope (light) |
-| Spec face | Inter (tabular figures) | IBM Plex Sans + Plex Mono for references | Manrope (tabular figures) |
+| Spec face | Instrument Sans (tabular figures) | IBM Plex Sans + Plex Mono for references | Manrope (tabular figures) |
 | Ground | Warm graphite `#121110` | True black `#000000` | Midnight `#0D1117` |
-| Default accent | Champagne | Lume | Sky |
+| Default accent | Champagne | Lume | Sunburst blue |
+
+I checked each spec face's font files for tabular figures: Instrument Sans, Manrope and Archivo have the `tnum` feature, and IBM Plex Sans/Mono have tabular figures by default.
 
 All three share the same **seven accent palettes**: Champagne, Lume, Ice blue, Racing green, Bordeaux, Sunburst blue and Tropical amber. Each has dark and light variants that are checked against WCAG AA when the design system is built.
 
