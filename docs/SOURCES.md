@@ -4,10 +4,16 @@ Every request uses an honest User-Agent, at most 1 request per second per host, 
 
 | Source | Status | Access | Covers |
 | --- | --- | --- | --- |
-| Grail Watch Reference | ✅ Planned for M2 | Public WordPress REST API (`/wp-json/wp/v2/movement`) | Movements: brand, winding, jewels, frequency, power reserve, complications, production years, history |
-| Ranfft DB (ranfft.org) | ✅ Planned for M2, **with the site owner's permission** | Server-rendered HTML: `/calibers?quick=<text>` and `/caliber/{id}-{slug}` | Movements: diameter (mm and lignes), height, jewels, beat rate, power reserve, lift angle, escapement, shock protection, base calibre, complications |
-| Wikidata + Wikipedia | ✅ Planned for M2 | Action API (`wbsearchentities`, `wbgetentities`) and REST page summary | Brand and model identity, history text, official site |
-| WatchBase | ⚠️ Unverified | HTML. A paid DataFeed API also exists (interface slot reserved, not built) | Full watch specs |
+| Grail Watch Reference | ✅ Built (M2) | Public WordPress REST API (`/wp-json/wp/v2/movement`) | Movements: winding, jewels, frequency, power reserve, complications, production years, regulator, shock protection |
+| Ranfft DB (ranfft.org) | ✅ Built (M2), **with the site owner's permission** | Server-rendered HTML: `/calibers?quick=<text>` and `/caliber/{id}-{slug}` | Calibres: type, jewels, beat rate, power reserve, base calibre, complications; size, height, lift angle, escapement, shock protection as extra specs |
+| Wikidata + Wikipedia | ✅ Built (M2) | Action API (`wbsearchentities`, `wbgetentities`), REST page summary, Commons `imageinfo` when you save a picture | Brand, collection, introduction year, official site, history text |
+| WatchBase | ⚠️ Connection test only | HTML. A paid DataFeed API also exists (interface slot reserved, not built) | Full watch specs, once fixtures arrive |
+
+**What the app maps where.** Movement data never fills case fields: Ranfft's "26 mm" is the movement's size and is kept as an extra spec, not the case diameter. A movement's maker (ETA, Valjoux) is never written as the watch's brand.
+
+**Requests per lookup.** A search is one request per enabled source. Opening a result is one request: Grail and Ranfft one each; Wikidata up to three (the entity and its brand and maker labels from Wikidata, a second apart, then the Wikipedia summary). Result pictures are fetched only while their card is on screen. The first request to a host each day also fetches its `robots.txt`.
+
+**Fixtures.** Parser tests run against saved pages in `shared/search/src/jvmTest/resources/fixtures`. While the repository is public, the Grail and Ranfft fixtures are *reduced*: markup and facts only, with descriptions, glossary text and pictures removed. See the README in that folder.
 
 ## Ranfft DB
 
@@ -51,11 +57,12 @@ Omega 1861 parsed equally cleanly.
 - No dimensions.
 
 ## Wikidata and Wikipedia
-- The API policy gives clients that identify themselves with contact details in the User-Agent 200 requests/min.
+- The API policy gives clients that identify themselves with contact details in the User-Agent 200 requests/min. The app sends at most 1 request per second per host.
 - The data is licensed CC0 (Wikidata) and CC BY-SA 4.0 (Wikipedia text). Wikipedia text is shown with attribution.
-- robots.txt disallows `/w/` and `/api/` for crawlers. The app is not a crawler, and the brief directs use of the public APIs.
+- robots.txt disallows `/w/` and `/api/` for crawlers. The app is not a crawler, and the brief directs use of the public APIs, so these requests follow the API policy instead (`RobotsPolicy.ApiPolicy`). The request log marks them "(API)". Picture downloads from `upload.wikimedia.org` obey that host's robots.txt like any other.
+- Saved Commons pictures keep their author and licence (from `imageinfo`) as the photo's credit, and a link to the file page.
 
 ## WatchBase
 - Every page except `robots.txt` (which only disallows `/honeypot`) returns a Cloudflare block to this build server, so its terms and page structure are unverified here.
 - The brief's summary of the terms: personal, non-commercial use is allowed; extracting a substantial part of the database or systematically reusing it is not.
-- The adapter waits for fixtures saved from a normal browser and a connection test from the phone. It will never disguise itself as a browser.
+- The adapter waits for fixtures saved from a normal browser and a connection test from the phone (Settings › Lookup sources › Test connection). It will never disguise itself as a browser.

@@ -3,7 +3,7 @@
 A private, offline-first watch collection app for one collector. Kotlin Multiplatform with Compose Multiplatform: Android first, iOS from the same code.
 
 - Everything lives on the phone. No accounts, servers, analytics, ads or crash reporting.
-- The network is used by the spec search only, and only when you press Search (from milestone 2). Milestone 1 builds have no network permission at all.
+- The network is used by Lookup only, and only when you press Search, open a result or save a picture. Every request is listed in Settings › Request log.
 - Designed for 500+ watches with photos.
 
 Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md). Data sources: [`docs/SOURCES.md`](docs/SOURCES.md). Changes: [`CHANGELOG.md`](CHANGELOG.md).
@@ -27,9 +27,9 @@ Requirements: JDK 21 and the Android SDK (compile SDK 37). Gradle is provided by
 
 ```sh
 ./gradlew :androidApp:assembleDebug          # debug APK
-./gradlew :shared:core:jvmTest :shared:data:jvmTest
+./gradlew :shared:core:jvmTest :shared:data:jvmTest :shared:search:jvmTest   # unit and parser tests
 ./gradlew :androidApp:recordRoborazziDebug   # screenshots of every design direction -> androidApp/build/outputs/roborazzi
-./gradlew checkNetworkIsolation              # fails if a network library reaches core, data or ui
+./gradlew checkNetworkIsolation              # fails if core, data or ui can compile against a network library
 ./gradlew :shared:ui:compileKotlinIosSimulatorArm64   # checks shared code compiles for iOS (works on Linux)
 ```
 
@@ -75,15 +75,24 @@ The Xcode build phase compiles the shared Kotlin framework (`:shared:ui:embedAnd
 
 Settings › Diagnostics shows cold-start, search and detail-open timings measured on the device against the brief's targets. It can also add 500 realistic sample watches, each with a generated photo, and remove them again afterwards.
 
+## How Lookup behaves
+
+- **Sources:** Wikidata and Wikipedia (identity and history), Ranfft DB (calibres, with the owner's permission) and Grail Watch Reference (movements). WatchBase has a connection test only until its pages can be checked. Details and terms are in [`docs/SOURCES.md`](docs/SOURCES.md).
+- **Politeness:** every request goes through `PoliteHttpClient` in `shared/search`.
+  - Honest User-Agent (`WatchCollection/1.0 (+https://github.com/tunlezah/Watches)`), and no cookies.
+  - At least 1 second between requests to the same host, and a 10 s timeout.
+  - `robots.txt` is checked first and cached for a day. Wikimedia's API endpoints follow its API policy instead, and are marked "(API)" in the log.
+  - `Retry-After` is honoured. A bot-protection page is reported, never bypassed.
+- **Your values win:** in the review screen, any value you typed or edited starts unticked. A lookup replaces it only if you tick it. Applied values record their source, page and fetch date. Changing one later marks it "Edited".
+- **Pictures:** pictures from Ranfft and Grail are shown, never saved. Freely licensed Wikimedia Commons pictures can be saved to a watch with their credit. They never become the cover unless you choose it.
+
 ## Adding a spec source
 
-The full adapter interface arrives in milestone 2. The shape is:
-
 1. Check the site's terms and `robots.txt`. Record the result in `docs/SOURCES.md`, and skip any site that forbids automated access.
-2. Implement `SpecSource` in `shared/search`: one search request and one detail request per lookup. Keep parsing in pure `parseSearch` and `parseDetail` functions.
-3. Map every value to a spec-field key from `SpecFields` (core). Convert units with `UnitParser`, and put anything without a field into "other specs".
-4. Save HTML or JSON fixtures and add a parser test for each field.
-5. Register the source in Koin and add its on/off switch in Settings.
+2. Implement `SpecSource` in `shared/search/.../sources`. Use one search request and one detail request per lookup, always through `PoliteHttpClient`. Keep parsing in pure `parseSearch`/`parseDetail` functions.
+3. Map every value to a key from `SpecFields` (core), converting units with `UnitParser` and words with `Vocabulary`. Anything without a field goes in `extras`.
+4. Save trimmed fixtures under `shared/search/src/jvmTest/resources/fixtures/<source>/` (see the README there) and add a parser test.
+5. Add the source to `searchModule`. Its switch appears in Settings automatically.
 
 ## Backup archive format
 
