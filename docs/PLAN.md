@@ -1,7 +1,20 @@
 # Watch Collection App: questions and plan (milestone 0)
 
-Status: **waiting for your go-ahead**. No app code has been written.
-Researched 12 October 2026. Versions were checked against Maven Central, Google Maven and services.gradle.org on that date.
+Status: **milestone 1 built** (14 Oct 2026). Researched 12 October 2026. Versions were checked against Maven Central, Google Maven and services.gradle.org on that date.
+
+## Decisions so far
+
+On 14 Oct you reported that Ranfft DB granted permission for lookups and asked me to carry on. The open questions below were not answered yet, so milestone 1 uses the recommended defaults. Each one is easy to change.
+
+| Question | Default used in M1 |
+| --- | --- |
+| Q1 iOS | GitHub Actions macOS runner builds, launches and screenshots the simulator app. |
+| Q2 Repo visibility | Still public. No third-party page fixtures are committed until this is settled. |
+| Q3 Signing key | (a): I generated the key. It's kept outside the repo and sent to you privately. |
+| Q4 Direction | All three ship, switchable in Settings, so you can choose on the phone. The other two are removed afterwards. |
+| Q5 My Watch Memoir | Deferred to M4. |
+| Q7 Ranfft | **Permission reported by you.** The adapter is in M2; see `docs/SOURCES.md`. |
+| Q8–Q10 | Proposed defaults, applied in M2. |
 
 Contents
 
@@ -159,7 +172,7 @@ Every request in this check used an honest User-Agent and stayed at or under 1 r
 | --- | --- | --- | --- | --- | --- |
 | **WatchBase** | Fetched OK. Only `Disallow: /honeypot`, so search and watch pages are allowed. | **Couldn't read.** `/terms` returns a Cloudflare block (403) from this server, including in a real headless browser. I'm relying on the brief's summary until you confirm. | HTML pages. A paid DataFeed API also exists (an interface slot is reserved; not built in v1). | **Not possible from here.** Every page returns 403. | **Unverified.** Build in M2 against fixtures you save (Q6). Add a one-tap "test connection" so we learn whether the honest client gets through from your phone. |
 | **Wikidata + Wikipedia** | Generic crawlers are disallowed from `/w/` and `/api/` (see Q9). | Wikidata data is CC0. Wikipedia text is CC BY-SA 4.0, so attribution and a link are shown, which we do anyway. Commons images each carry their own licence. API policy requires a User-Agent with contact details, no more than 3 concurrent requests, and honouring `Retry-After`. | Action API (`wbsearchentities`, `wbgetentities`) and the REST page summary. | ✅ "Omega Speedmaster" → `Q1414495` "chronograph wristwatches produced by Omega SA". Its claims: manufacturer Omega SA, official website, a Commons image and a Wikipedia article. The summary returned a clean description and extract. "ETA 2824" → `Q109315562`, which has only "instance of" and "manufacturer". | **Use, for identity and history.** Good for brand and model-family descriptions, history text and the official site link. **Not** a spec source: reference-level specs are almost never on Wikidata. |
-| **Ranfft** | The original `www.ranfft.de` no longer resolves, and `ranfft.de` shows a parked hosting page. Dr Ranfft died in 2023 and his site's data was deleted. The successor `ranfft.org` disallows `?sort=` and `?CaliberSearch`. | Ranfft DB's terms §4 and §8: "scrape, crawl, or extract data in bulk without permission" is prohibited, and "scraping, automated bulk access" counts as abuse of anonymous access. | n/a | Not attempted, out of respect for the terms. | **Skip** (per the brief). Optionally ask permission (Q7). |
+| **Ranfft** (update 14 Oct: permission granted, now in M2; see `docs/SOURCES.md`) | The original `www.ranfft.de` no longer resolves, and `ranfft.de` shows a parked hosting page. Dr Ranfft died in 2023 and his site's data was deleted. The successor `ranfft.org` disallows `?sort=` and `?CaliberSearch`. | Ranfft DB's terms §4 and §8: "scrape, crawl, or extract data in bulk without permission" is prohibited, and "scraping, automated bulk access" counts as abuse of anonymous access. | n/a | Not attempted, out of respect for the terms. | **Skip** (per the brief). Optionally ask permission (Q7). |
 | **Grail Watch Reference** | Only `/wp-admin/` disallowed. | No terms, copyright or licence page. The About text says illustrations are manufacturer press photos used for commentary. | **Public WordPress REST API.** `movement` posts carry structured taxonomies, so no HTML scraping is needed. | ✅ ETA 7750: brand ETA/Valjoux, automatic (central rotor), jewels 17/24/25, power reserve 54 h, 28,800 A/h (28,800 bph, 4 Hz), chronograph, day, date, hacking seconds, production 1973 to current, Incabloc, Etachron, plus the history text. No dimensions. | **Use, for movement data.** Image saving is off for this source, because the photos aren't Grail's to license. Links only. |
 
 Request plan per source:
