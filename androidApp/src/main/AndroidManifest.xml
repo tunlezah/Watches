@@ -1,11 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:label="Watches">
-        <activity android:name=".MainActivity" android:exported="true">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        Milestone 1 has no network permission at all, so nothing in the app can reach the internet.
+        OkHttp (the search module's HTTP engine) declares INTERNET in its own manifest; it is removed
+        here until milestone 2 turns search on.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+
+    <application
+        android:name=".WatchesApplication"
+        android:label="Watches"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:enableOnBackInvokedCallback="true"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Watches"
+        tools:targetApi="37">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- OkHttp registers a start-up initializer; search isn't used yet, so it doesn't run at launch. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            tools:node="merge">
+            <meta-data
+                android:name="okhttp3.internal.platform.PlatformInitializer"
+                tools:node="remove" />
+        </provider>
+
+        <!-- FileKit declares an inert Google Play services hook for back-porting the photo picker to
+             Android 10 and older. This app needs Android 11+, so it is removed: no Play services at all. -->
+        <service
+            android:name="com.google.android.gms.metadata.ModuleDependencies"
+            tools:node="remove" />
     </application>
 </manifest>

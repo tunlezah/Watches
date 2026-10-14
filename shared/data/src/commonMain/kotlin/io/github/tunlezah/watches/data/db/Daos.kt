@@ -14,7 +14,7 @@ interface WatchDao {
     @Query(
         """
         SELECT w.id, w.brand, w.model_name, w.collection, w.reference, w.nickname, w.status, w.movement_type,
-               w.diameter_mm, w.acquired_on, w.created_at, w.archived_at,
+               w.diameter_mm, w.acquired_on, w.created_at, w.archived_at, w.dial_colour, w.case_material,
                (SELECT group_concat(c.key, '|') FROM watch_complication c WHERE c.watch_id = w.id) AS complications,
                p.thumb_file AS cover_thumb, p.display_file AS cover_display
         FROM watch w

@@ -37,6 +37,8 @@ class PhotoRepository(
 
     suspend fun forWatch(watchId: String): List<Photo> = dao.getForWatch(watchId).map { it.toModel() }
 
+    suspend fun byId(id: String): Photo? = dao.get(id)?.toModel()
+
     suspend fun add(
         watchId: String,
         bytes: ByteArray,

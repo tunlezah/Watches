@@ -148,6 +148,8 @@ fun WatchSummaryRow.toModel(): WatchSummary = WatchSummary(
     complications = complications?.split('|')?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
     coverThumb = coverThumb,
     coverDisplay = coverDisplay,
+    dialColour = dialColour,
+    caseMaterial = caseMaterial,
 )
 
 fun PhotoEntity.toModel(): Photo {

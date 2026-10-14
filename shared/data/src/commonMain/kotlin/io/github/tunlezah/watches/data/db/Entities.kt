@@ -230,4 +230,6 @@ data class WatchSummaryRow(
     val complications: String?,
     @ColumnInfo(name = "cover_thumb") val coverThumb: String?,
     @ColumnInfo(name = "cover_display") val coverDisplay: String?,
+    @ColumnInfo(name = "dial_colour") val dialColour: String?,
+    @ColumnInfo(name = "case_material") val caseMaterial: String?,
 )

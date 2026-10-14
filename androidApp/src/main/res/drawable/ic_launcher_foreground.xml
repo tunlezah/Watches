@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A watch head-on at 10:10, champagne on graphite. 108dp canvas, art inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#D4B47A" android:pathData="M46,22h16l2,12h-20z M46,86h16l2,-12h-20z" />
+    <path android:fillColor="#D4B47A" android:pathData="M54,30a24,24 0 1,0 0.01,0z" />
+    <path android:fillColor="#121110" android:pathData="M54,34a20,20 0 1,0 0.01,0z" />
+    <path android:fillColor="#D4B47A" android:pathData="M53,37h2v5h-2z M53,66h2v5h-2z M37,53h5v2h-5z M66,53h5v2h-5z" />
+    <path android:strokeColor="#EDE7DC" android:strokeWidth="2.4" android:strokeLineCap="round" android:pathData="M54,54L45,48.5 M54,54L65,45" />
+    <path android:fillColor="#EDE7DC" android:pathData="M54,51.8a2.2,2.2 0 1,0 0.01,0z" />
+</vector>

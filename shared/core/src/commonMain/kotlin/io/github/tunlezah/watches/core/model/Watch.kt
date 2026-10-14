@@ -185,6 +185,8 @@ data class WatchSummary(
     val complications: Set<String>,
     val coverThumb: String?,
     val coverDisplay: String?,
+    val dialColour: String? = null,
+    val caseMaterial: String? = null,
 ) {
     val title: String
         get() = (modelName ?: collection ?: reference ?: nickname ?: brand ?: "Untitled watch")
