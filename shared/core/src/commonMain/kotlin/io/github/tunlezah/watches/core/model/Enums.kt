@@ -62,7 +62,8 @@ enum class Complication(override val key: String, override val label: String) : 
     companion object {
         const val CUSTOM_PREFIX = "custom:"
 
-        fun customKey(label: String): String = CUSTOM_PREFIX + label.trim()
+        /** "|" is the list separator in the collection query, so it can't appear in a key. */
+        fun customKey(label: String): String = CUSTOM_PREFIX + label.replace('|', '/').trim()
 
         fun labelFor(key: String): String =
             entries.firstOrNull { it.key == key }?.label ?: key.removePrefix(CUSTOM_PREFIX)

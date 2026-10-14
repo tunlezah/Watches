@@ -51,6 +51,8 @@ object CollectionQuery {
         sort: SortSpec,
         searchMatches: Set<String>?,
     ): List<WatchSummary> {
+        // "Omega" and "OMEGA" are one brand chip, so they match as one too.
+        val brands = filter.brands.mapTo(mutableSetOf()) { it.lowercase() }
         val filtered = all.filter { w ->
             val tabOk = when (filter.tab) {
                 StatusTab.ARCHIVED -> w.archived
@@ -59,7 +61,7 @@ object CollectionQuery {
             }
             tabOk &&
                 (searchMatches == null || w.id in searchMatches) &&
-                (filter.brands.isEmpty() || (w.brand ?: "") in filter.brands) &&
+                (brands.isEmpty() || (w.brand ?: "").lowercase() in brands) &&
                 (filter.movementTypes.isEmpty() || w.movementType in filter.movementTypes) &&
                 (filter.complications.isEmpty() || w.complications.containsAll(filter.complications)) &&
                 (filter.minDiameterMm == null || (w.diameterMm != null && w.diameterMm >= filter.minDiameterMm - 0.001)) &&

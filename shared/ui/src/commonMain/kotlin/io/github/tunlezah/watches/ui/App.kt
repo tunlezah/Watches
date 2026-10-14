@@ -21,6 +21,7 @@ import io.github.tunlezah.watches.ui.diagnostics.SampleGenerator
 import io.github.tunlezah.watches.ui.edit.EditViewModel
 import io.github.tunlezah.watches.ui.nav.AppShell
 import io.github.tunlezah.watches.ui.photos.CropViewModel
+import io.github.tunlezah.watches.ui.photos.PhotoImporter
 import io.github.tunlezah.watches.ui.photos.PhotosViewModel
 import io.github.tunlezah.watches.ui.settings.DiagnosticsViewModel
 import io.github.tunlezah.watches.ui.settings.SettingsViewModel
@@ -34,8 +35,9 @@ val uiModule = module {
     viewModel { CollectionViewModel(get(), get(), get()) }
     viewModel { params -> DetailViewModel(params.get(), get(), get(), get(), get()) }
     viewModel { params -> EditViewModel(params.getOrNull(), get(), get(), get()) }
-    viewModel { params -> PhotosViewModel(params.get(), get(), get(), get()) }
-    viewModel { params -> CropViewModel(params.get(), get(), get()) }
+    single { PhotoImporter(get()) }
+    viewModel { params -> PhotosViewModel(params.get(), get(), get(), get(), get()) }
+    viewModel { params -> CropViewModel(params.get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get()) }
     viewModel { DiagnosticsViewModel(get(), get()) }
 }

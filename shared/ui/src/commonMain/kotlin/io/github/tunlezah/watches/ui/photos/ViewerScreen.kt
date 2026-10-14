@@ -2,7 +2,8 @@ package io.github.tunlezah.watches.ui.photos
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -59,6 +60,10 @@ private fun ZoomableImage(path: String, description: String) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     val model = remember(path) { path.toPath() }
+    val transform = rememberTransformableState { zoom, pan, _ ->
+        scale = (scale * zoom).coerceIn(1f, 5f)
+        offset = if (scale == 1f) Offset.Zero else offset + pan
+    }
     AsyncImage(
         model = model,
         contentDescription = description,
@@ -70,12 +75,8 @@ private fun ZoomableImage(path: String, description: String) {
                     if (scale > 1f) { scale = 1f; offset = Offset.Zero } else { scale = 2.5f; offset = (Offset(size.width / 2f, size.height / 2f) - tap) * 1.5f }
                 })
             }
-            .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(1f, 5f)
-                    offset = if (scale == 1f) Offset.Zero else offset + pan
-                }
-            }
+            // Panning is only claimed when zoomed in, so a one-finger swipe at 1x still pages.
+            .transformable(transform, canPan = { scale > 1f })
             .graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y),
     )
 }

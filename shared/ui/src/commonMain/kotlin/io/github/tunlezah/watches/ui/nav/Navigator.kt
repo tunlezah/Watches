@@ -71,9 +71,13 @@ class Navigator(val backStack: SnapshotStateList<Route>) {
         backStack.add(route)
     }
 
-    /** Opens a watch. On wide screens the list stays and the detail pane is swapped, not stacked. */
+    /**
+     * Opens a watch from its tab's list. Whatever sat above the list (another watch, its photos)
+     * goes first, so the stack never holds two details and back always returns to the list.
+     */
     fun openDetail(watchId: String) {
-        if (current is Route.Detail) backStack[backStack.lastIndex] = Route.Detail(watchId) else push(Route.Detail(watchId))
+        popTo { it.isTopLevel }
+        push(Route.Detail(watchId))
     }
 
     fun replaceTop(route: Route) {

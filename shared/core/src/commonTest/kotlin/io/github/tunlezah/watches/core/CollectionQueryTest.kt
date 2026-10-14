@@ -59,6 +59,15 @@ class CollectionQueryTest {
         assertEquals(listOf("b"), ids(CollectionQuery.apply(all, CollectionFilter(brands = setOf("Tudor")), SortSpec(), null)))
     }
 
+    @Test fun brandFilterIgnoresCase() {
+        val mixed = all + w("f", "TUDOR", "Pelagos", 42.0, created = 6)
+        assertEquals(listOf("b", "f"), ids(CollectionQuery.apply(mixed, CollectionFilter(brands = setOf("Tudor")), SortSpec(SortOrder.RECENTLY_ADDED, reversed = true), null)))
+    }
+
+    @Test fun customComplicationKeysHaveNoListSeparator() {
+        assertEquals("custom:Date/Day", io.github.tunlezah.watches.core.model.Complication.customKey(" Date|Day "))
+    }
+
     @Test fun searchMatchesIntersect() {
         assertEquals(listOf("a", "c"), ids(CollectionQuery.apply(all, CollectionFilter(), SortSpec(), setOf("a", "c", "d"))))
     }

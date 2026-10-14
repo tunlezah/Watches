@@ -13,7 +13,9 @@ import io.github.tunlezah.watches.data.files.ImageFormats
 import io.github.tunlezah.watches.data.files.ImageProcessor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
 import kotlin.random.Random
 
@@ -75,7 +77,8 @@ class PhotoRepository(
             }
             photo
         } catch (e: Throwable) {
-            files.delete(original)
+            // Runs even when the import was cancelled, so no orphan files are left behind.
+            withContext(NonCancellable) { files.delete(original) }
             throw e
         }
     }
@@ -119,8 +122,16 @@ class PhotoRepository(
         val tag = Random.nextInt(0, 1 shl 30).toString(36)
         val display = "$dir/$id-display-$tag.jpg"
         val thumb = "$dir/$id-thumb-$tag.jpg"
-        processor.render(files.resolve(original), crop, DISPLAY_EDGE, DISPLAY_QUALITY, files.resolve(display))
-        processor.render(files.resolve(original), crop, THUMB_EDGE, THUMB_QUALITY, files.resolve(thumb))
+        try {
+            processor.render(files.resolve(original), crop, DISPLAY_EDGE, DISPLAY_QUALITY, files.resolve(display))
+            processor.render(files.resolve(original), crop, THUMB_EDGE, THUMB_QUALITY, files.resolve(thumb))
+        } catch (e: Throwable) {
+            withContext(NonCancellable) {
+                files.delete(display)
+                files.delete(thumb)
+            }
+            throw e
+        }
         return display to thumb
     }
 

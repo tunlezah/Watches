@@ -38,6 +38,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.runtime.Composable
@@ -115,13 +117,19 @@ fun AppShell() {
 
     BoxWithConstraints(Modifier.fillMaxSize().background(c.bg)) {
         val wide = maxWidth >= 600.dp
-        val listDetail = rememberListDetailSceneStrategy<Route>()
+        // Two panes only when the adaptive directive says so (840 dp and up by default), which can
+        // differ from the 600 dp rail breakpoint. Both the strategy and the screens read this one value.
+        val directive = calculatePaneScaffoldDirective(currentWindowAdaptiveInfo())
+        val twoPane = directive.maxHorizontalPartitions > 1
+        val listDetail = rememberListDetailSceneStrategy<Route>(directive = directive)
+        // Tabs hide while a form is open, so switching tab can't throw unsaved work away.
+        val editing = navigator.backStack.any { it is Route.Edit || it is Route.Crop }
         Row(Modifier.fillMaxSize()) {
-            if (wide) NavRail(navigator)
+            if (wide && !editing) NavRail(navigator)
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 SharedTransitionLayout {
                     CompositionLocalProvider(
-                        LocalSharedTransitionScope provides if (animations && !wide) this else null,
+                        LocalSharedTransitionScope provides if (animations && !twoPane) this else null,
                         LocalAnimationsEnabled provides animations,
                     ) {
                         NavDisplay(
@@ -132,7 +140,7 @@ fun AppShell() {
                                 rememberViewModelStoreNavEntryDecorator(),
                             ),
                             sceneStrategies = listOf(listDetail),
-                            sharedTransitionScope = if (animations && !wide) this@SharedTransitionLayout else null,
+                            sharedTransitionScope = if (animations && !twoPane) this@SharedTransitionLayout else null,
                             transitionSpec = { forward(animations) },
                             popTransitionSpec = { backward(animations) },
                             predictivePopTransitionSpec = { backward(animations) },
@@ -141,7 +149,7 @@ fun AppShell() {
                                     InEntry { CollectionEntry(navigator) }
                                 }
                                 entry<Route.Detail>(metadata = ListDetailSceneStrategy.detailPane()) { r ->
-                                    InEntry { DetailEntry(r.watchId, navigator, showBack = !wide) }
+                                    InEntry { DetailEntry(r.watchId, navigator, showBack = !twoPane) }
                                 }
                                 entry<Route.Edit> { r -> InEntry { EditEntry(r.watchId, navigator) } }
                                 entry<Route.Photos> { r -> InEntry { PhotosEntry(r.watchId, navigator) } }
@@ -164,7 +172,7 @@ fun AppShell() {
                         )
                     }
                 }
-                if (!wide && navigator.current.isTopLevel) {
+                if (!wide && navigator.backStack.size == 1) {
                     BottomBar(navigator, Modifier.align(Alignment.BottomCenter))
                 }
             }
@@ -241,7 +249,7 @@ private fun DetailEntry(watchId: String, navigator: Navigator, showBack: Boolean
             onEdit = { navigator.push(Route.Edit(watchId)) },
             onPhotos = { navigator.push(Route.Photos(watchId)) },
             onViewPhoto = { i -> navigator.push(Route.Viewer(watchId, i)) },
-            onDuplicate = { vm.duplicate { id -> navigator.replaceTop(Route.Detail(id)); navigator.push(Route.Edit(id)) } },
+            onDuplicate = { vm.duplicate { id -> navigator.openDetail(id); navigator.push(Route.Edit(id)) } },
             onArchive = vm::setArchived,
             onDelete = { vm.delete { navigator.popTo { it !is Route.Detail && it !is Route.Edit } } },
         ),
@@ -256,7 +264,7 @@ private fun EditEntry(watchId: String?, navigator: Navigator) {
         state = state,
         vm = vm,
         onClose = { navigator.pop() },
-        onSaved = { id -> if (watchId == null) navigator.replaceTop(Route.Detail(id)) else navigator.pop() },
+        onSaved = { id -> if (watchId == null) navigator.openDetail(id) else navigator.pop() },
         onLookUp = { navigator.push(Route.Lookup) },
     )
 }

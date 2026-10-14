@@ -1,6 +1,7 @@
 package io.github.tunlezah.watches.ui.edit
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -111,6 +112,8 @@ fun EditScreen(
     val style = WatchTheme.style
     var confirmDiscard by remember { mutableStateOf(false) }
     val close = { if (state.dirty) confirmDiscard = true else onClose() }
+    // System and predictive back ask too, rather than dropping the changes.
+    BackHandler(enabled = state.dirty && !confirmDiscard) { confirmDiscard = true }
 
     Column(Modifier.fillMaxSize().background(c.bg)) {
         Row(

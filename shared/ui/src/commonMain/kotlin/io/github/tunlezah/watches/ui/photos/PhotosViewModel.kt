@@ -9,7 +9,6 @@ import io.github.tunlezah.watches.data.PhotoRepository
 import io.github.tunlezah.watches.data.WatchRepository
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.vinceglb.filekit.PlatformFile
-import io.github.vinceglb.filekit.readBytes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,11 +34,10 @@ class PhotosViewModel(
     watches: WatchRepository,
     private val photos: PhotoRepository,
     private val files: FileStore,
+    private val importer: PhotoImporter,
 ) : ViewModel() {
 
-    private val progress = MutableStateFlow(0 to null as String?)
-
-    val state: StateFlow<PhotosUiState> = combine(watches.observeDetail(watchId), progress) { detail, (importing, message) ->
+    val state: StateFlow<PhotosUiState> = combine(watches.observeDetail(watchId), importer.progress(watchId)) { detail, progress ->
         val cover = detail?.cover?.id
         PhotosUiState(
             loaded = true,
@@ -47,23 +45,12 @@ class PhotosViewModel(
             photos = detail?.photos.orEmpty().sortedBy { it.position }.map {
                 PhotoTile(it.id, files.absolute(it.thumbFile), files.absolute(it.displayFile), it.id == cover, it.crop != null)
             },
-            importing = importing,
-            message = message,
+            importing = progress.pending,
+            message = progress.failed.takeIf { it > 0 }?.let { "$it ${if (it == 1) "photo" else "photos"} couldn't be read" },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PhotosUiState())
 
-    fun addFiles(picked: List<PlatformFile>) {
-        if (picked.isEmpty()) return
-        viewModelScope.launch {
-            progress.update { (n, _) -> n + picked.size to null }
-            var failed = 0
-            for (file in picked) {
-                runCatching { photos.add(watchId, file.readBytes()) }.onFailure { failed++ }
-                progress.update { (n, m) -> (n - 1) to m }
-            }
-            if (failed > 0) progress.update { (n, _) -> n to "$failed ${if (failed == 1) "photo" else "photos"} couldn't be read" }
-        }
-    }
+    fun addFiles(picked: List<PlatformFile>) = importer.import(watchId, picked)
 
     fun setCover(id: String) = viewModelScope.launch { photos.setCover(watchId, id) }
 
@@ -78,7 +65,7 @@ class PhotosViewModel(
 
     fun delete(id: String) = viewModelScope.launch { photos.delete(id) }
 
-    fun dismissMessage() = progress.update { (n, _) -> n to null }
+    fun dismissMessage() = importer.clearFailures(watchId)
 }
 
 @Immutable
@@ -95,6 +82,7 @@ class CropViewModel(
     private val photoId: String,
     private val photos: PhotoRepository,
     private val files: FileStore,
+    private val importer: PhotoImporter,
 ) : ViewModel() {
     private val _state = MutableStateFlow(CropUiState())
     val state: StateFlow<CropUiState> = _state
@@ -108,8 +96,10 @@ class CropViewModel(
 
     fun save(rect: NormalizedRect, onDone: () -> Unit) {
         _state.update { it.copy(saving = true) }
+        // The crop itself finishes even if the screen closes; only the "done" step needs the screen.
+        val work = importer.crop(photoId, rect)
         viewModelScope.launch {
-            photos.crop(photoId, rect)
+            runCatching { work.await() }
             onDone()
         }
     }

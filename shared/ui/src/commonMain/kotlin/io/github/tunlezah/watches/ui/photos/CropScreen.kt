@@ -71,7 +71,8 @@ private fun fitAspect(ratio: Float, imgW: Int, imgH: Int, around: NormalizedRect
     val cy = (around.top + around.bottom) / 2
     val l = (cx - w / 2).coerceIn(0f, 1f - w)
     val t = (cy - h / 2).coerceIn(0f, 1f - h)
-    return NormalizedRect(l, t, l + w, t + h)
+    // Clamp: float rounding can otherwise push an edge a hair past 1.
+    return runCatching { NormalizedRect(l, t, min(1f, l + w), min(1f, t + h)) }.getOrDefault(around)
 }
 
 @Composable
@@ -162,7 +163,7 @@ private fun dragRect(r: NormalizedRect, mode: Int, dx: Float, dy: Float, ratio: 
     if (mode == 0) {
         val l = (r.left + dx).coerceIn(0f, 1f - r.width)
         val t = (r.top + dy).coerceIn(0f, 1f - r.height)
-        return NormalizedRect(l, t, l + r.width, t + r.height)
+        return runCatching { NormalizedRect(l, t, min(1f, l + r.width), min(1f, t + r.height)) }.getOrDefault(r)
     }
     var l = r.left; var t = r.top; var rt = r.right; var b = r.bottom
     when (mode) {
@@ -171,6 +172,8 @@ private fun dragRect(r: NormalizedRect, mode: Int, dx: Float, dy: Float, ratio: 
         3 -> { l += dx; b += dy }
         4 -> { rt += dx; b += dy }
     }
+    // Clamp the far edges first so the ranges below are never empty when a handle hits the edge.
+    rt = rt.coerceIn(MIN_SIZE, 1f); b = b.coerceIn(MIN_SIZE, 1f)
     l = l.coerceIn(0f, rt - MIN_SIZE); rt = rt.coerceIn(l + MIN_SIZE, 1f)
     t = t.coerceIn(0f, b - MIN_SIZE); b = b.coerceIn(t + MIN_SIZE, 1f)
     if (ratio != null) {

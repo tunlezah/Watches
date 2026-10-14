@@ -32,6 +32,9 @@ data class EditUiState(
     val draft: Watch? = null,
     /** Raw text for every text, number and price field, keyed by spec field key. */
     val texts: Map<String, String> = emptyMap(),
+    /** The texts as first shown, so saving only rewrites fields the owner actually changed. */
+    val initialTexts: Map<String, String> = emptyMap(),
+    val initialCurrency: String = Currencies.DEFAULT,
     val errors: Map<String, String> = emptyMap(),
     val currency: String = Currencies.DEFAULT,
     val brands: List<String> = emptyList(),
@@ -58,12 +61,16 @@ class EditViewModel(
             val existing = watchId?.let { watches.get(it) }
             val now = time.now()
             val watch = existing ?: Watch(id = "", createdAt = now, updatedAt = now)
+            val texts = SpecFields.all.filter { it.isTextual() }.associate { it.key to initialText(it, watch) }
+            val currency = watch.pricePaid?.currency ?: prefs.defaultCurrency
             _state.value = EditUiState(
                 loaded = true,
                 isNew = existing == null,
                 draft = watch,
-                texts = SpecFields.all.filter { it.isTextual() }.associate { it.key to initialText(it, watch) },
-                currency = watch.pricePaid?.currency ?: prefs.defaultCurrency,
+                texts = texts,
+                initialTexts = texts,
+                currency = currency,
+                initialCurrency = currency,
                 prefs = prefs,
             )
         }
@@ -109,7 +116,12 @@ class EditViewModel(
             return
         }
         var watch = base
-        for (field in SpecFields.all.filter { it.isTextual() }) watch = field.set(watch, parse(field, s.text(field), s.currency))
+        for (field in SpecFields.all.filter { it.isTextual() }) {
+            // An untouched box keeps the stored value exactly: the box shows 2 decimals, the value may have more.
+            val changed = s.text(field) != s.initialTexts[field.key].orEmpty() ||
+                (field == SpecFields.PricePaid && s.currency != s.initialCurrency)
+            if (changed) watch = field.set(watch, parse(field, s.text(field), s.currency))
+        }
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
             val saved = if (s.isNew) watches.create(watch) else watches.update(watch)

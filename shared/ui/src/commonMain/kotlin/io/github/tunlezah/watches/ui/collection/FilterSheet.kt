@@ -104,7 +104,9 @@ fun FilterSheet(
             state.sizeBounds?.let { bounds ->
                 val lo = floor(bounds.start).toFloat()
                 val hi = ceil(bounds.endInclusive).toFloat().coerceAtLeast(lo + 1f)
-                val current = (draft.minDiameterMm?.toFloat() ?: lo)..(draft.maxDiameterMm?.toFloat() ?: hi)
+                // A saved filter can fall outside today's bounds (the 36 mm watch was sold); clamp it.
+                val start = (draft.minDiameterMm?.toFloat() ?: lo).coerceIn(lo, hi)
+                val current = start..(draft.maxDiameterMm?.toFloat() ?: hi).coerceIn(start, hi)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row {
                         FieldLabel("Case size", Modifier.weight(1f))
