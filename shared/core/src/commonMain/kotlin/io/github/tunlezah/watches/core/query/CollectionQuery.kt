@@ -88,12 +88,16 @@ object CollectionQuery {
         return sizes.min()..sizes.max()
     }
 
-    /** Builds an FTS MATCH expression from free text: every word must prefix-match. */
+    /**
+     * Builds an FTS4 MATCH expression from free text: every word must prefix-match (`omega* 310*`).
+     * Words are reduced to letters and digits and lower-cased, so no FTS operator (AND, OR, NOT,
+     * NEAR are upper-case only) or special character can reach the query.
+     */
     fun ftsExpression(text: String): String? {
         val words = text.lowercase()
             .split(Regex("[^\\p{L}\\p{N}]+"))
             .filter { it.isNotBlank() }
         if (words.isEmpty()) return null
-        return words.joinToString(" ") { "\"$it\"*" }
+        return words.joinToString(" ") { "$it*" }
     }
 }

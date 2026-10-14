@@ -64,8 +64,9 @@ class CollectionQueryTest {
     }
 
     @Test fun ftsExpression() {
-        assertEquals("\"omega\"* \"310\"* \"30\"*", CollectionQuery.ftsExpression("Omega 310.30"))
-        assertEquals("\"genève\"*", CollectionQuery.ftsExpression("Genève"))
+        assertEquals("omega* 310* 30*", CollectionQuery.ftsExpression("Omega 310.30"))
+        assertEquals("genève*", CollectionQuery.ftsExpression("Genève"))
+        assertEquals("or* not* near*", CollectionQuery.ftsExpression("OR \"NOT\" NEAR -"))
         assertNull(CollectionQuery.ftsExpression("  ... "))
     }
 }
