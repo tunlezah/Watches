@@ -143,7 +143,8 @@ class RanfftSource(private val http: PoliteHttpClient, private val clock: Clock 
                 extras = extras,
                 summary = headerLines.firstOrNull { !it.startsWith("Also known as", ignoreCase = true) },
                 summaryCredit = "Ranfft DB",
-                images = images(doc),
+                // Pictures are a nicety: a page whose carousel can't be read still gives its specs.
+                images = runCatching { images(doc) }.getOrDefault(emptyList()),
                 raw = RawPayload("text/html", body),
             )
         }
@@ -184,10 +185,27 @@ class RanfftSource(private val http: PoliteHttpClient, private val clock: Clock 
             return items.ifEmpty { Parsing.visibleText(td).split(',').mapNotNull(Parsing::present) }
         }
 
+        /**
+         * The body of the single-quoted JavaScript string that starts right after [marker], scanned by hand:
+         * a regex with alternation inside a repeat overflows the stack on long literals.
+         */
+        private fun jsStringAfter(text: String, marker: String): String? {
+            val start = text.indexOf(marker).takeIf { it >= 0 }?.plus(marker.length) ?: return null
+            var i = start
+            while (i < text.length) {
+                when (text[i]) {
+                    '\\' -> i += 2
+                    '\'' -> return text.substring(start, i)
+                    else -> i++
+                }
+            }
+            return null
+        }
+
         /** The carousel keeps its pictures as JSON inside an Alpine.js `x-data` attribute. */
         private fun images(doc: Document): List<RecordImage> {
             val data = doc.select("[x-data]").map { it.attr("x-data") }.firstOrNull { "images" in it && "JSON.parse(" in it } ?: return emptyList()
-            val literal = Regex("JSON\\.parse\\('((?:[^'\\\\]|\\\\.)*)'\\)").find(data)?.groupValues?.get(1) ?: return emptyList()
+            val literal = jsStringAfter(data, "JSON.parse('") ?: return emptyList()
             val parsed = runCatching { json.parseToJsonElement(Parsing.jsUnescape(literal)) }.getOrNull() ?: return emptyList()
             return parsed.array.mapNotNull { img ->
                 val display = img["display"].str?.takeIf { it.startsWith("$BASE/") } ?: return@mapNotNull null

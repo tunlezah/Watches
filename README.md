@@ -28,6 +28,7 @@ Requirements: JDK 21 and the Android SDK (compile SDK 37). Gradle is provided by
 ```sh
 ./gradlew :androidApp:assembleDebug          # debug APK
 ./gradlew :shared:core:jvmTest :shared:data:jvmTest :shared:search:jvmTest   # unit and parser tests
+WATCHES_LIVE_TESTS=1 ./gradlew :shared:search:jvmTest --tests '*LiveSourcesTest*'   # one real lookup per source
 ./gradlew :androidApp:recordRoborazziDebug   # screenshots of every design direction -> androidApp/build/outputs/roborazzi
 ./gradlew checkNetworkIsolation              # fails if core, data or ui can compile against a network library
 ./gradlew :shared:ui:compileKotlinIosSimulatorArm64   # checks shared code compiles for iOS (works on Linux)

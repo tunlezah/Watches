@@ -91,14 +91,18 @@ class PoliteHttpClient(
 
     private class HostGate {
         val mutex = Mutex()
-        var nextAllowedAt = Long.MIN_VALUE
-        var blockedUntil = Long.MIN_VALUE
+        /** Null until the first request; never a sentinel value, so the wait below can't overflow. */
+        var nextAllowedAt: Long? = null
+        var blockedUntil: Long? = null
+
+        /** Guards this host's robots.txt only, so a slow host never holds up another. */
+        val robotsMutex = Mutex()
+        var robots: CachedRobots? = null
+        var robotsFailedAt: Long? = null
     }
 
     private val gates = mutableMapOf<String, HostGate>()
     private val gatesLock = Mutex()
-    private val robotsLock = Mutex()
-    private val robotsMemory = mutableMapOf<String, CachedRobots>()
 
     suspend fun get(
         url: String,
@@ -116,7 +120,7 @@ class PoliteHttpClient(
             val response = send(current, accept, maxBytes, note = if (robots == RobotsPolicy.ApiPolicy) " (API)" else "")
             val location = response.redirect
             if (location == null) return response.checked(current)
-            current = URLBuilder(current).takeFrom(location).build()
+            current = runCatching { URLBuilder(current).takeFrom(location).build() }.getOrElse { throw LookupFailure.Http(response.status) }
         }
         throw LookupFailure.Http(310)
     }
@@ -137,13 +141,13 @@ class PoliteHttpClient(
         val gate = gate(url.host)
         gate.mutex.withLock {
             val now = nowMillis()
-            if (now < gate.blockedUntil) {
-                val wait = (gate.blockedUntil - now + 999) / 1000
+            val blockedUntil = gate.blockedUntil
+            if (blockedUntil != null && now < blockedUntil) {
                 logRefused(url, "Not sent: site asked to wait")
-                throw LookupFailure.RateLimited(url.host, wait)
+                throw LookupFailure.RateLimited(url.host, (blockedUntil - now + 999) / 1000)
             }
-            val wait = gate.nextAllowedAt - now
-            if (wait > 0) delay(wait)
+            val wait = gate.nextAllowedAt?.let { it - now } ?: 0L
+            if (wait > 0) delay(wait.coerceAtMost(minInterval.inWholeMilliseconds))
             gate.nextAllowedAt = nowMillis() + minInterval.inWholeMilliseconds
         }
         val started = nowMillis()
@@ -205,15 +209,28 @@ class PoliteHttpClient(
         return robots.isAllowed(url.encodedPathAndQuery, PRODUCT_TOKEN)
     }
 
-    private suspend fun robotsFor(host: String): RobotsTxt = robotsLock.withLock {
-        val now = wallClock.now().toEpochMilliseconds()
-        val cached = robotsMemory[host] ?: robotsStore.load(host)?.also { robotsMemory[host] = it }
-        val fresh = cached?.takeIf { now - it.fetchedAtMillis < ROBOTS_TTL.inWholeMilliseconds }
-        val entry = fresh ?: fetchRobots(host, now).also {
-            robotsMemory[host] = it
-            robotsStore.save(host, it)
+    private suspend fun robotsFor(host: String): RobotsTxt {
+        val gate = gate(host)
+        return gate.robotsMutex.withLock {
+            val now = wallClock.now().toEpochMilliseconds()
+            val cached = gate.robots ?: runCatching { robotsStore.load(host) }.getOrNull()?.also { gate.robots = it }
+            val fresh = cached?.takeIf { now - it.fetchedAtMillis in 0 until ROBOTS_TTL.inWholeMilliseconds }
+            val entry = fresh ?: run {
+                // A host whose robots.txt just failed isn't asked again for a minute: searches fail fast instead.
+                gate.robotsFailedAt?.let { if (nowMillis() - it < ROBOTS_RETRY_MS) throw LookupFailure.RobotsUnavailable(host) }
+                val fetched = try {
+                    fetchRobots(host, now)
+                } catch (e: LookupFailure) {
+                    if (e !is LookupFailure.Offline) gate.robotsFailedAt = nowMillis()
+                    throw e
+                }
+                gate.robotsFailedAt = null
+                gate.robots = fetched
+                runCatching { robotsStore.save(host, fetched) }
+                fetched
+            }
+            entry.body?.let(RobotsTxt::parse) ?: RobotsTxt.AllowAll
         }
-        entry.body?.let(RobotsTxt::parse) ?: RobotsTxt.AllowAll
     }
 
     private suspend fun fetchRobots(host: String, now: Long): CachedRobots {
@@ -221,7 +238,7 @@ class PoliteHttpClient(
         repeat(MAX_REDIRECTS + 1) {
             val raw = send(url, "text/plain,*/*;q=0.5", maxBytes = 512 * 1024)
             when {
-                raw.redirect != null -> url = URLBuilder(url).takeFrom(raw.redirect).build()
+                raw.redirect != null -> url = runCatching { URLBuilder(url).takeFrom(raw.redirect).build() }.getOrElse { throw LookupFailure.RobotsUnavailable(host) }
                 raw.status in 200..299 -> return CachedRobots(now, raw.bytes.decodeToString())
                 // RFC 9309: a missing robots.txt (any 4xx) means no restrictions.
                 raw.status in 400..499 && !raw.blocked -> return CachedRobots(now, null)
@@ -245,6 +262,7 @@ class PoliteHttpClient(
         private const val MAX_REDIRECTS = 3
         private const val DEFAULT_BACKOFF_S = 60L
         val ROBOTS_TTL = 24.hours
+        private const val ROBOTS_RETRY_MS = 60_000L
 
         private fun monotonicMillis(): () -> Long {
             val start = TimeSource.Monotonic.markNow()

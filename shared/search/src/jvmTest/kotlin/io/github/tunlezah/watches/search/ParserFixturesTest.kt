@@ -102,8 +102,10 @@ class ParserFixturesTest {
         assertEquals("1982", x["Movement launched"])
         assertEquals("Date, Hacking Seconds, Quick Set", x["Movement features"])
         assertEquals("Automatic · 11.5‴ · Switzerland · 1982", r.summary)
-        assertEquals(1, r.images.size)
-        assertEquals("https://ranfft.org/img/1?fit=down&w=1000", r.images.single().url)
+        // The carousel literal is the real, full-length one (it once overflowed a regex).
+        assertEquals(3, r.images.size)
+        assertTrue(r.images.first().url.startsWith("https://ranfft.org/img/9880?fit=down&v="))
+        assertTrue(r.images.first().thumbnailUrl!!.startsWith("https://ranfft.org/storage/"))
         assertTrue(r.images.none { it.savable })
     }
 
@@ -166,6 +168,11 @@ class ParserFixturesTest {
         assertEquals("CC BY-SA 2.0", image.licence)
         assertEquals("Shane Lin", image.artist)
         assertEquals("Photo: Shane Lin, CC BY-SA 2.0, via Wikimedia Commons", image.attribution)
+    }
+
+    @Test fun previewMustBeTheSavedFile() {
+        assertTrue(WikidataSource.sameFile("https://thumb.wikimedia.org/a/b/X.jpg/330px-Vintage_Omega_Speedmaster_%22Pre-moon%22.jpg?utm=1", "Vintage Omega Speedmaster \"Pre-moon\".jpg"))
+        assertTrue(!WikidataSource.sameFile("https://upload.wikimedia.org/a/b/Other.jpg", "Vintage Omega Speedmaster.jpg"))
     }
 
     @Test fun shortBrandNames() {

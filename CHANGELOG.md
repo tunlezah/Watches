@@ -51,9 +51,10 @@
 - Still no accounts, analytics or crash reporting.
 
 **Tests**
-- 100 automated tests, including a parser test per source against saved pages.
+- 105 automated tests, including parser tests for every source against saved pages.
 - The politeness rules are tested: spacing, robots.txt, back-off, timeouts and blocks.
 - Screenshot tests cover the Lookup, Review and Request log screens.
+- An opt-in live test (`WATCHES_LIVE_TESTS=1`) runs each source against the real site. It was run against Ranfft DB, Grail and Wikidata/Wikipedia for this release.
 
 ## 0.1.0-m1: Milestone 1, foundation (14 Oct 2026)
 

@@ -35,7 +35,7 @@ class GrailSource(private val http: PoliteHttpClient, private val clock: Clock =
     )
 
     override suspend fun search(query: String): List<SearchHit> =
-        parseSearch(http.get("$API/movement?search=${Parsing.query(query)}&per_page=10&_fields=id,slug,title,link,class_list", accept = JSON).text)
+        parseSearch(http.get("$API/movement?search=${Parsing.query(query)}&orderby=relevance&per_page=10&_fields=id,slug,title,link,class_list", accept = JSON).text)
 
     override suspend fun detail(hit: SearchHit): SourceRecord {
         val slug = hit.key

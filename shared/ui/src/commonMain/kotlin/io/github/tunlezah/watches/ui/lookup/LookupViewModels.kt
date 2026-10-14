@@ -232,6 +232,10 @@ class ResultViewModel(
         val page = image.pageUrl ?: return
         val wikidata = service.source(WikidataSource.ID) as? WikidataSource ?: return
         if (!image.savable) return
+        if (!service.isOnline()) {
+            _state.update { it.copy(pictureStatus = LookupFailure.Offline().describe("Wikimedia Commons")) }
+            return
+        }
         _state.update { it.copy(pictureStatus = "Saving picture…") }
         viewModelScope.launch {
             val status = try {
@@ -357,8 +361,9 @@ class ApplyViewModel(
                     onFormFilled()
                 }
                 LookupTarget.None -> {
+                    // The tray stays: if the owner comes back from the form, the review is still there.
                     val key = drafts.put(LookupDraft(applied, sourced, sourcedValues, extras, records))
-                    session.clearTray()
+                    _state.update { it.copy(applying = false) }
                     onDraft(key)
                 }
             }
@@ -431,6 +436,10 @@ class SourcesViewModel(
     fun testWatchBase() {
         val source = service.source(io.github.tunlezah.watches.search.sources.WatchBaseSource.ID)
             as? io.github.tunlezah.watches.search.sources.WatchBaseSource ?: return
+        if (!service.isOnline()) {
+            probe.value = false to LookupFailure.Offline().describe("WatchBase")
+            return
+        }
         probe.value = true to null
         viewModelScope.launch {
             val failure = source.testConnection()

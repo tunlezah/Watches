@@ -156,6 +156,9 @@ fun EditScreen(
                     .filter { it.isNotBlank() }.joinToString(" ")
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     WatchButton("Look up specs", { onLookUp(query) }, Modifier.fillMaxWidth(), kind = ButtonKind.Tonal, icon = WatchIcons.Lookup)
+                    if (state.draftLost) {
+                        Text("The lookup results were cleared when the app closed. Look up again to fill the form.", style = t.type.bodySmall, color = c.fg2)
+                    }
                     if (state.filledFrom.isNotEmpty()) {
                         Text(
                             "Filled from ${state.filledFrom.joinToString(" and ")}. Values keep their source unless you change them. Nothing is saved until you tap Save.",

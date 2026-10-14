@@ -8,10 +8,11 @@ import io.github.tunlezah.watches.core.model.Watch
 import io.github.tunlezah.watches.core.spec.SpecValue
 import io.github.tunlezah.watches.search.LookupService
 import io.github.tunlezah.watches.search.SourceState
-import io.github.tunlezah.watches.search.http.LookupFailure
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -126,6 +127,9 @@ fun interface ImageSource {
  * current search only (cleared when a new search starts). Each fetch goes through the polite client.
  */
 class RemoteImages(private val service: LookupService) : ImageSource {
+    // Downloads run here rather than in the card's scope, so a second card showing the same picture
+    // still gets it if the first scrolls away. Only cards that were on screen ever start one.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Mutex()
     private val cache = LinkedHashMap<String, ByteArray>()
     private val inFlight = mutableMapOf<String, Deferred<ByteArray?>>()
@@ -134,16 +138,19 @@ class RemoteImages(private val service: LookupService) : ImageSource {
         val pending = lock.withLock {
             cache[url]?.let { return it }
             inFlight.getOrPut(url) {
-                scope.async {
-                    try {
-                        service.image(url).also { bytes -> lock.withLock { put(url, bytes); inFlight.remove(url) } }
+                this.scope.async {
+                    val bytes = try {
+                        service.image(url)
                     } catch (e: CancellationException) {
-                        lock.withLock { inFlight.remove(url) }
                         throw e
-                    } catch (_: LookupFailure) {
-                        lock.withLock { inFlight.remove(url) }
+                    } catch (_: Throwable) {
                         null
                     }
+                    lock.withLock {
+                        inFlight.remove(url)
+                        if (bytes != null) put(url, bytes)
+                    }
+                    bytes
                 }
             }
         }
@@ -155,7 +162,11 @@ class RemoteImages(private val service: LookupService) : ImageSource {
         while (cache.size > MAX) cache.remove(cache.keys.first())
     }
 
-    suspend fun clear() = lock.withLock { cache.clear() }
+    suspend fun clear() = lock.withLock {
+        inFlight.values.forEach { it.cancel() }
+        inFlight.clear()
+        cache.clear()
+    }
 
     private companion object {
         const val MAX = 60

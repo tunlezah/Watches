@@ -272,8 +272,19 @@ private fun DetailEntry(watchId: String, navigator: Navigator, showBack: Boolean
                 val query = listOfNotNull(w?.brand, w?.reference ?: w?.modelName ?: w?.collection).joinToString(" ")
                 navigator.push(Route.LookupFor(LookupTarget.Watch(watchId), query))
             },
-            onRefresh = { vm.refresh { navigator.push(Route.Apply(LookupTarget.Watch(watchId))) } },
-            onDismissNotice = vm::dismissNotice,
+            onRefresh = {
+                vm.refresh {
+                    // Only if the watch is still what's on screen: never on top of a form opened meanwhile.
+                    if (navigator.current == Route.Detail(watchId)) {
+                        vm.dismissNotice()
+                        navigator.push(Route.Apply(LookupTarget.Watch(watchId)))
+                    }
+                }
+            },
+            onDismissNotice = {
+                if (state.reviewReady) navigator.push(Route.Apply(LookupTarget.Watch(watchId)))
+                vm.dismissNotice()
+            },
         ),
     )
 }

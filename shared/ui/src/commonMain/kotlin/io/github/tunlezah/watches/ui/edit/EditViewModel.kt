@@ -56,6 +56,8 @@ data class EditUiState(
     val appliedTexts: Map<String, String> = emptyMap(),
     val pendingExtras: List<OtherSpec> = emptyList(),
     val pendingRecords: List<SourceRecord> = emptyList(),
+    /** The lookup draft this form was opened with no longer exists (the app was closed meanwhile). */
+    val draftLost: Boolean = false,
 ) {
     fun text(field: SpecField) = texts[field.key].orEmpty()
 
@@ -108,7 +110,10 @@ class EditViewModel(
                 prefs = prefs,
             )
             // "Add to collection" from Lookup: start from the reviewed values.
-            draftKey?.let(drafts::take)?.let(::applyLookup)
+            if (draftKey != null) {
+                val draft = drafts.take(draftKey)
+                if (draft != null) applyLookup(draft) else _state.update { it.copy(draftLost = true) }
+            }
         }
         viewModelScope.launch {
             val brands = watches.observeBrands().first()
@@ -179,10 +184,11 @@ class EditViewModel(
 
     /** Where each of the form's values came from: lookups, the stored watch, or the owner. */
     private fun formProvenance(s: EditUiState): Map<String, Provenance> {
-        val before = original ?: return s.sourced
         val now = formWatch(s)
-        val changedByOwner = SpecFields.changedKeys(before, now) - s.sourced.keys
-        return savedProvenance + s.sourced + changedByOwner.associateWith { Provenance(it, Sources.MANUAL, userEdited = true) }
+        // A filled value stays the source's only while it's unchanged; once the owner edits it, it's theirs.
+        val stillSourced = s.sourced.filterKeys { key -> SpecFields.byKey(key)?.get(now) == s.sourcedValues[key] }
+        val changedByOwner = SpecFields.changedKeys(original ?: now, now) - stillSourced.keys
+        return savedProvenance + stillSourced + changedByOwner.associateWith { Provenance(it, Sources.MANUAL, userEdited = true) }
     }
 
     private fun applyLookup(draft: LookupDraft) = _state.update { s ->

@@ -127,6 +127,13 @@ class LookupDiffTest {
         assertEquals(25, updated.jewels)
     }
 
+    @Test fun complicationsWithTheOwnersEntriesStayProtected() {
+        val prov = provenance + (SpecFields.Complications.key to Provenance(SpecFields.Complications.key, Sources.MANUAL, userEdited = true))
+        val rows = LookupDiff.rows(watch, prov, listOf(ranfft))
+        val (_, applied) = LookupDiff.apply(watch, rows, mapOf(SpecFields.Complications.key to 0))
+        assertTrue(applied.single().userEdited)
+    }
+
     @Test fun mergedTakesPreferredValues() {
         val blank = Watch(id = "", createdAt = t0, updatedAt = t0)
         val (merged, prov) = LookupDiff.merged(blank, listOf(grail, ranfft))

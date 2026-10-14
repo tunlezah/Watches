@@ -50,7 +50,8 @@ class LookupService(
                     SourceState.Results(source.search(q))
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
+                    // Throwable, not Exception: a hostile or odd page can overflow a parser's stack.
                     SourceState.Failed(e.asFailure(source))
                 }
                 send(SourceEvent(source.info.id, state))
@@ -66,7 +67,7 @@ class LookupService(
             source.detail(hit)
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             throw e.asFailure(source)
         }
     }
@@ -74,10 +75,20 @@ class LookupService(
     /** One picture for a card on screen. Images on these sites are under their robots rules like any page. */
     suspend fun image(url: String, maxBytes: Int = 3 * 1024 * 1024): ByteArray {
         if (!connectivity.isOnline()) throw LookupFailure.Offline()
-        return http.get(url, accept = "image/avif,image/webp,image/*;q=0.8", maxBytes = maxBytes).bytes
+        return try {
+            http.get(url, accept = "image/avif,image/webp,image/*;q=0.8", maxBytes = maxBytes).bytes
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LookupFailure) {
+            throw e
+        } catch (e: Exception) {
+            throw LookupFailure.Unreadable("Couldn't load a picture", e)
+        }
     }
 
-    private fun Exception.asFailure(source: SpecSource): LookupFailure =
+    fun isOnline(): Boolean = connectivity.isOnline()
+
+    private fun Throwable.asFailure(source: SpecSource): LookupFailure =
         this as? LookupFailure ?: LookupFailure.Unreadable("Couldn't read ${source.info.name}", this)
 
     companion object {

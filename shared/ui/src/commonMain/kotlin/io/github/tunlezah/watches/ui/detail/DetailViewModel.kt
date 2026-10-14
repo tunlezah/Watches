@@ -60,6 +60,8 @@ data class DetailUiState(
     val hasSources: Boolean = false,
     val notice: String? = null,
     val refreshing: Boolean = false,
+    /** A refresh finished while another screen was open; tapping the notice opens the review. */
+    val reviewReady: Boolean = false,
 )
 
 class DetailViewModel(
@@ -71,9 +73,10 @@ class DetailViewModel(
     private val refresher: RefreshSpecs,
 ) : ViewModel() {
 
-    private val transient = MutableStateFlow<Pair<Boolean, String?>>(false to null)
+    private data class Transient(val refreshing: Boolean = false, val notice: String? = null, val reviewReady: Boolean = false)
+    private val transient = MutableStateFlow(Transient())
 
-    val state: StateFlow<DetailUiState> = combine(watches.observeDetail(watchId), settings.settings, transient) { detail, s, (refreshing, notice) ->
+    val state: StateFlow<DetailUiState> = combine(watches.observeDetail(watchId), settings.settings, transient) { detail, s, tr ->
         if (detail == null) return@combine DetailUiState(loading = false, missing = true)
         val w = detail.watch
         val prefs = s.display
@@ -98,8 +101,9 @@ class DetailViewModel(
             other = otherSheet(detail.otherSpecs),
             footer = footer(w, prefs),
             hasSources = detail.provenance.values.any { it.source != Sources.MANUAL } || detail.otherSpecs.any { it.source != null && it.source != Sources.MANUAL },
-            notice = notice,
-            refreshing = refreshing,
+            notice = tr.notice,
+            refreshing = tr.refreshing,
+            reviewReady = tr.reviewReady,
         )
     }
         .flowOn(Dispatchers.Default)
@@ -158,17 +162,17 @@ class DetailViewModel(
 
     /** Re-reads the source pages behind this watch's specs, then [onReady] opens the review. */
     fun refresh(onReady: () -> Unit) {
-        if (transient.value.first) return
-        transient.value = true to "Checking the sources…"
+        if (transient.value.refreshing) return
+        transient.value = Transient(refreshing = true, notice = "Checking the sources…")
         viewModelScope.launch {
             val title = state.value.watch?.title.orEmpty()
             val message = refresher.prepare(watchId, title)
-            transient.value = false to message
+            transient.value = if (message == null) Transient(notice = "Fresh specs are ready. Tap to review.", reviewReady = true) else Transient(notice = message)
             if (message == null) onReady()
         }
     }
 
-    fun dismissNotice() { transient.value = transient.value.first to null }
+    fun dismissNotice() { transient.value = Transient(refreshing = transient.value.refreshing) }
 
     fun duplicate(onDone: (String) -> Unit) = viewModelScope.launch {
         watches.duplicate(watchId)?.let { onDone(it.id) }

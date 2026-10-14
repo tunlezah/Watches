@@ -17,6 +17,7 @@ import io.github.tunlezah.watches.search.sources.Parsing.array
 import io.github.tunlezah.watches.search.sources.Parsing.get
 import io.github.tunlezah.watches.search.sources.Parsing.obj
 import io.github.tunlezah.watches.search.sources.Parsing.str
+import io.ktor.http.decodeURLPart
 import io.ktor.http.encodeURLPathPart
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
@@ -68,8 +69,9 @@ class WikidataSource(private val http: PoliteHttpClient, private val clock: Cloc
 
     /** Looks up a Commons file's full-size URL and licence. Called only when the owner taps Save photo. */
     suspend fun commonsImage(pageUrl: String): CommonsImage {
-        val file = pageUrl.substringAfter("/wiki/File:", "").takeIf { it.isNotEmpty() } ?: throw LookupFailure.NotAllowed(pageUrl)
-        val body = api("https://commons.wikimedia.org/w/api.php?action=query&titles=File:$file&prop=imageinfo&iiprop=url%7Cextmetadata&iiurlwidth=2000&format=json&formatversion=2")
+        val file = pageUrl.substringAfter("/wiki/File:", "").takeIf { it.isNotEmpty() }?.decodeURLPart() ?: throw LookupFailure.NotAllowed(pageUrl)
+        val title = Parsing.query("File:$file")
+        val body = api("https://commons.wikimedia.org/w/api.php?action=query&titles=$title&prop=imageinfo&iiprop=url%7Cextmetadata&iiurlwidth=2000&format=json&formatversion=2")
         return parseImageInfo(body) ?: throw LookupFailure.Unreadable("Commons has no file $file")
     }
 
@@ -154,7 +156,8 @@ class WikidataSource(private val http: PoliteHttpClient, private val clock: Cloc
             val images = buildList {
                 val file = claimString(entity, IMAGE)
                 val preview = summary["thumbnail"]["source"].str?.takeIf { url -> IMAGE_HOSTS.any { url.startsWith(it) } }
-                if (file != null && preview != null) {
+                // The summary's picture is shown, Wikidata's (P18) is saved: only offer it when they're the same file.
+                if (file != null && preview != null && sameFile(preview, file)) {
                     add(RecordImage(
                         url = preview,
                         credit = "Wikimedia Commons",
@@ -190,6 +193,13 @@ class WikidataSource(private val http: PoliteHttpClient, private val clock: Cloc
                 licence = meta["LicenseShortName"]["value"].str?.let(Parsing::htmlToText),
                 artist = meta["Artist"]["value"].str?.let(Parsing::htmlToText)?.takeIf { it.isNotBlank() },
             )
+        }
+
+        /** Whether a Commons thumbnail URL (".../330px-Name.jpg") shows the file [name]. */
+        fun sameFile(thumbnailUrl: String, name: String): Boolean {
+            val last = thumbnailUrl.substringBefore('?').substringAfterLast('/').decodeURLPart()
+            val shown = last.replaceFirst(Regex("^\\d+px-"), "")
+            return shown.equals(name.replace(' ', '_'), ignoreCase = true)
         }
 
         private val corporate = Regex("""[\s,]+(S\.?A\.?|AG|GmbH|Ltd\.?|Limited|Inc\.?|Corp\.?|Corporation|Co\.,? Ltd\.?|K\.K\.|Holding|Group|SA de CV)$""", RegexOption.IGNORE_CASE)

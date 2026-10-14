@@ -107,6 +107,20 @@ class PoliteHttpClientTest {
         assertEquals(0L, byHost.getValue("other.example").first())
     }
 
+    @Test fun firstRequestIsNotDelayedWhateverTheClock() = runTest {
+        // A monotonic clock rarely starts at zero. The first request to a host must go straight out.
+        val engine = MockEngine(MockEngineConfig().apply {
+            dispatcher = StandardTestDispatcher(testScheduler)
+            addHandler { respond("") }
+        })
+        val start = 5_000_000_000L
+        val http = PoliteHttpClient(engine, RequestLog(), MemoryRobotsStore(), nowMillis = { start + testScheduler.currentTime }, wallClock = fixedClock)
+        http.get("https://example.org/a", robots = RobotsPolicy.ApiPolicy)
+        assertEquals(0L, testScheduler.currentTime)
+        http.get("https://example.org/b", robots = RobotsPolicy.ApiPolicy)
+        assertEquals(1_000L, testScheduler.currentTime)
+    }
+
     @Test fun refusesDisallowedUrlsWithoutSending() = runTest {
         val rec = Recorder()
         val log = RequestLog()
@@ -141,6 +155,30 @@ class PoliteHttpClientTest {
         }
         assertFailsWith<LookupFailure.RobotsUnavailable> { http.get("https://example.org/x") }
         assertEquals(1, rec.requests.size)
+    }
+
+    @Test fun aFailedRobotsFetchIsNotRetriedForAMinute() = runTest {
+        val rec = Recorder()
+        val http = client(recorder = rec) { req ->
+            if (req.url.encodedPath == "/robots.txt") respond("", HttpStatusCode.ServiceUnavailable) else respond("fine")
+        }
+        assertFailsWith<LookupFailure.RobotsUnavailable> { http.get("https://slow.example/x") }
+        assertFailsWith<LookupFailure.RobotsUnavailable> { http.get("https://slow.example/y") }
+        assertEquals(1, rec.requests.size)
+    }
+
+    @Test fun oneHostsRobotsDoesNotHoldUpAnother() = runTest {
+        val rec = Recorder()
+        val http = client(recorder = rec) { req ->
+            if (req.url.host == "slow.example" && req.url.encodedPath == "/robots.txt") delay(9_000)
+            if (req.url.encodedPath == "/robots.txt") respond("") else respond("fine")
+        }
+        val slow = async { http.get("https://slow.example/x") }
+        val fast = async { http.get("https://fast.example/x") }
+        fast.await()
+        val fastDone = testScheduler.currentTime
+        slow.await()
+        assertTrue(fastDone < 9_000, "fast host finished at $fastDone ms")
     }
 
     @Test fun backsOffWhenAskedToWait() = runTest {

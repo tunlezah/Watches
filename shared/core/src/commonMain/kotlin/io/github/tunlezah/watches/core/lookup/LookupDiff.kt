@@ -79,7 +79,9 @@ object LookupDiff {
         for (row in rows) {
             val option = choices[row.field.key]?.let { row.options.getOrNull(it) } ?: continue
             watch = row.field.set(watch, option.value)
-            provenance += Provenance(row.field.key, option.source, option.url, option.fetchedAt, userEdited = false)
+            // A complications union still holds the owner's own entries, so it stays theirs to protect.
+            val mixed = row.field == SpecFields.Complications && row.protected
+            provenance += Provenance(row.field.key, option.source, option.url, option.fetchedAt, userEdited = mixed)
         }
         return watch to provenance
     }
