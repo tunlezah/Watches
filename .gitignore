@@ -1,0 +1,26 @@
+# Gradle / Kotlin
+.gradle/
+build/
+.kotlin/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing material never goes in the repo
+*.jks
+*.keystore
+keystore.properties
+signing/
+
+# iOS
+iosApp/build/
+iosApp/*.xcodeproj/
+iosApp/DerivedData/
+xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# OS
+.DS_Store
