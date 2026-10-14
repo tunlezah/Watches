@@ -20,6 +20,14 @@ kotlin {
         }
     }
 
+    sourceSets.all {
+        languageSettings.optIn("kotlin.time.ExperimentalTime")
+        languageSettings.optIn("kotlin.uuid.ExperimentalUuidApi")
+        languageSettings.optIn("androidx.compose.material3.ExperimentalMaterial3Api")
+        languageSettings.optIn("androidx.compose.foundation.layout.ExperimentalLayoutApi")
+        languageSettings.optIn("androidx.compose.animation.ExperimentalSharedTransitionApi")
+    }
+
     sourceSets {
         commonMain.dependencies {
             api(project(":shared:data"))

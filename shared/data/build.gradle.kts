@@ -17,6 +17,11 @@ kotlin {
     iosArm64()
     iosSimulatorArm64()
 
+    sourceSets.all {
+        languageSettings.optIn("kotlin.time.ExperimentalTime")
+        languageSettings.optIn("kotlin.uuid.ExperimentalUuidApi")
+    }
+
     sourceSets {
         commonMain.dependencies {
             api(project(":shared:core"))
