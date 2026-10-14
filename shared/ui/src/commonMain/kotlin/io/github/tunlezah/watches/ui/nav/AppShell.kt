@@ -293,11 +293,16 @@ private fun DetailEntry(watchId: String, navigator: Navigator, showBack: Boolean
 private fun EditEntry(watchId: String?, draftKey: String?, navigator: Navigator) {
     val vm = koinViewModel<EditViewModel>(key = "edit-${watchId ?: "new"}-${draftKey.orEmpty()}") { parametersOf(watchId, draftKey) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val session = koinInject<LookupSession>()
     EditScreen(
         state = state,
         vm = vm,
         onClose = { navigator.pop() },
-        onSaved = { id -> if (watchId == null) navigator.openDetail(id) else navigator.pop() },
+        onSaved = { id ->
+            // A watch made from lookup results: those results are used up, so "Add" can't make it twice.
+            if (draftKey != null) session.clearTray()
+            if (watchId == null) navigator.openDetail(id) else navigator.pop()
+        },
         onLookUp = { query -> navigator.push(Route.LookupFor(LookupTarget.Form(vm.formKey), query)) },
     )
 }
