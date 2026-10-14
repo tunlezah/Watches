@@ -44,6 +44,7 @@ jobs:
           checkNetworkIsolation
           :shared:core:jvmTest
           :shared:data:jvmTest
+          :shared:search:jvmTest
           :shared:ui:compileKotlinIosSimulatorArm64
           :androidApp:recordRoborazziDebug
           :androidApp:assembleRelease
