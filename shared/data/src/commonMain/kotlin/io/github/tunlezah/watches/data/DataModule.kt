@@ -13,5 +13,6 @@ val dataModule = module {
     single { TimeSource.System }
     single { WatchRepository(get(), get(), get()) }
     single { PhotoRepository(get(), get(), get(), get()) }
-    single { SettingsRepository(get<AppDatabase>().settingDao()) }
+    single { get<AppDatabase>().settingDao() }
+    single { SettingsRepository(get()) }
 }

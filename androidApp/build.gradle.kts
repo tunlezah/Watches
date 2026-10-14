@@ -78,6 +78,7 @@ dependencies {
 
     // Screenshot tests render real screens on the JVM (Robolectric), so every direction can be checked without a device.
     testImplementation(libs.junit)
+    testImplementation(libs.koin.test)
     testImplementation(libs.robolectric)
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
