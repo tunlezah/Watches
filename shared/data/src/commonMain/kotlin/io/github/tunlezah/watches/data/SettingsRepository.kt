@@ -44,6 +44,7 @@ class SettingsRepository(private val dao: SettingDao) {
         DATE_FORMAT to s.display.dateFormat.key,
         WR_UNIT to s.display.waterResistanceUnit.key,
         CURRENCY to s.display.defaultCurrency,
+        DISABLED_SOURCES to s.disabledSources.sorted().joinToString(","),
     )
 
     private fun decode(m: Map<String, String>): AppSettings {
@@ -60,6 +61,7 @@ class SettingsRepository(private val dao: SettingDao) {
                 waterResistanceUnit = keyedOf<WaterResistanceUnit>(m[WR_UNIT]) ?: d.display.waterResistanceUnit,
                 defaultCurrency = m[CURRENCY] ?: d.display.defaultCurrency,
             ),
+            disabledSources = m[DISABLED_SOURCES].orEmpty().split(',').filter { it.isNotBlank() }.toSet(),
         )
     }
 
@@ -73,5 +75,6 @@ class SettingsRepository(private val dao: SettingDao) {
         const val DATE_FORMAT = "display.date_format"
         const val WR_UNIT = "display.water_resistance_unit"
         const val CURRENCY = "display.currency"
+        const val DISABLED_SOURCES = "lookup.disabled_sources"
     }
 }

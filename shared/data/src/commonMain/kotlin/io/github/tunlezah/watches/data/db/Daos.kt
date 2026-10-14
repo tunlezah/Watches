@@ -128,3 +128,34 @@ interface SettingDao {
     @Query("DELETE FROM setting WHERE `key` = :key")
     suspend fun remove(key: String)
 }
+
+@Dao
+interface LookupDao {
+
+    @Query("SELECT * FROM recent_search ORDER BY used_at DESC LIMIT :limit")
+    fun observeRecent(limit: Int): Flow<List<RecentSearchEntity>>
+
+    @Upsert
+    suspend fun upsertRecent(row: RecentSearchEntity)
+
+    @Query("DELETE FROM recent_search WHERE `query` = :query")
+    suspend fun deleteRecent(query: String)
+
+    @Query("DELETE FROM recent_search")
+    suspend fun clearRecent()
+
+    @Query("DELETE FROM recent_search WHERE `query` NOT IN (SELECT `query` FROM recent_search ORDER BY used_at DESC LIMIT :keep)")
+    suspend fun trimRecent(keep: Int)
+
+    @Query("SELECT * FROM source_snapshot WHERE watch_id = :watchId ORDER BY fetched_at DESC")
+    suspend fun snapshots(watchId: String): List<SourceSnapshotEntity>
+
+    @Query("SELECT * FROM source_snapshot WHERE watch_id = :watchId AND source = :source AND url = :url")
+    suspend fun snapshotsFor(watchId: String, source: String, url: String): List<SourceSnapshotEntity>
+
+    @Upsert
+    suspend fun upsertSnapshot(row: SourceSnapshotEntity)
+
+    @Query("DELETE FROM source_snapshot WHERE id = :id")
+    suspend fun deleteSnapshot(id: String)
+}

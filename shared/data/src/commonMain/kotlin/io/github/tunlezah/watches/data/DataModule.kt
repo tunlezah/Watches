@@ -15,4 +15,5 @@ val dataModule = module {
     single { PhotoRepository(get(), get(), get(), get()) }
     single { get<AppDatabase>().settingDao() }
     single { SettingsRepository(get()) }
+    single { LookupRepository(get(), get(), get()) }
 }

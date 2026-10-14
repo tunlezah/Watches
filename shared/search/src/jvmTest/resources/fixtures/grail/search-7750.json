@@ -1,0 +1,83 @@
+[
+ {
+  "id": 5628,
+  "slug": "lemania-5012",
+  "link": "https://reference.grail-watch.com/movement/lemania-5012/",
+  "title": {
+   "rendered": "Lemania 5012"
+  },
+  "class_list": [
+   "complication-2-button",
+   "complication-bilingual-day-wheel",
+   "complication-cam-switching-chronograph",
+   "complication-chronograph",
+   "complication-date",
+   "complication-day",
+   "complication-hacking-seconds",
+   "complication-quick-date-correction",
+   "brand-lemania",
+   "winding-automatic",
+   "winding-central-rotor-automatic-winding"
+  ]
+ },
+ {
+  "id": 5618,
+  "slug": "dubois-depraz-2070",
+  "link": "https://reference.grail-watch.com/movement/dubois-depraz-2070/",
+  "title": {
+   "rendered": "Dubois-Dépraz 2070"
+  },
+  "class_list": [
+   "complication-2-button",
+   "complication-24-hour-hand",
+   "complication-chronograph",
+   "complication-date",
+   "complication-date-by-pointer",
+   "complication-modular",
+   "complication-modular-chronograph",
+   "brand-dubois-depraz",
+   "brand-sinn",
+   "winding-automatic",
+   "winding-bi-directional-automatic-winding",
+   "winding-central-rotor-automatic-winding"
+  ]
+ },
+ {
+  "id": 5611,
+  "slug": "sinn-sz04-2",
+  "link": "https://reference.grail-watch.com/movement/sinn-sz04-2/",
+  "title": {
+   "rendered": "Sinn SZ04"
+  },
+  "class_list": [
+   "complication-regulator",
+   "brand-sinn",
+   "winding-hand-winding"
+  ]
+ },
+ {
+  "id": 5597,
+  "slug": "sellita-sw515",
+  "link": "https://reference.grail-watch.com/movement/sellita-sw515/",
+  "title": {
+   "rendered": "Sellita SW515"
+  },
+  "class_list": [
+   "complication-2-button",
+   "complication-bilingual-day-wheel",
+   "complication-cam-switching-chronograph",
+   "complication-chronograph",
+   "complication-date",
+   "complication-day",
+   "complication-hacking-seconds",
+   "complication-hand-winding",
+   "complication-quick-date-correction",
+   "complication-quick-day-correction",
+   "brand-sellita",
+   "brand-sinn",
+   "winding-automatic",
+   "winding-bi-directional-automatic-winding",
+   "winding-central-rotor-automatic-winding"
+  ]
+ }
+]

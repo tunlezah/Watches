@@ -72,14 +72,22 @@ class WatchRepository(
         }
     }
 
-    /** Creates a watch from manual entry. Every value it carries is recorded as manual and user-entered. */
-    suspend fun create(watch: Watch, id: String = Ids.new()): Watch {
+    /**
+     * Creates a watch. Values in [sourced] came from a lookup and keep that source; every other
+     * value is recorded as manual and user-entered.
+     */
+    suspend fun create(
+        watch: Watch,
+        id: String = Ids.new(),
+        sourced: Map<String, Provenance> = emptyMap(),
+        otherSpecs: List<OtherSpec> = emptyList(),
+    ): Watch {
         val now = time.now()
         val created = watch.copy(id = id, createdAt = now, updatedAt = now)
         val provenance = SpecFields.all
             .filter { it.get(created) != null && it.key != SpecFields.Status.key }
-            .map { Provenance(it.key, Sources.MANUAL, userEdited = true) }
-        write(created, provenance, otherSpecs = emptyList())
+            .map { sourced[it.key]?.copy(userEdited = false) ?: Provenance(it.key, Sources.MANUAL, userEdited = true) }
+        write(created, provenance, otherSpecs.mapIndexed { i, o -> o.copy(position = i) })
         return created
     }
 
@@ -88,17 +96,26 @@ class WatchRepository(
      * keeps its source details, so a later lookup can show where the original came from without
      * silently overwriting the edit.
      */
-    suspend fun update(edited: Watch): Watch {
-        val before = get(edited.id) ?: return create(edited, edited.id)
+    suspend fun update(
+        edited: Watch,
+        sourced: Map<String, Provenance> = emptyMap(),
+        otherSpecs: List<OtherSpec> = emptyList(),
+    ): Watch {
+        val before = get(edited.id) ?: return create(edited, edited.id, sourced, otherSpecs)
         val changed = SpecFields.changedKeys(before, edited) - SpecFields.Status.key
         val existing = dao.getProvenance(edited.id).associateBy { it.fieldKey }
         val provenance = changed.map { key ->
             val old = existing[key]
-            if (old != null) Provenance(key, old.source, old.sourceUrl, old.fetchedAt?.let { kotlin.time.Instant.fromEpochMilliseconds(it) }, userEdited = true)
-            else Provenance(key, Sources.MANUAL, userEdited = true)
+            when {
+                // Applied from a lookup (and the owner ticked it if it replaced their own value).
+                key in sourced -> sourced.getValue(key).copy(userEdited = false)
+                old != null -> Provenance(key, old.source, old.sourceUrl, old.fetchedAt?.let { kotlin.time.Instant.fromEpochMilliseconds(it) }, userEdited = true)
+                else -> Provenance(key, Sources.MANUAL, userEdited = true)
+            }
         }
         val saved = edited.copy(createdAt = before.createdAt, updatedAt = time.now())
-        write(saved, provenance, otherSpecs = null)
+        val other = if (otherSpecs.isEmpty()) null else mergeOtherSpecs(dao.getOtherSpecs(edited.id).map { it.toModel() }, otherSpecs)
+        write(saved, provenance, other)
         return saved
     }
 
@@ -146,14 +163,15 @@ class WatchRepository(
         }
         files.deleteTree(FileStore.photoDir(id))
         files.deleteTree(FileStore.documentDir(id))
+        files.deleteTree(FileStore.snapshotDir(id))
     }
 
     suspend fun sampleIds(): List<String> = dao.sampleIds()
 
-    /** Saves a lookup's extra specs, replacing earlier ones from the same source. */
+    /** Saves a lookup's extra specs, replacing earlier ones from the same sources. */
     suspend fun saveOtherSpecs(watchId: String, specs: List<OtherSpec>) {
         val watch = get(watchId) ?: return
-        write(watch, emptyList(), specs)
+        write(watch, emptyList(), mergeOtherSpecs(dao.getOtherSpecs(watchId).map { it.toModel() }, specs))
     }
 
     /** Rebuilds the search index if it is out of step with the watch table (it is a cache). */
@@ -200,6 +218,16 @@ class WatchRepository(
 
     companion object {
         private val prefs = DisplayPrefs()
+
+        /**
+         * Extra specs from a fresh lookup replace the ones the same source gave before; specs from
+         * other sources, and ones the owner added, stay.
+         */
+        fun mergeOtherSpecs(existing: List<OtherSpec>, incoming: List<OtherSpec>): List<OtherSpec> {
+            val replaced = incoming.mapNotNull { it.source }.toSet()
+            return (existing.filter { it.source == null || it.source !in replaced } + incoming)
+                .mapIndexed { i, o -> o.copy(position = i) }
+        }
 
         /** Every searchable word for a watch: all fields as shown, complications, notes and extra specs. */
         fun searchBody(watch: Watch, otherSpecs: List<OtherSpec>): String = buildString {

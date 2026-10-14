@@ -50,5 +50,9 @@ class FileStore(val root: Path, val fileSystem: FileSystem = FileSystem.SYSTEM) 
     companion object {
         fun photoDir(watchId: String) = "photos/$watchId"
         fun documentDir(watchId: String) = "documents/$watchId"
+        fun snapshotDir(watchId: String) = "snapshots/$watchId"
+
+        /** Rebuildable data (robots.txt cache). Never part of a backup. */
+        const val CACHE_DIR = "cache"
     }
 }

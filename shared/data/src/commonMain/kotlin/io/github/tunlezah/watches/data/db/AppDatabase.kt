@@ -32,6 +32,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun watchDao(): WatchDao
     abstract fun photoDao(): PhotoDao
     abstract fun settingDao(): SettingDao
+    abstract fun lookupDao(): LookupDao
 
     companion object {
         const val FILE_NAME = "watches.db"

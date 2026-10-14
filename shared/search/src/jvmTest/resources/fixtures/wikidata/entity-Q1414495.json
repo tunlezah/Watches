@@ -1,0 +1,301 @@
+{
+ "entities": {
+  "Q1414495": {
+   "type": "item",
+   "id": "Q1414495",
+   "labels": {
+    "en": {
+     "language": "en",
+     "value": "Omega Speedmaster"
+    }
+   },
+   "descriptions": {
+    "en": {
+     "language": "en",
+     "value": "chronograph wristwatches produced by Omega SA"
+    }
+   },
+   "claims": {
+    "P373": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P373",
+       "hash": "5ecea311f3d6b0d653d8e20991a0526023696f3b",
+       "datavalue": {
+        "value": "Omega Speedmaster",
+        "type": "string"
+       },
+       "datatype": "string"
+      },
+      "type": "statement",
+      "id": "q1414495$7429B684-8710-458D-AF05-D86B1FBD05ED",
+      "rank": "normal",
+      "references": [
+       {
+        "hash": "9a24f7c0208b05d6be97077d855671d1dfdbc0dd",
+        "snaks": {
+         "P143": [
+          {
+           "snaktype": "value",
+           "property": "P143",
+           "hash": "d38375ffe6fe142663ff55cd783aa4df4301d83d",
+           "datavalue": {
+            "value": {
+             "entity-type": "item",
+             "numeric-id": 48183,
+             "id": "Q48183"
+            },
+            "type": "wikibase-entityid"
+           },
+           "datatype": "wikibase-item"
+          }
+         ]
+        },
+        "snaks-order": [
+         "P143"
+        ]
+       }
+      ]
+     }
+    ],
+    "P646": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P646",
+       "hash": "2f71697d27a0cebc1495cefd4d44db2721c09794",
+       "datavalue": {
+        "value": "/m/08d774",
+        "type": "string"
+       },
+       "datatype": "external-id"
+      },
+      "type": "statement",
+      "id": "Q1414495$D915C6D1-F5D7-43ED-98B0-08892B6DF7D1",
+      "rank": "normal",
+      "references": [
+       {
+        "hash": "2b00cb481cddcac7623114367489b5c194901c4a",
+        "snaks": {
+         "P248": [
+          {
+           "snaktype": "value",
+           "property": "P248",
+           "hash": "a94b740202b097dd33355e0e6c00e54b9395e5e0",
+           "datavalue": {
+            "value": {
+             "entity-type": "item",
+             "numeric-id": 15241312,
+             "id": "Q15241312"
+            },
+            "type": "wikibase-entityid"
+           },
+           "datatype": "wikibase-item"
+          }
+         ],
+         "P577": [
+          {
+           "snaktype": "value",
+           "property": "P577",
+           "hash": "fde79ecb015112d2f29229ccc1ec514ed3e71fa2",
+           "datavalue": {
+            "value": {
+             "time": "+2013-10-28T00:00:00Z",
+             "timezone": 0,
+             "before": 0,
+             "after": 0,
+             "precision": 11,
+             "calendarmodel": "http://www.wikidata.org/entity/Q1985727"
+            },
+            "type": "time"
+           },
+           "datatype": "time"
+          }
+         ]
+        },
+        "snaks-order": [
+         "P248",
+         "P577"
+        ]
+       }
+      ]
+     }
+    ],
+    "P176": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P176",
+       "hash": "2c2c3523096c483bf2d53bf8b113e490767a341b",
+       "datavalue": {
+        "value": {
+         "entity-type": "item",
+         "numeric-id": 659224,
+         "id": "Q659224"
+        },
+        "type": "wikibase-entityid"
+       },
+       "datatype": "wikibase-item"
+      },
+      "type": "statement",
+      "id": "Q1414495$b0c035a6-4d1b-96fb-dfe5-ffbb1c54935a",
+      "rank": "normal"
+     }
+    ],
+    "P279": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P279",
+       "hash": "26eb8f650c877f37c9c7797caea52d7c59b4dee7",
+       "datavalue": {
+        "value": {
+         "entity-type": "item",
+         "numeric-id": 26965868,
+         "id": "Q26965868"
+        },
+        "type": "wikibase-entityid"
+       },
+       "datatype": "wikibase-item"
+      },
+      "type": "statement",
+      "id": "Q1414495$76716d58-498a-7c2f-a5a5-aa51f264ed6c",
+      "rank": "normal"
+     }
+    ],
+    "P18": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P18",
+       "hash": "ab0422f61fc80c594c04c87b5b96ecfcf0566702",
+       "datavalue": {
+        "value": "Vintage Omega Speedmaster \"Pre-moon\".jpg",
+        "type": "string"
+       },
+       "datatype": "commonsMedia"
+      },
+      "type": "statement",
+      "id": "Q1414495$85343b1f-45ec-3ac7-8cc4-6365d21ab2e7",
+      "rank": "normal"
+     }
+    ],
+    "P1716": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P1716",
+       "hash": "146fb2da3a66a8b3e70190e92e98bcec88b98718",
+       "datavalue": {
+        "value": {
+         "entity-type": "item",
+         "numeric-id": 125129697,
+         "id": "Q125129697"
+        },
+        "type": "wikibase-entityid"
+       },
+       "datatype": "wikibase-item"
+      },
+      "type": "statement",
+      "id": "Q1414495$d7ad0daa-438a-a393-7a7d-7c7760236194",
+      "rank": "normal"
+     }
+    ],
+    "P2671": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P2671",
+       "hash": "2a8cc71613f06225aee212bf976e43785aa3e8b8",
+       "datavalue": {
+        "value": "/g/11kj1pw5nv",
+        "type": "string"
+       },
+       "datatype": "external-id"
+      },
+      "type": "statement",
+      "id": "Q1414495$301fe04b-43f5-060b-5d6c-d4dbde5b6b78",
+      "rank": "normal"
+     }
+    ],
+    "P856": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P856",
+       "hash": "d822e1e80c214a5cb5898b72700c7876d4c05862",
+       "datavalue": {
+        "value": "https://www.omegawatches.com/watches/speedmaster",
+        "type": "string"
+       },
+       "datatype": "url"
+      },
+      "type": "statement",
+      "id": "Q1414495$409d3886-4f0a-fcc8-9f32-3c25ad8726e2",
+      "rank": "preferred"
+     }
+    ]
+   },
+   "sitelinks": {
+    "enwiki": {
+     "site": "enwiki",
+     "title": "Omega Speedmaster",
+     "badges": []
+    }
+   }
+  },
+  "Q109315562": {
+   "type": "item",
+   "id": "Q109315562",
+   "labels": {},
+   "descriptions": {},
+   "claims": {
+    "P31": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P31",
+       "hash": "8ead095396cb8ed4d25b83f577d32dfaca1c5470",
+       "datavalue": {
+        "value": {
+         "entity-type": "item",
+         "numeric-id": 1149963,
+         "id": "Q1149963"
+        },
+        "type": "wikibase-entityid"
+       },
+       "datatype": "wikibase-item"
+      },
+      "type": "statement",
+      "id": "Q109315562$fae7869d-4c69-5616-c093-714b707c386a",
+      "rank": "normal"
+     }
+    ],
+    "P176": [
+     {
+      "mainsnak": {
+       "snaktype": "value",
+       "property": "P176",
+       "hash": "e2daf7bffe4b10037774ace361e9d7df4036d85c",
+       "datavalue": {
+        "value": {
+         "entity-type": "item",
+         "numeric-id": 680237,
+         "id": "Q680237"
+        },
+        "type": "wikibase-entityid"
+       },
+       "datatype": "wikibase-item"
+      },
+      "type": "statement",
+      "id": "Q109315562$84c888f6-4c94-2dd3-8c15-14357c4f453c",
+      "rank": "normal"
+     }
+    ]
+   },
+   "sitelinks": {}
+  }
+ },
+ "success": 1
+}

@@ -236,4 +236,62 @@ class RepositoryTest {
         assertEquals(listOf("grand Seiko", "Omega"), watches.observeBrands().first())
         assertNotNull(watches.get(watches.observeSummaries().first().first().id))
     }
+
+    @Test fun lookupValuesKeepTheirSource() = runBlocking<Unit> {
+        val fetched = Instant.fromEpochMilliseconds(1_790_000_000_000)
+        val ranfft = io.github.tunlezah.watches.core.model.Provenance("movement.jewels", "ranfft", "https://ranfft.org/caliber/1-x", fetched)
+        val created = watches.create(blank().copy(brand = "Tudor", jewels = 25), sourced = mapOf("movement.jewels" to ranfft),
+            otherSpecs = listOf(io.github.tunlezah.watches.core.model.OtherSpec("o1", "Lift angle", "50°", "ranfft", "https://ranfft.org/caliber/1-x", fetched)))
+        val detail = watches.observeDetail(created.id).first()!!
+        assertEquals("ranfft", detail.provenance.getValue("movement.jewels").source)
+        assertFalse(detail.provenance.getValue("movement.jewels").userEdited)
+        assertTrue(detail.provenance.getValue("identity.brand").userEdited)
+        assertEquals(listOf("Lift angle"), detail.otherSpecs.map { it.label })
+
+        // A later lookup from the same source replaces its extras; the owner's own stay.
+        watches.update(created.copy(powerReserveH = 40.0),
+            sourced = mapOf("movement.power_reserve_h" to ranfft.copy(fieldKey = "movement.power_reserve_h")),
+            otherSpecs = listOf(io.github.tunlezah.watches.core.model.OtherSpec("o2", "Escapement", "Swiss lever", "ranfft", "u", fetched)))
+        val after = watches.observeDetail(created.id).first()!!
+        assertEquals(listOf("Escapement"), after.otherSpecs.map { it.label })
+        assertEquals("ranfft", after.provenance.getValue("movement.power_reserve_h").source)
+        assertFalse(after.provenance.getValue("movement.power_reserve_h").userEdited)
+    }
+
+    @Test fun mergeOtherSpecsBySource() {
+        val o = { id: String, src: String? -> io.github.tunlezah.watches.core.model.OtherSpec(id, id, "v", src) }
+        val merged = WatchRepository.mergeOtherSpecs(listOf(o("a", "grail"), o("b", null), o("c", "ranfft")), listOf(o("d", "ranfft")))
+        assertEquals(listOf("a", "b", "d"), merged.map { it.id })
+        assertEquals(listOf(0, 1, 2), merged.map { it.position })
+    }
+
+    @Test fun recentSearchesAndSnapshots() = runBlocking<Unit> {
+        val lookups = LookupRepository(db, files, clock)
+        repeat(15) { lookups.remember("query $it") }
+        lookups.remember("query 3")
+        val recent = lookups.observeRecent().first()
+        assertEquals(LookupRepository.RECENT_LIMIT, recent.size)
+        assertEquals("query 3", recent.first())
+        lookups.forget("query 3")
+        assertFalse("query 3" in lookups.observeRecent().first())
+
+        val w = watches.create(blank().copy(brand = "Omega"))
+        val record = io.github.tunlezah.watches.core.lookup.SourceRecord("grail", "eta-7750", "https://g/eta-7750", "ETA 7750",
+            Instant.fromEpochMilliseconds(1_790_000_000_000), raw = io.github.tunlezah.watches.core.lookup.RawPayload("application/json", "[1]"))
+        lookups.saveSnapshots(w.id, listOf(record))
+        lookups.saveSnapshots(w.id, listOf(record))
+        assertEquals(listOf("grail" to "https://g/eta-7750"), lookups.snapshotSources(w.id))
+        val stored = File(dir, "files/${FileStore.snapshotDir(w.id)}").listFiles()!!.toList()
+        assertEquals(1, stored.size)
+        assertEquals("[1]", stored.single().readText())
+        watches.delete(w.id)
+        assertFalse(File(dir, "files/${FileStore.snapshotDir(w.id)}").exists())
+    }
+
+    @Test fun disabledSourcesPersist() = runBlocking<Unit> {
+        settings.update { it.copy(disabledSources = setOf("grail")) }
+        assertEquals(setOf("grail"), settings.current().disabledSources)
+        settings.update { it.copy(disabledSources = emptySet()) }
+        assertEquals(emptySet(), settings.current().disabledSources)
+    }
 }

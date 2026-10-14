@@ -1,0 +1,46 @@
+{
+ "batchcomplete": true,
+ "query": {
+  "normalized": [
+   {
+    "fromencoded": false,
+    "from": "File:Vintage_Omega_Speedmaster_\"Pre-moon\".jpg",
+    "to": "File:Vintage Omega Speedmaster \"Pre-moon\".jpg"
+   }
+  ],
+  "pages": [
+   {
+    "ns": 6,
+    "title": "File:Vintage Omega Speedmaster \"Pre-moon\".jpg",
+    "imageinfo": [
+     {
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/c/cd/Vintage_Omega_Speedmaster_%22Pre-moon%22.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "thumbwidth": 2000,
+      "thumbheight": 2679,
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/cd/Vintage_Omega_Speedmaster_%22Pre-moon%22.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Vintage_Omega_Speedmaster_%22Pre-moon%22.jpg",
+      "extmetadata": {
+       "LicenseShortName": {
+        "value": "CC BY-SA 2.0",
+        "source": "commons-desc-page",
+        "hidden": ""
+       },
+       "Artist": {
+        "value": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/8869879@N05\">Shane Lin</a>",
+        "source": "commons-desc-page"
+       },
+       "LicenseUrl": {
+        "value": "https://creativecommons.org/licenses/by-sa/2.0",
+        "source": "commons-desc-page"
+       },
+       "Credit": {
+        "value": "<a href=\"//commons.wikimedia.org/wiki/Flickr\" class=\"mw-redirect\" title=\"Flickr\">Flickr</a>: <a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/photos/8869879@N05/5433433662\">Vintage Omega Speedmaster \"Pre-moon\"</a>",
+        "source": "commons-desc-page"
+       }
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

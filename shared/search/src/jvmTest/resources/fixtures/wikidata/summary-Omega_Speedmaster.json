@@ -1,0 +1,26 @@
+{
+ "type": "standard",
+ "title": "Omega Speedmaster",
+ "wikibase_item": "Q1414495",
+ "thumbnail": {
+  "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/Vintage_Omega_Speedmaster_%22Pre-moon%22.jpg/330px-Vintage_Omega_Speedmaster_%22Pre-moon%22.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "width": 330,
+  "height": 442
+ },
+ "description": "Chronograph wristwatch, worn by astronauts",
+ "content_urls": {
+  "desktop": {
+   "page": "https://en.wikipedia.org/wiki/Omega_Speedmaster",
+   "revisions": "https://en.wikipedia.org/wiki/Omega_Speedmaster?action=history",
+   "edit": "https://en.wikipedia.org/wiki/Omega_Speedmaster?action=edit",
+   "talk": "https://en.wikipedia.org/wiki/Talk:Omega_Speedmaster"
+  },
+  "mobile": {
+   "page": "https://en.wikipedia.org/wiki/Omega_Speedmaster",
+   "revisions": "https://en.wikipedia.org/wiki/Special:History/Omega_Speedmaster",
+   "edit": "https://en.wikipedia.org/wiki/Omega_Speedmaster?action=edit",
+   "talk": "https://en.wikipedia.org/wiki/Talk:Omega_Speedmaster"
+  }
+ },
+ "extract": "Omega Speedmaster is a line of luxury chronograph wristwatches produced by Omega SA. While chronographs have existed since the late 1800s, Omega first introduced this line of chronographs in 1957. Since then, many different chronograph movements have been marketed under the Speedmaster name. Astronaut Walter Schirra was the first person to wear one in space in 1962 during his Mercury-Atlas 8 mission. The manual winding Speedmaster Professional or \"Moonwatch\" is the best-known and longest-produced; it was worn during the first American spacewalk as part of NASA's Gemini 4 mission, and was the first watch worn by an astronaut walking on the Moon during the Apollo 11 mission. The Speedmaster Professional remains one of several watches qualified by NASA for spaceflight, and is still the only one so qualified for EVA. The Speedmaster line also includes other models, including analog-digital and automatic mechanical watches."
+}

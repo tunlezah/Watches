@@ -1,0 +1,81 @@
+{
+ "searchinfo": {
+  "search": "Omega Speedmaster"
+ },
+ "search": [
+  {
+   "id": "Q1414495",
+   "title": "Q1414495",
+   "pageid": 1353369,
+   "concepturi": "http://www.wikidata.org/entity/Q1414495",
+   "repository": "wikidata",
+   "url": "//www.wikidata.org/wiki/Q1414495",
+   "display": {
+    "label": {
+     "value": "Omega Speedmaster",
+     "language": "en"
+    },
+    "description": {
+     "value": "chronograph wristwatches produced by Omega SA",
+     "language": "en"
+    }
+   },
+   "label": "Omega Speedmaster",
+   "description": "chronograph wristwatches produced by Omega SA",
+   "match": {
+    "type": "label",
+    "language": "en",
+    "text": "Omega Speedmaster"
+   }
+  },
+  {
+   "id": "Q110621896",
+   "title": "Q110621896",
+   "pageid": 105667475,
+   "concepturi": "http://www.wikidata.org/entity/Q110621896",
+   "repository": "wikidata",
+   "url": "//www.wikidata.org/wiki/Q110621896",
+   "display": {
+    "label": {
+     "value": "Complete Omega Speedmaster watch with velcro strap",
+     "language": "en"
+    },
+    "description": {
+     "value": "Swiss watch used in the Apollo project",
+     "language": "en"
+    }
+   },
+   "label": "Complete Omega Speedmaster watch with velcro strap",
+   "description": "Swiss watch used in the Apollo project",
+   "match": {
+    "type": "alias",
+    "language": "en",
+    "text": "Omega Speedmaster"
+   },
+   "aliases": [
+    "Omega Speedmaster"
+   ]
+  },
+  {
+   "id": "Q85790642",
+   "title": "Q85790642",
+   "pageid": 85065815,
+   "concepturi": "http://www.wikidata.org/entity/Q85790642",
+   "repository": "wikidata",
+   "url": "//www.wikidata.org/wiki/Q85790642",
+   "display": {
+    "label": {
+     "value": "Omega Speedmaster Reduced",
+     "language": "en"
+    }
+   },
+   "label": "Omega Speedmaster Reduced",
+   "match": {
+    "type": "label",
+    "language": "en",
+    "text": "Omega Speedmaster Reduced"
+   }
+  }
+ ],
+ "success": 1
+}

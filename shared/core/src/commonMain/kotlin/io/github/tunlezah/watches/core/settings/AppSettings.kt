@@ -50,4 +50,6 @@ data class AppSettings(
     val layout: CollectionLayout = CollectionLayout.GRID,
     val sort: SortSpec = SortSpec(),
     val display: DisplayPrefs = DisplayPrefs(),
+    /** Lookup sources switched off in Settings. Stored as "off" so a new source starts on. */
+    val disabledSources: Set<String> = emptySet(),
 )

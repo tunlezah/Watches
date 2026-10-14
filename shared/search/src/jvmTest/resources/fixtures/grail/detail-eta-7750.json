@@ -1,0 +1,295 @@
+[
+ {
+  "id": 87,
+  "slug": "eta-7750",
+  "link": "https://reference.grail-watch.com/movement/eta-7750/",
+  "title": {
+   "rendered": "ETA 7750"
+  },
+  "excerpt": {
+   "rendered": "<p>Cam-operated automatic chronograph with day and date. (Fixture stand-in text.)</p>"
+  },
+  "_embedded": {
+   "wp:term": [
+    [
+     {
+      "id": 34,
+      "name": "2-Button",
+      "slug": "2-button",
+      "taxonomy": "complication"
+     },
+     {
+      "id": 109,
+      "name": "Cam Switching Chronograph",
+      "slug": "cam-switching-chronograph",
+      "taxonomy": "complication"
+     },
+     {
+      "id": 33,
+      "name": "Chronograph",
+      "slug": "chronograph",
+      "taxonomy": "complication"
+     },
+     {
+      "id": 2,
+      "name": "Date",
+      "slug": "date",
+      "taxonomy": "complication"
+     },
+     {
+      "id": 28,
+      "name": "Day",
+      "slug": "day",
+      "taxonomy": "complication"
+     },
+     {
+      "id": 76,
+      "name": "Hacking Seconds",
+      "slug": "hacking-seconds",
+      "taxonomy": "complication"
+     }
+    ],
+    [
+     {
+      "id": 4,
+      "name": "ETA",
+      "slug": "eta",
+      "taxonomy": "brand"
+     },
+     {
+      "id": 110,
+      "name": "Valjoux",
+      "slug": "valjoux",
+      "taxonomy": "brand"
+     }
+    ],
+    [
+     {
+      "id": 5,
+      "name": "Automatic",
+      "slug": "automatic",
+      "taxonomy": "winding"
+     },
+     {
+      "id": 811,
+      "name": "Central Rotor Automatic Winding",
+      "slug": "central-rotor-automatic-winding",
+      "taxonomy": "winding"
+     },
+     {
+      "id": 111,
+      "name": "Clockwise Automatic Winding",
+      "slug": "clockwise-automatic-winding",
+      "taxonomy": "winding"
+     },
+     {
+      "id": 163,
+      "name": "Uni-Directional Automatic Winding",
+      "slug": "uni-directional-automatic-winding",
+      "taxonomy": "winding"
+     }
+    ],
+    [
+     {
+      "id": 46,
+      "name": "17",
+      "slug": "17",
+      "taxonomy": "jewels"
+     },
+     {
+      "id": 149,
+      "name": "24",
+      "slug": "24",
+      "taxonomy": "jewels"
+     },
+     {
+      "id": 7,
+      "name": "25",
+      "slug": "25",
+      "taxonomy": "jewels"
+     }
+    ],
+    [
+     {
+      "id": 112,
+      "name": "54",
+      "slug": "54",
+      "taxonomy": "power-reserve"
+     }
+    ],
+    [
+     {
+      "id": 8,
+      "name": "28,800 A/h",
+      "slug": "28800",
+      "taxonomy": "frequency"
+     }
+    ],
+    [
+     {
+      "id": 95,
+      "name": "12 Hour Chronograph Hand at 6:00",
+      "slug": "twelve-hour-chronograph-at-6",
+      "taxonomy": "hands"
+     },
+     {
+      "id": 116,
+      "name": "30 Minute Chronograph Hand at 12:00",
+      "slug": "thirty-minute-chronograph-at-12",
+      "taxonomy": "hands"
+     },
+     {
+      "id": 40,
+      "name": "Central 60 Second Chronograph Hand",
+      "slug": "central-60-second-chronograph",
+      "taxonomy": "hands"
+     },
+     {
+      "id": 12,
+      "name": "Central Hour Hand",
+      "slug": "central-hours",
+      "taxonomy": "hands"
+     },
+     {
+      "id": 13,
+      "name": "Central Minute Hand",
+      "slug": "central-minutes",
+      "taxonomy": "hands"
+     },
+     {
+      "id": 217,
+      "name": "Date Window at 3:00",
+      "slug": "date-window-at-3",
+      "taxonomy": "hands"
+     },
+     {
+      "id": 268,
+      "name": "Day Window at 3:00",
+      "slug": "day-window-at-3",
+      "taxonomy": "hands"
+     },
+     {
+      "id": 113,
+      "name": "Small Seconds Hand at 9:00",
+      "slug": "small-seconds-at-9",
+      "taxonomy": "hands"
+     }
+    ],
+    [
+     {
+      "id": 17,
+      "name": "ETACHRON",
+      "slug": "etachron",
+      "taxonomy": "regulator"
+     },
+     {
+      "id": 1105,
+      "name": "Valjoux",
+      "slug": "valjoux",
+      "taxonomy": "regulator"
+     }
+    ],
+    [
+     {
+      "id": 18,
+      "name": "Balance Cock",
+      "slug": "balance-cock",
+      "taxonomy": "balance-mount"
+     },
+     {
+      "id": 19,
+      "name": "Balance Cock Clockwise",
+      "slug": "balance-cock-clockwise",
+      "taxonomy": "balance-mount"
+     }
+    ],
+    [
+     {
+      "id": 22,
+      "name": "Incabloc Double-Cone",
+      "slug": "incabloc",
+      "taxonomy": "anti-shock"
+     }
+    ],
+    [
+     {
+      "id": 114,
+      "name": "1970s",
+      "slug": "1970s",
+      "taxonomy": "production-period"
+     },
+     {
+      "id": 107,
+      "name": "1980s",
+      "slug": "1980s",
+      "taxonomy": "production-period"
+     },
+     {
+      "id": 98,
+      "name": "1990s",
+      "slug": "1990s",
+      "taxonomy": "production-period"
+     },
+     {
+      "id": 99,
+      "name": "2000s",
+      "slug": "2000s",
+      "taxonomy": "production-period"
+     },
+     {
+      "id": 100,
+      "name": "2010s",
+      "slug": "2010s",
+      "taxonomy": "production-period"
+     },
+     {
+      "id": 800,
+      "name": "2020s",
+      "slug": "2020s",
+      "taxonomy": "production-period"
+     }
+    ],
+    [],
+    [],
+    [
+     {
+      "id": 354,
+      "name": "1973",
+      "slug": "1973",
+      "taxonomy": "production-start-year"
+     }
+    ],
+    [
+     {
+      "id": 372,
+      "name": "Current",
+      "slug": "current",
+      "taxonomy": "production-end-year"
+     }
+    ],
+    [],
+    [
+     {
+      "id": 861,
+      "name": "Balance",
+      "slug": "balance",
+      "taxonomy": "back-side-feature"
+     },
+     {
+      "id": 845,
+      "name": "Balance at 1:30",
+      "slug": "bal0130",
+      "taxonomy": "back-side-feature"
+     },
+     {
+      "id": 1093,
+      "name": "Central Rotor",
+      "slug": "central-rotor",
+      "taxonomy": "back-side-feature"
+     }
+    ],
+    []
+   ]
+  }
+ }
+]
