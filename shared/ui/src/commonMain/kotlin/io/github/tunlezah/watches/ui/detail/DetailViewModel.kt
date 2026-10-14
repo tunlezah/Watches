@@ -18,7 +18,9 @@ import io.github.tunlezah.watches.data.WatchRepository
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.ui.components.WatchLook
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import io.github.tunlezah.watches.ui.lookup.RefreshSpecs
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
@@ -31,7 +33,8 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
 @Immutable
-data class PhotoUi(val id: String, val display: String, val thumb: String)
+/** [credit] is set for reference pictures saved from a lookup, which must keep their attribution. */
+data class PhotoUi(val id: String, val display: String, val thumb: String, val credit: String? = null)
 
 @Immutable
 data class DetailStat(val label: String, val value: String, val emphasis: Boolean = false)
@@ -53,6 +56,10 @@ data class DetailUiState(
     val groups: List<SpecGroupSheet> = emptyList(),
     val other: SpecGroupSheet? = null,
     val footer: String = "",
+    /** Some values came from a lookup, so "Refresh from sources" has pages to re-read. */
+    val hasSources: Boolean = false,
+    val notice: String? = null,
+    val refreshing: Boolean = false,
 )
 
 class DetailViewModel(
@@ -61,9 +68,12 @@ class DetailViewModel(
     settings: SettingsRepository,
     private val files: FileStore,
     private val time: TimeSource,
+    private val refresher: RefreshSpecs,
 ) : ViewModel() {
 
-    val state: StateFlow<DetailUiState> = combine(watches.observeDetail(watchId), settings.settings) { detail, s ->
+    private val transient = MutableStateFlow<Pair<Boolean, String?>>(false to null)
+
+    val state: StateFlow<DetailUiState> = combine(watches.observeDetail(watchId), settings.settings, transient) { detail, s, (refreshing, notice) ->
         if (detail == null) return@combine DetailUiState(loading = false, missing = true)
         val w = detail.watch
         val prefs = s.display
@@ -81,12 +91,15 @@ class DetailViewModel(
             reference = w.reference,
             statusLabel = w.status.label,
             archived = w.isArchived,
-            photos = photos.map { PhotoUi(it.id, files.absolute(it.displayFile), files.absolute(it.thumbFile)) },
+            photos = photos.map { PhotoUi(it.id, files.absolute(it.displayFile), files.absolute(it.thumbFile), it.attribution) },
             look = WatchLook.guess(w.dialColour, w.caseMaterial, w.complications),
             stats = stats(w, prefs),
             groups = SpecSheet.build(w, detail.provenance, prefs),
             other = otherSheet(detail.otherSpecs),
             footer = footer(w, prefs),
+            hasSources = detail.provenance.values.any { it.source != Sources.MANUAL } || detail.otherSpecs.any { it.source != null && it.source != Sources.MANUAL },
+            notice = notice,
+            refreshing = refreshing,
         )
     }
         .flowOn(Dispatchers.Default)
@@ -142,6 +155,20 @@ class DetailViewModel(
         watches.delete(watchId)
         onDone()
     }
+
+    /** Re-reads the source pages behind this watch's specs, then [onReady] opens the review. */
+    fun refresh(onReady: () -> Unit) {
+        if (transient.value.first) return
+        transient.value = true to "Checking the sources…"
+        viewModelScope.launch {
+            val title = state.value.watch?.title.orEmpty()
+            val message = refresher.prepare(watchId, title)
+            transient.value = false to message
+            if (message == null) onReady()
+        }
+    }
+
+    fun dismissNotice() { transient.value = transient.value.first to null }
 
     fun duplicate(onDone: (String) -> Unit) = viewModelScope.launch {
         watches.duplicate(watchId)?.let { onDone(it.id) }

@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import io.github.tunlezah.watches.data.androidDataModule
 import io.github.tunlezah.watches.data.dataModule
+import io.github.tunlezah.watches.search.androidSearchModule
+import io.github.tunlezah.watches.search.searchModule
 import io.github.tunlezah.watches.ui.uiModule
 import org.junit.Test
 import org.koin.core.annotation.KoinExperimentalAPI
@@ -25,14 +27,24 @@ class DependencyGraphTest {
     @Test
     fun everyDefinitionCanBeBuilt() {
         val context: Context = ApplicationProvider.getApplicationContext()
-        module { includes(dataModule, androidDataModule(context), uiModule) }.verify(
+        module { includes(dataModule, androidDataModule(context), searchModule, androidSearchModule(context), uiModule) }.verify(
             // Plain values passed inline rather than injected.
-            extraTypes = listOf(Context::class, SavedStateHandle::class, okio.Path::class, okio.FileSystem::class),
+            extraTypes = listOf(
+                Context::class, SavedStateHandle::class, okio.Path::class, okio.FileSystem::class,
+                // The HTTP engine is built inline by the search module; Ktor isn't on this module's compile classpath.
+                Class.forName("io.ktor.client.engine.HttpClientEngine").kotlin,
+                kotlin.time.Clock::class, kotlin.time.Duration::class, Function0::class,
+            ),
             injections = injectedParameters(
                 definition<io.github.tunlezah.watches.ui.detail.DetailViewModel>(String::class),
                 definition<io.github.tunlezah.watches.ui.edit.EditViewModel>(String::class),
                 definition<io.github.tunlezah.watches.ui.photos.PhotosViewModel>(String::class),
                 definition<io.github.tunlezah.watches.ui.photos.CropViewModel>(String::class),
+                definition<io.github.tunlezah.watches.ui.lookup.LookupViewModel>(io.github.tunlezah.watches.ui.lookup.LookupTarget::class, String::class),
+                definition<io.github.tunlezah.watches.ui.lookup.ResultViewModel>(String::class),
+                // The source list is built in the search module's definition, not resolved by type.
+                definition<io.github.tunlezah.watches.search.LookupService>(List::class),
+                definition<io.github.tunlezah.watches.ui.lookup.ApplyViewModel>(io.github.tunlezah.watches.ui.lookup.LookupTarget::class),
             ),
         )
     }

@@ -16,7 +16,15 @@ import io.github.tunlezah.watches.core.spec.SpecKind
 import io.github.tunlezah.watches.core.spec.SpecValue
 import io.github.tunlezah.watches.core.units.Units
 import io.github.tunlezah.watches.data.SettingsRepository
+import io.github.tunlezah.watches.data.LookupRepository
 import io.github.tunlezah.watches.data.WatchRepository
+import io.github.tunlezah.watches.core.lookup.SourceRecord
+import io.github.tunlezah.watches.core.model.OtherSpec
+import io.github.tunlezah.watches.core.model.Provenance
+import io.github.tunlezah.watches.core.model.Sources
+import io.github.tunlezah.watches.ui.lookup.LookupDraft
+import io.github.tunlezah.watches.ui.lookup.LookupDrafts
+import io.github.tunlezah.watches.ui.lookup.LookupForm
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,38 +49,66 @@ data class EditUiState(
     val prefs: DisplayPrefs = DisplayPrefs(),
     val dirty: Boolean = false,
     val saving: Boolean = false,
+    /** Values filled from lookups in this form, and their sources. They stay sourced unless changed. */
+    val sourced: Map<String, Provenance> = emptyMap(),
+    val sourcedValues: Map<String, SpecValue?> = emptyMap(),
+    /** The text each filled field showed when filled; if it's still the same, the exact value is kept. */
+    val appliedTexts: Map<String, String> = emptyMap(),
+    val pendingExtras: List<OtherSpec> = emptyList(),
+    val pendingRecords: List<SourceRecord> = emptyList(),
 ) {
     fun text(field: SpecField) = texts[field.key].orEmpty()
+
+    /** Display names of the sources this form was filled from. */
+    val filledFrom: List<String> get() = sourced.values.map { Sources.displayName(it.source) }.distinct()
 }
 
 class EditViewModel(
     private val watchId: String?,
+    private val draftKey: String?,
     private val watches: WatchRepository,
     private val settings: SettingsRepository,
     private val time: TimeSource,
+    private val lookups: LookupRepository,
+    private val drafts: LookupDrafts,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(EditUiState(isNew = watchId == null))
     val state: StateFlow<EditUiState> = _state.asStateFlow()
 
+    /** The watch as stored (or blank for a new one) and its provenance, for working out what the form changed. */
+    private var original: Watch? = null
+    private var savedProvenance: Map<String, Provenance> = emptyMap()
+
+    /** Lets a lookup started from this form read its values and fill it. */
+    val formKey: String = drafts.register(object : LookupForm {
+        override val title: String get() = _state.value.draft?.let { formWatch(_state.value).title } ?: "New watch"
+        override fun current(): Pair<Watch, Map<String, Provenance>> = _state.value.let { s -> formWatch(s) to formProvenance(s) }
+        override fun apply(draft: LookupDraft) = applyLookup(draft)
+    })
+
     init {
         viewModelScope.launch {
             val prefs = settings.current().display
             val existing = watchId?.let { watches.get(it) }
+            savedProvenance = watchId?.let { watches.observeDetail(it).first()?.provenance }.orEmpty()
             val now = time.now()
-            val watch = existing ?: Watch(id = "", createdAt = now, updatedAt = now)
-            val texts = SpecFields.all.filter { it.isTextual() }.associate { it.key to initialText(it, watch) }
-            val currency = watch.pricePaid?.currency ?: prefs.defaultCurrency
+            val blank = existing ?: Watch(id = "", createdAt = now, updatedAt = now)
+            original = blank
+            val texts = SpecFields.all.filter { it.isTextual() }.associate { it.key to initialText(it, blank) }
+            val currency = blank.pricePaid?.currency ?: prefs.defaultCurrency
             _state.value = EditUiState(
                 loaded = true,
                 isNew = existing == null,
-                draft = watch,
+                draft = blank,
                 texts = texts,
                 initialTexts = texts,
                 currency = currency,
                 initialCurrency = currency,
                 prefs = prefs,
             )
+            // "Add to collection" from Lookup: start from the reviewed values.
+            draftKey?.let(drafts::take)?.let(::applyLookup)
         }
         viewModelScope.launch {
             val brands = watches.observeBrands().first()
@@ -109,25 +145,67 @@ class EditViewModel(
     /** Validates, then saves. [onSaved] gets the watch id. */
     fun save(onSaved: (String) -> Unit) {
         val s = _state.value
-        val base = s.draft ?: return
+        if (s.draft == null) return
         val errors = SpecFields.all.filter { it.isTextual() }.mapNotNull { f -> validate(f, s.text(f), s.currency) }.toMap()
         if (errors.isNotEmpty()) {
             _state.update { it.copy(errors = errors) }
             return
         }
-        var watch = base
-        for (field in SpecFields.all.filter { it.isTextual() }) {
-            // An untouched box keeps the stored value exactly: the box shows 2 decimals, the value may have more.
-            val changed = s.text(field) != s.initialTexts[field.key].orEmpty() ||
-                (field == SpecFields.PricePaid && s.currency != s.initialCurrency)
-            if (changed) watch = field.set(watch, parse(field, s.text(field), s.currency))
-        }
+        val watch = formWatch(s)
+        // A filled value stays sourced only if the owner didn't change it afterwards.
+        val sourced = s.sourced.filterKeys { key -> SpecFields.byKey(key)?.get(watch) == s.sourcedValues[key] }
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
-            val saved = if (s.isNew) watches.create(watch) else watches.update(watch)
+            val saved = if (s.isNew) watches.create(watch, sourced = sourced, otherSpecs = s.pendingExtras)
+            else watches.update(watch, sourced, s.pendingExtras)
+            lookups.saveSnapshots(saved.id, s.pendingRecords)
             _state.update { it.copy(saving = false, dirty = false) }
             onSaved(saved.id)
         }
+    }
+
+    /** The form's values as a watch. Text boxes that weren't touched keep their exact stored or filled value. */
+    private fun formWatch(s: EditUiState): Watch {
+        var watch = s.draft ?: return original ?: Watch(id = "", createdAt = time.now(), updatedAt = time.now())
+        for (field in SpecFields.all.filter { it.isTextual() }) {
+            val text = s.text(field)
+            val untouched = text == (s.appliedTexts[field.key] ?: s.initialTexts[field.key].orEmpty()) &&
+                !(field == SpecFields.PricePaid && s.currency != s.initialCurrency)
+            if (untouched) continue
+            if (validate(field, text, s.currency) == null) watch = field.set(watch, parse(field, text, s.currency))
+        }
+        return watch
+    }
+
+    /** Where each of the form's values came from: lookups, the stored watch, or the owner. */
+    private fun formProvenance(s: EditUiState): Map<String, Provenance> {
+        val before = original ?: return s.sourced
+        val now = formWatch(s)
+        val changedByOwner = SpecFields.changedKeys(before, now) - s.sourced.keys
+        return savedProvenance + s.sourced + changedByOwner.associateWith { Provenance(it, Sources.MANUAL, userEdited = true) }
+    }
+
+    private fun applyLookup(draft: LookupDraft) = _state.update { s ->
+        val applied = draft.sourced.keys.mapNotNull(SpecFields::byKey)
+        val texts = applied.filter { it.isTextual() }.associate { it.key to initialText(it, draft.watch) }
+        // Applied text fields take the draft's exact values; everything else keeps what the form shows.
+        var next = s.draft ?: draft.watch
+        for (field in applied) next = field.set(next, field.get(draft.watch))
+        s.copy(
+            draft = next,
+            texts = s.texts + texts,
+            appliedTexts = s.appliedTexts + texts,
+            errors = s.errors - texts.keys,
+            sourced = s.sourced + draft.sourced,
+            sourcedValues = s.sourcedValues + draft.sourcedValues,
+            pendingExtras = io.github.tunlezah.watches.data.WatchRepository.mergeOtherSpecs(s.pendingExtras, draft.extras),
+            pendingRecords = s.pendingRecords.filterNot { r -> draft.records.any { it.source == r.source } } + draft.records,
+            dirty = true,
+        )
+    }
+
+    override fun onCleared() {
+        drafts.unregister(formKey)
     }
 
     /** Live conversion shown under unit fields, e.g. "5 ATM" under 50 m. */

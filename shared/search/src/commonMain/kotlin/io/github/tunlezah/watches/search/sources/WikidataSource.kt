@@ -63,6 +63,9 @@ class WikidataSource(private val http: PoliteHttpClient, private val clock: Cloc
         return parseDetail(entity, labels, summary, hit.key, clock.now())
     }
 
+    override fun hitFor(url: String, title: String): SearchHit? =
+        Regex("^https://www\\.wikidata\\.org/wiki/(Q\\d+)$").find(url)?.groupValues?.get(1)?.let { SearchHit(ID, it, title, url = url) }
+
     /** Looks up a Commons file's full-size URL and licence. Called only when the owner taps Save photo. */
     suspend fun commonsImage(pageUrl: String): CommonsImage {
         val file = pageUrl.substringAfter("/wiki/File:", "").takeIf { it.isNotEmpty() } ?: throw LookupFailure.NotAllowed(pageUrl)

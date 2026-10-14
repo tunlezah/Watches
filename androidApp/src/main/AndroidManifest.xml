@@ -3,11 +3,11 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        Milestone 1 has no network permission at all, so nothing in the app can reach the internet.
-        OkHttp (the search module's HTTP engine) declares INTERNET in its own manifest; it is removed
-        here until milestone 2 turns search on.
+        Lookup is the only feature that goes online, and only when the owner presses Search, opens a
+        result or saves a picture. Network state is read so an offline search sends nothing.
     -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:name=".WatchesApplication"
@@ -33,7 +33,8 @@
             </intent-filter>
         </activity>
 
-        <!-- OkHttp registers a start-up initializer; search isn't used yet, so it doesn't run at launch. -->
+        <!-- OkHttp registers a start-up initializer. Lookup builds its client on first use instead, so
+             nothing network-related runs at launch. -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"

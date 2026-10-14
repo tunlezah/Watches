@@ -21,6 +21,16 @@ import io.github.tunlezah.watches.ui.diagnostics.SampleGenerator
 import io.github.tunlezah.watches.ui.edit.EditViewModel
 import io.github.tunlezah.watches.ui.nav.AppShell
 import io.github.tunlezah.watches.ui.photos.CropViewModel
+import io.github.tunlezah.watches.ui.lookup.ApplyViewModel
+import io.github.tunlezah.watches.ui.lookup.FileRobotsStore
+import io.github.tunlezah.watches.ui.lookup.LookupDrafts
+import io.github.tunlezah.watches.ui.lookup.LookupSession
+import io.github.tunlezah.watches.ui.lookup.LookupViewModel
+import io.github.tunlezah.watches.ui.lookup.RefreshSpecs
+import io.github.tunlezah.watches.ui.lookup.RemoteImages
+import io.github.tunlezah.watches.ui.lookup.ResultViewModel
+import io.github.tunlezah.watches.ui.lookup.SourcesViewModel
+import io.github.tunlezah.watches.search.http.RobotsStore
 import io.github.tunlezah.watches.ui.photos.PhotoImporter
 import io.github.tunlezah.watches.ui.photos.PhotosViewModel
 import io.github.tunlezah.watches.ui.settings.DiagnosticsViewModel
@@ -32,20 +42,33 @@ import org.koin.dsl.module
 
 val uiModule = module {
     single { SampleGenerator(get(), get(), get()) }
-    viewModel { CollectionViewModel(get(), get(), get()) }
-    viewModel { params -> DetailViewModel(params.get(), get(), get(), get(), get()) }
-    viewModel { params -> EditViewModel(params.getOrNull(), get(), get(), get()) }
     single { PhotoImporter(get()) }
+    single { LookupSession() }
+    single { LookupDrafts() }
+    single { RemoteImages(get()) }
+    single { RefreshSpecs(get(), get(), get()) }
+    single<RobotsStore> { FileRobotsStore(get()) }
+    viewModel { CollectionViewModel(get(), get(), get()) }
+    viewModel { params -> DetailViewModel(params.get(), get(), get(), get(), get(), get()) }
+    viewModel { params ->
+        // Two optional strings: the watch being edited, and a lookup draft for a new watch.
+        EditViewModel(params.values.getOrNull(0) as String?, params.values.getOrNull(1) as String?, get(), get(), get(), get(), get())
+    }
     viewModel { params -> PhotosViewModel(params.get(), get(), get(), get(), get()) }
     viewModel { params -> CropViewModel(params.get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get()) }
     viewModel { DiagnosticsViewModel(get(), get()) }
+    viewModel { params -> LookupViewModel(params.get(), params.getOrNull(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { params -> ResultViewModel(params.get(), get(), get(), get()) }
+    viewModel { params -> ApplyViewModel(params.get(), get(), get(), get(), get(), get()) }
+    viewModel { SourcesViewModel(get(), get(), get()) }
 }
 
 /** Root of the shared UI. Koin must already be started by the platform shell. */
 @Composable
 fun WatchesApp() {
-    // Images come only from local files: no network fetcher is installed in this loader.
+    // No network fetcher is installed: photos load from local files, and lookup pictures arrive as
+    // bytes fetched by the lookup's polite HTTP client.
     setSingletonImageLoaderFactory { context -> ImageLoader.Builder(context).crossfade(120).build() }
 
     val settingsRepo = koinInject<SettingsRepository>()

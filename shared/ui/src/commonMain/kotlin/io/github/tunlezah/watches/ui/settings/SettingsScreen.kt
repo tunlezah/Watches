@@ -54,6 +54,7 @@ fun SettingsScreen(
     onUpdate: ((AppSettings) -> AppSettings) -> Unit,
     onDiagnostics: () -> Unit,
     onLicences: () -> Unit,
+    lookupSection: @Composable () -> Unit = {},
 ) {
     val c = WatchTheme.colors
     val t = WatchTheme.values
@@ -126,14 +127,17 @@ fun SettingsScreen(
             })
         }
 
+        Section("Lookup sources") {
+            lookupSection()
+        }
+
         Section("Coming in later milestones") {
-            Note("Sources", "Spec lookup from Grail Watch Reference, Ranfft DB, Wikidata and WatchBase, each switchable. Milestone 2.")
             Note("Backup and restore", "Export everything to one .zip you save where you like, restore with replace or merge, and CSV export. Milestone 4.")
             Note("App lock", "Optional biometric lock. Milestone 4.")
         }
 
         Section("Privacy") {
-            Note("No network access", "This build can't use the internet at all: it doesn't ask Android for network permission. Search arrives in milestone 2 and will be the only feature that goes online, and only when you press Search.")
+            Note("Online only when you search", "Lookup is the only feature that uses the internet, and only when you press Search, open a result or save a picture. Every request is listed in the request log. There are no accounts, analytics or crash reporting.")
             Note("Not in cloud backups", "Your collection is excluded from Android's automatic cloud backup and device transfer. Export (milestone 4) is the backup.")
         }
 

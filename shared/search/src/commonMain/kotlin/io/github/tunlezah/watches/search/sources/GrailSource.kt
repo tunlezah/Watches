@@ -44,6 +44,10 @@ class GrailSource(private val http: PoliteHttpClient, private val clock: Clock =
         return parseDetail(fetched.text, clock.now())
     }
 
+    override fun hitFor(url: String, title: String): SearchHit? =
+        Regex("^https://reference\\.grail-watch\\.com/movement/([a-z0-9-]+)/?$").find(url)?.groupValues?.get(1)
+            ?.let { SearchHit(ID, it, title, url = url) }
+
     companion object {
         const val ID = "grail"
         private const val API = "https://reference.grail-watch.com/wp-json/wp/v2"

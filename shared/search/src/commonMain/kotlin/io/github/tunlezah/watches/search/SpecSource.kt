@@ -31,4 +31,7 @@ interface SpecSource {
     val info: SourceInfo
     suspend fun search(query: String): List<SearchHit>
     suspend fun detail(hit: SearchHit): SourceRecord
+
+    /** Rebuilds a hit from a page URL saved with a watch, for "Refresh from sources". */
+    fun hitFor(url: String, title: String): SearchHit?
 }

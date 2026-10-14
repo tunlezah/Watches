@@ -165,7 +165,8 @@ data class WatchDetail(
     val provenance: Map<String, Provenance>,
     val otherSpecs: List<OtherSpec>,
 ) {
-    val cover: Photo? get() = photos.firstOrNull { it.id == watch.coverPhotoId } ?: photos.firstOrNull()
+    /** The chosen cover, else the first of the owner's own photos. A reference picture is never picked automatically. */
+    val cover: Photo? get() = photos.firstOrNull { it.id == watch.coverPhotoId } ?: photos.firstOrNull { it.kind == PhotoKind.USER }
 }
 
 /** The slim projection the collection grid and list are built from. */

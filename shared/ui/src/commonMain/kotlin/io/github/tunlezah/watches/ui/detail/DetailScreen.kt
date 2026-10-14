@@ -75,6 +75,9 @@ data class DetailActions(
     val onDuplicate: () -> Unit,
     val onArchive: (Boolean) -> Unit,
     val onDelete: () -> Unit,
+    val onLookUp: () -> Unit = {},
+    val onRefresh: () -> Unit = {},
+    val onDismissNotice: () -> Unit = {},
 )
 
 @Composable
@@ -112,6 +115,14 @@ fun DetailScreen(state: DetailUiState, watchId: String, actions: DetailActions, 
                     WatchButton("Edit", actions.onEdit, Modifier.weight(1f), icon = WatchIcons.Edit)
                     WatchButton("Photos", actions.onPhotos, Modifier.weight(1f), icon = WatchIcons.Camera,
                         kind = if (style.direction == Direction.INSTRUMENT) ButtonKind.Primary else ButtonKind.Secondary)
+                    WatchButton("Look up", actions.onLookUp, Modifier.weight(1f), icon = WatchIcons.Lookup)
+                }
+            }
+            state.notice?.let { notice ->
+                item("notice") {
+                    Box(Modifier.padding(horizontal = style.screenPadding).padding(top = 14.dp).clickable(enabled = !state.refreshing, onClick = actions.onDismissNotice)) {
+                        io.github.tunlezah.watches.ui.lookup.Notice(notice)
+                    }
                 }
             }
             itemsIndexed(state.groups, key = { _, g -> g.group.name }) { index, group ->
@@ -127,7 +138,7 @@ fun DetailScreen(state: DetailUiState, watchId: String, actions: DetailActions, 
             state.other?.let { other ->
                 item("other") {
                     Column(Modifier.padding(horizontal = style.screenPadding).padding(top = if (style.groupCards) 12.dp else 30.dp)) {
-                        SpecGroupView(other.copy(), state.groups.size + 1, revealed, {}, copy)
+                        SpecGroupView(other, state.groups.size + 1, revealed, {}, copy, title = "Other specs")
                     }
                 }
             }
@@ -154,6 +165,8 @@ fun DetailScreen(state: DetailUiState, watchId: String, actions: DetailActions, 
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = c.surface) {
                     MenuRow("Edit", WatchIcons.Edit) { menu = false; actions.onEdit() }
                     MenuRow("Manage photos", WatchIcons.Camera) { menu = false; actions.onPhotos() }
+                    MenuRow("Look up specs", WatchIcons.Lookup) { menu = false; actions.onLookUp() }
+                    if (state.hasSources) MenuRow("Refresh from sources", WatchIcons.Refresh) { menu = false; actions.onRefresh() }
                     MenuRow("Duplicate", WatchIcons.Copy) { menu = false; actions.onDuplicate() }
                     MenuRow(if (state.archived) "Unarchive" else "Archive", if (state.archived) WatchIcons.Restore else WatchIcons.Archive) {
                         menu = false
@@ -223,6 +236,13 @@ private fun Hero(state: DetailUiState, watchId: String, onView: (Int) -> Unit) {
                         .fillMaxSize()
                         .then(if (page == 0) Modifier.sharedWatchPhoto(watchId) else Modifier)
                         .clickable(enabled = photo != null, role = Role.Image, onClickLabel = "View full screen") { onView(page) },
+                )
+            }
+            state.photos.getOrNull(pager.currentPage)?.credit?.let { credit ->
+                Text(
+                    credit, style = t.type.specSource, color = c.fg2, maxLines = 2,
+                    modifier = Modifier.align(Alignment.TopStart).padding(12.dp).clip(RoundedCornerShape(6.dp))
+                        .background(c.bg.copy(alpha = 0.75f)).padding(horizontal = 8.dp, vertical = 4.dp),
                 )
             }
             if (state.photos.size > 1) {

@@ -20,7 +20,7 @@ interface WatchDao {
         FROM watch w
         LEFT JOIN photo p ON p.id = COALESCE(
             (SELECT p1.id FROM photo p1 WHERE p1.id = w.cover_photo_id),
-            (SELECT p2.id FROM photo p2 WHERE p2.watch_id = w.id ORDER BY p2.position LIMIT 1))
+            (SELECT p2.id FROM photo p2 WHERE p2.watch_id = w.id AND p2.kind = 'user' ORDER BY p2.position LIMIT 1))
         """,
     )
     fun observeSummaries(): Flow<List<WatchSummaryRow>>

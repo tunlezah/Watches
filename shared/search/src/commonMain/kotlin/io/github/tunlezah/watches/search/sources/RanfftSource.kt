@@ -48,6 +48,9 @@ class RanfftSource(private val http: PoliteHttpClient, private val clock: Clock 
         return parseDetail(fetched.text, hit.url, clock.now())
     }
 
+    override fun hitFor(url: String, title: String): SearchHit? =
+        if (DETAIL_URL.matches(url)) SearchHit(ID, Regex("/caliber/(\\d+)-").find(url)!!.groupValues[1], title, url = url) else null
+
     companion object {
         const val ID = "ranfft"
         private const val BASE = "https://ranfft.org"

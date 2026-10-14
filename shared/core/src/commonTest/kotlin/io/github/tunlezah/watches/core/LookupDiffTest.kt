@@ -87,6 +87,14 @@ class LookupDiffTest {
         assertEquals(listOf("ranfft", "grail"), power.options.map { it.source })
     }
 
+    @Test fun aSourceAgreeingWithTheWatchKeepsItButShowsTheOther() {
+        val watch2 = watch.copy(powerReserveH = 42.0)
+        val power = LookupDiff.rows(watch2, provenance, listOf(grail, ranfft)).single { it.field.key == SpecFields.PowerReserve.key }
+        assertFalse(power.matchesCurrent)
+        assertTrue(power.isCurrent(1))
+        assertNull(power.defaultChoice)
+    }
+
     @Test fun agreeingSourcesCollapseIntoOneOption() {
         val freq = rows().getValue(SpecFields.Frequency.key)
         assertEquals(1, freq.options.size)

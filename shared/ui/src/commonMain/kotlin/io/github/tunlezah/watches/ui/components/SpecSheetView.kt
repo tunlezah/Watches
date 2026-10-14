@@ -50,6 +50,7 @@ fun SpecGroupView(
     onReveal: (SpecRow) -> Unit,
     onCopy: (SpecRow) -> Unit,
     modifier: Modifier = Modifier,
+    title: String = sheet.group.label,
 ) {
     val c = WatchTheme.colors
     val t = WatchTheme.values
@@ -66,7 +67,7 @@ fun SpecGroupView(
         Column(
             modifier.fillMaxWidth().clip(style.cardShape).background(c.surface).padding(horizontal = 16.dp, vertical = 6.dp),
         ) {
-            Text(sheet.group.label, style = t.type.groupTitle, color = c.fg, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
+            Text(title, style = t.type.groupTitle, color = c.fg, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
             rows()
         }
     } else if (style.numberedGroups) {
@@ -74,7 +75,7 @@ fun SpecGroupView(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
                 Text(number.toString().padStart(2, '0'), style = t.type.label, color = c.accent)
                 Spacer(Modifier.width(10.dp))
-                Text(sheet.group.label.uppercase(), style = t.type.groupTitle, color = c.fg)
+                Text(title.uppercase(), style = t.type.groupTitle, color = c.fg)
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.weight(1f).height(1.dp).background(c.line))
                 Spacer(Modifier.width(10.dp))
@@ -84,7 +85,7 @@ fun SpecGroupView(
         }
     } else {
         Column(modifier.fillMaxWidth()) {
-            Text(sheet.group.label, style = t.type.groupTitle, color = c.fg, modifier = Modifier.padding(bottom = 8.dp))
+            Text(title, style = t.type.groupTitle, color = c.fg, modifier = Modifier.padding(bottom = 8.dp))
             rows()
         }
     }

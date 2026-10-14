@@ -154,7 +154,15 @@ fun EditScreen(
             item("lookup") {
                 val query = listOf(state.text(SpecFields.Brand), state.text(SpecFields.ModelName), state.text(SpecFields.Reference))
                     .filter { it.isNotBlank() }.joinToString(" ")
-                WatchButton("Look up specs", { onLookUp(query) }, Modifier.fillMaxWidth(), kind = ButtonKind.Tonal, icon = WatchIcons.Lookup)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    WatchButton("Look up specs", { onLookUp(query) }, Modifier.fillMaxWidth(), kind = ButtonKind.Tonal, icon = WatchIcons.Lookup)
+                    if (state.filledFrom.isNotEmpty()) {
+                        Text(
+                            "Filled from ${state.filledFrom.joinToString(" and ")}. Values keep their source unless you change them. Nothing is saved until you tap Save.",
+                            style = t.type.bodySmall, color = c.fg2,
+                        )
+                    }
+                }
             }
             for ((group, rows) in layout) {
                 item("h-${group.name}") {

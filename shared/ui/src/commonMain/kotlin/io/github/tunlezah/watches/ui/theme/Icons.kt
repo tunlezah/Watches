@@ -67,5 +67,8 @@ object WatchIcons {
     val Restore = stroke("restore", "M4,12a8,8 0 1 0 2.3,-5.7", "M4,4v4h4")
     val Watch = stroke("watch", circle(12f, 12f, 6f), "M9,6l0.8,-3h4.4l0.8,3", "M9,18l0.8,3h4.4l0.8,-3", "M12,9v3l2,1.5")
     val Info = stroke("info", circle(12f, 12f, 9f), "M12,11v5", "M12,8v0.2")
+    val External = stroke("external", "M14,4h6v6", "M20,4l-9,9", "M18,14v5a1,1 0 0 1 -1,1h-12a1,1 0 0 1 -1,-1v-12a1,1 0 0 1 1,-1h5")
+    val Refresh = stroke("refresh", "M20,12a8,8 0 1 1 -2.3,-5.7", "M20,4v4h-4")
+    val History = stroke("history", circle(12f, 12f, 8f), "M12,8v4l3,2")
     val Gauge = stroke("gauge", "M4,16a8,8 0 1 1 16,0", "M12,16l4,-5")
 }

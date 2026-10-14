@@ -30,6 +30,8 @@ class WatchBaseSource(private val http: PoliteHttpClient) : SpecSource {
 
     override suspend fun detail(hit: SearchHit): SourceRecord = throw LookupFailure.Unreadable("WatchBase isn't set up yet")
 
+    override fun hitFor(url: String, title: String): SearchHit? = null
+
     /** Null when the home page came back normally; otherwise why it didn't. */
     suspend fun testConnection(): LookupFailure? = try {
         http.get("https://watchbase.com/")

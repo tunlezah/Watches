@@ -28,6 +28,7 @@ class LookupServiceTest {
         override val info = SourceInfo(id, id, "https://$id.example", Coverage.MOVEMENT, "", status)
         override suspend fun search(query: String): List<SearchHit> { calls++; delay(wait); return result() }
         override suspend fun detail(hit: SearchHit): SourceRecord = error("unused")
+        override fun hitFor(url: String, title: String): SearchHit? = null
     }
 
     private fun hit(source: String) = SearchHit(source, "k", "T", url = "https://$source.example/k")

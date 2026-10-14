@@ -6,16 +6,21 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import io.github.tunlezah.watches.ui.lookup.LookupTarget
 
 /** Every destination. Reserved for later milestones: Wear, Accuracy, Value, Glossary, Clock, Identify. */
 sealed interface Route {
     data object Collection : Route
     data class Detail(val watchId: String) : Route
-    data class Edit(val watchId: String?) : Route
+    data class Edit(val watchId: String?, val draftKey: String? = null) : Route
     data class Photos(val watchId: String) : Route
     data class Crop(val photoId: String) : Route
     data class Viewer(val watchId: String, val index: Int) : Route
     data object Lookup : Route
+    data class LookupFor(val target: LookupTarget, val query: String) : Route
+    data class LookupResult(val hitId: String) : Route
+    data class Apply(val target: LookupTarget) : Route
+    data object RequestLog : Route
     data object Service : Route
     data object Settings : Route
     data object Diagnostics : Route
@@ -29,11 +34,15 @@ sealed interface Route {
         fun encode(r: Route): String = when (r) {
             Collection -> "collection"
             is Detail -> "detail|${r.watchId}"
-            is Edit -> "edit|${r.watchId ?: ""}"
+            is Edit -> "edit|${r.watchId ?: ""}|${r.draftKey ?: ""}"
             is Photos -> "photos|${r.watchId}"
             is Crop -> "crop|${r.photoId}"
             is Viewer -> "viewer|${r.watchId}|${r.index}"
             Lookup -> "lookup"
+            is LookupFor -> "lookupfor|${r.target.encode()}|${r.query.replace('|', ' ')}"
+            is LookupResult -> "result|${r.hitId}"
+            is Apply -> "apply|${r.target.encode()}"
+            RequestLog -> "requestlog"
             Service -> "service"
             Settings -> "settings"
             Diagnostics -> "diagnostics"
@@ -45,11 +54,15 @@ sealed interface Route {
             return when (p[0]) {
                 "collection" -> Collection
                 "detail" -> Detail(p[1])
-                "edit" -> Edit(p.getOrNull(1)?.ifEmpty { null })
+                "edit" -> Edit(p.getOrNull(1)?.ifEmpty { null }, p.getOrNull(2)?.ifEmpty { null })
                 "photos" -> Photos(p[1])
                 "crop" -> Crop(p[1])
                 "viewer" -> Viewer(p[1], p.getOrNull(2)?.toIntOrNull() ?: 0)
                 "lookup" -> Lookup
+                "lookupfor" -> LookupFor(LookupTarget.decode(p[1]), p.getOrNull(2).orEmpty())
+                "result" -> LookupResult(p[1])
+                "apply" -> Apply(LookupTarget.decode(p[1]))
+                "requestlog" -> RequestLog
                 "service" -> Service
                 "settings" -> Settings
                 "diagnostics" -> Diagnostics

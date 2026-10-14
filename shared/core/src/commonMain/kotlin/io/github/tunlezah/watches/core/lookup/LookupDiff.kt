@@ -30,15 +30,24 @@ data class DiffRow(
     val options: List<FieldOption>,
 ) {
     val protected: Boolean get() = current != null && (provenance == null || provenance.userEdited)
-    val matchesCurrent: Boolean get() = current != null && options.any { LookupDiff.same(it.value, current) }
+
+    /** Every source agrees with what's there, so the row needs no decision. */
+    val matchesCurrent: Boolean get() = current != null && options.all { LookupDiff.same(it.value, current) }
+
+    /** Whether [index] is the value the watch already has. */
+    fun isCurrent(index: Int): Boolean = current != null && options.getOrNull(index)?.let { LookupDiff.same(it.value, current) } == true
+
     val conflict: Boolean get() = options.size > 1
 
-    /** Which option is ticked when the screen opens, or null for none. */
+    /**
+     * Which option is ticked when the screen opens, or null for none. When one source agrees with
+     * the current value and another doesn't, nothing is ticked: the current value stays unless chosen.
+     */
     val defaultChoice: Int?
         get() = when {
             options.isEmpty() -> null
             current == null -> 0
-            matchesCurrent -> null
+            options.indices.any(::isCurrent) -> null
             protected -> null
             else -> 0
         }

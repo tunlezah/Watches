@@ -22,6 +22,7 @@ val searchModule = module {
     single { WatchBaseSource(get()) }
     single {
         LookupService(
+            // The one list of sources, in the order results are shown.
             sources = listOf(get<WikidataSource>(), get<RanfftSource>(), get<GrailSource>(), get<WatchBaseSource>()),
             http = get(),
             connectivity = get(),

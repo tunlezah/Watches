@@ -87,14 +87,29 @@ import io.github.tunlezah.watches.ui.photos.PhotosViewModel
 import io.github.tunlezah.watches.ui.photos.ViewerScreen
 import io.github.tunlezah.watches.ui.platform.processUptimeMillis
 import io.github.tunlezah.watches.ui.platform.systemAnimationsEnabled
-import io.github.tunlezah.watches.ui.settings.ComingSoonScreen
 import io.github.tunlezah.watches.ui.settings.DiagnosticsScreen
 import io.github.tunlezah.watches.ui.settings.DiagnosticsViewModel
+import io.github.tunlezah.watches.ui.settings.ComingSoonScreen
 import io.github.tunlezah.watches.ui.settings.LicencesScreen
 import io.github.tunlezah.watches.ui.settings.SettingsScreen
 import io.github.tunlezah.watches.ui.settings.SettingsViewModel
 import io.github.tunlezah.watches.ui.theme.WatchIcons
 import io.github.tunlezah.watches.ui.theme.WatchTheme
+import io.github.tunlezah.watches.search.http.RequestLog
+import io.github.tunlezah.watches.ui.lookup.ApplyScreen
+import io.github.tunlezah.watches.ui.lookup.ApplyViewModel
+import io.github.tunlezah.watches.ui.lookup.LookupActions
+import io.github.tunlezah.watches.ui.lookup.LookupScreen
+import io.github.tunlezah.watches.ui.lookup.LookupSession
+import io.github.tunlezah.watches.ui.lookup.LookupSettingsSection
+import io.github.tunlezah.watches.ui.lookup.LookupTarget
+import io.github.tunlezah.watches.ui.lookup.LookupViewModel
+import io.github.tunlezah.watches.ui.lookup.RemoteImages
+import io.github.tunlezah.watches.ui.lookup.RequestLogScreen
+import io.github.tunlezah.watches.ui.lookup.ResultScreen
+import io.github.tunlezah.watches.ui.lookup.ResultViewModel
+import io.github.tunlezah.watches.ui.lookup.SourcesViewModel
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import kotlin.time.TimeSource
@@ -151,15 +166,15 @@ fun AppShell() {
                                 entry<Route.Detail>(metadata = ListDetailSceneStrategy.detailPane()) { r ->
                                     InEntry { DetailEntry(r.watchId, navigator, showBack = !twoPane) }
                                 }
-                                entry<Route.Edit> { r -> InEntry { EditEntry(r.watchId, navigator) } }
+                                entry<Route.Edit> { r -> InEntry { EditEntry(r.watchId, r.draftKey, navigator) } }
                                 entry<Route.Photos> { r -> InEntry { PhotosEntry(r.watchId, navigator) } }
                                 entry<Route.Crop> { r -> InEntry { CropEntry(r.photoId, navigator) } }
                                 entry<Route.Viewer> { r -> InEntry { ViewerEntry(r, navigator) } }
-                                entry<Route.Lookup> {
-                                    InEntry {
-                                        ComingSoonScreen("Lookup", "Search WatchBase, Grail Watch Reference, Ranfft DB and Wikidata for a watch or calibre, then add its specs in one go. Arrives in milestone 2.")
-                                    }
-                                }
+                                entry<Route.Lookup> { InEntry { LookupEntry(LookupTarget.None, null, navigator) } }
+                                entry<Route.LookupFor> { r -> InEntry { LookupEntry(r.target, r.query, navigator) } }
+                                entry<Route.LookupResult> { r -> InEntry { ResultEntry(r.hitId, navigator) } }
+                                entry<Route.Apply> { r -> InEntry { ApplyEntry(r.target, navigator) } }
+                                entry<Route.RequestLog> { InEntry { RequestLogEntry(navigator) } }
                                 entry<Route.Service> {
                                     InEntry {
                                         ComingSoonScreen("Service", "Service history, what's due across the collection, reminders, box and papers, and documents. Arrives in milestone 3.")
@@ -252,21 +267,102 @@ private fun DetailEntry(watchId: String, navigator: Navigator, showBack: Boolean
             onDuplicate = { vm.duplicate { id -> navigator.openDetail(id); navigator.push(Route.Edit(id)) } },
             onArchive = vm::setArchived,
             onDelete = { vm.delete { navigator.popTo { it !is Route.Detail && it !is Route.Edit } } },
+            onLookUp = {
+                val w = state.watch
+                val query = listOfNotNull(w?.brand, w?.reference ?: w?.modelName ?: w?.collection).joinToString(" ")
+                navigator.push(Route.LookupFor(LookupTarget.Watch(watchId), query))
+            },
+            onRefresh = { vm.refresh { navigator.push(Route.Apply(LookupTarget.Watch(watchId))) } },
+            onDismissNotice = vm::dismissNotice,
         ),
     )
 }
 
 @Composable
-private fun EditEntry(watchId: String?, navigator: Navigator) {
-    val vm = koinViewModel<EditViewModel>(key = "edit-${watchId ?: "new"}") { parametersOf(watchId) }
+private fun EditEntry(watchId: String?, draftKey: String?, navigator: Navigator) {
+    val vm = koinViewModel<EditViewModel>(key = "edit-${watchId ?: "new"}-${draftKey.orEmpty()}") { parametersOf(watchId, draftKey) }
     val state by vm.state.collectAsStateWithLifecycle()
     EditScreen(
         state = state,
         vm = vm,
         onClose = { navigator.pop() },
         onSaved = { id -> if (watchId == null) navigator.openDetail(id) else navigator.pop() },
-        onLookUp = { navigator.push(Route.Lookup) },
+        onLookUp = { query -> navigator.push(Route.LookupFor(LookupTarget.Form(vm.formKey), query)) },
     )
+}
+
+@Composable
+private fun LookupEntry(target: LookupTarget, query: String?, navigator: Navigator) {
+    val vm = koinViewModel<LookupViewModel>(key = "lookup-${target.encode()}") { parametersOf(target, query) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    val choices by vm.watchChoices.collectAsStateWithLifecycle()
+    LookupScreen(
+        state = state,
+        images = vm.sessionImages,
+        watchChoices = choices,
+        actions = LookupActions(
+            onBack = if (target == LookupTarget.None) null else ({ navigator.pop() }),
+            onQuery = vm::setQuery,
+            onSearch = { q -> vm.search(q ?: state.query) },
+            onForgetRecent = { vm.forgetRecent(it) },
+            onClearRecent = { vm.clearRecent() },
+            onToggleSource = { vm.toggleSource(it) },
+            onOpen = { hit -> navigator.push(Route.LookupResult(LookupSession.idOf(hit))) },
+            onRetry = vm::retry,
+            onReview = { t -> navigator.push(Route.Apply(t)) },
+            onClearTray = vm::clearTray,
+        ),
+    )
+}
+
+@Composable
+private fun ResultEntry(hitId: String, navigator: Navigator) {
+    val vm = koinViewModel<ResultViewModel>(key = "result-$hitId") { parametersOf(hitId) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    val settingsVm = koinViewModel<SettingsViewModel>()
+    val settings by settingsVm.settings.collectAsStateWithLifecycle()
+    ResultScreen(
+        state = state,
+        images = koinInject<RemoteImages>(),
+        prefs = settings?.display ?: io.github.tunlezah.watches.core.format.DisplayPrefs(),
+        onBack = { navigator.pop() },
+        onRetry = vm::load,
+        onToggle = {
+            val adding = !state.inTray
+            vm.toggleTray()
+            if (adding) navigator.pop()
+        },
+        onSavePicture = vm::savePicture,
+    )
+}
+
+@Composable
+private fun ApplyEntry(target: LookupTarget, navigator: Navigator) {
+    val vm = koinViewModel<ApplyViewModel>(key = "apply-${target.encode()}") { parametersOf(target) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    val settingsVm = koinViewModel<SettingsViewModel>()
+    val settings by settingsVm.settings.collectAsStateWithLifecycle()
+    ApplyScreen(
+        state = state,
+        prefs = settings?.display ?: io.github.tunlezah.watches.core.format.DisplayPrefs(),
+        onBack = { navigator.pop() },
+        onChoose = vm::choose,
+        onToggleExtras = vm::toggleExtras,
+        onApply = {
+            vm.apply(
+                onSaved = { id -> navigator.popTo { it == Route.Detail(id) } },
+                onFormFilled = { navigator.popTo { it is Route.Edit } },
+                onDraft = { key -> navigator.push(Route.Edit(null, key)) },
+            )
+        },
+    )
+}
+
+@Composable
+private fun RequestLogEntry(navigator: Navigator) {
+    val log = koinInject<RequestLog>()
+    val entries by log.entries.collectAsStateWithLifecycle()
+    RequestLogScreen(entries, onBack = { navigator.pop() }, onClear = log::clear)
 }
 
 @Composable
@@ -303,12 +399,23 @@ private fun ViewerEntry(route: Route.Viewer, navigator: Navigator) {
 private fun SettingsEntry(navigator: Navigator) {
     val vm = koinViewModel<SettingsViewModel>()
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val sources = koinViewModel<SourcesViewModel>()
+    val sourcesState by sources.state.collectAsStateWithLifecycle()
     settings?.let { s ->
         SettingsScreen(
             settings = s,
             onUpdate = { vm.update(it) },
             onDiagnostics = { navigator.push(Route.Diagnostics) },
             onLicences = { navigator.push(Route.Licences) },
+            lookupSection = {
+                LookupSettingsSection(
+                    state = sourcesState,
+                    onToggle = { sources.toggle(it) },
+                    onTestWatchBase = sources::testWatchBase,
+                    onRequestLog = { navigator.push(Route.RequestLog) },
+                    onClearRecent = { sources.clearRecent() },
+                )
+            },
         )
     }
 }
