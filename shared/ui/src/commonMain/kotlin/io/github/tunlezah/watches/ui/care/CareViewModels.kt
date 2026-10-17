@@ -98,6 +98,8 @@ data class DueItem(
     val detail: String?,
     val urgent: Boolean,
     val opensPapers: Boolean = false,
+    /** Unique within a section: a watch can have several service warranties ending. */
+    val key: String = watchId,
 )
 
 @Immutable
@@ -140,7 +142,7 @@ class ServiceDueViewModel(services: ServiceRepository, settings: SettingsReposit
                     val ws = CarePlan.warranty(w.warrantyStart, w.warrantyMonths, today) ?: continue
                     // Ending soon, or ended in the last few months: worth a look before it's forgotten.
                     if (ws.state == WarrantyState.ENDING_SOON || (ws.state == WarrantyState.EXPIRED && ws.daysLeft > -CarePlan.SOON_DAYS)) {
-                        add(DueItem(w.id, w.title, w.reference, w.thumb, CareText.warranty(ws, prefs), "Watch warranty", ws.state == WarrantyState.EXPIRED, opensPapers = true))
+                        add(DueItem(w.id, w.title, w.reference, w.thumb, CareText.warranty(ws, prefs), "Watch warranty", ws.state == WarrantyState.EXPIRED, opensPapers = true, key = "watch-${w.id}"))
                     }
                 }
                 for (e in serviceWarranties) {
@@ -149,7 +151,7 @@ class ServiceDueViewModel(services: ServiceRepository, settings: SettingsReposit
                     val ws = CarePlan.warranty(e.servicedOn, e.warrantyMonths, today) ?: continue
                     if (ws.state == WarrantyState.ENDING_SOON) {
                         add(DueItem(w.id, w.title, w.reference, w.thumb, "Service warranty until ${prefs.dateFormat.format(until)} (${CarePlan.relative(ws.daysLeft)})",
-                            listOfNotNull("Service on ${prefs.dateFormat.format(e.servicedOn)}", e.servicedBy).joinToString(" by "), false))
+                            listOfNotNull("Service on ${prefs.dateFormat.format(e.servicedOn)}", e.servicedBy).joinToString(" by "), false, key = "entry-${e.id}"))
                     }
                 }
             }
@@ -271,6 +273,8 @@ data class ServiceEditUiState(
     val notes: String = "",
     val attached: List<WatchDocument> = emptyList(),
     val pending: List<PendingAttachment> = emptyList(),
+    /** Attached documents the owner removed; deleted on Save, kept on Discard. */
+    val removed: List<WatchDocument> = emptyList(),
     val servicers: List<String> = emptyList(),
     val prefs: DisplayPrefs = DisplayPrefs(),
     val error: String? = null,
@@ -331,34 +335,18 @@ class ServiceEditViewModel(
 
     override fun toggleWork(w: ServiceWork) = edit { it.copy(work = if (w in it.work) it.work - w else it.work + w) }
 
-    /** Files picked for a new entry wait in memory until it's saved; an existing entry gets them at once. */
+    /**
+     * Attaching and removing files both wait until Save, like the rest of the form, so Discard
+     * leaves the stored paperwork exactly as it was.
+     */
     override fun attach(bytes: ByteArray, name: String) {
         val title = name.substringBeforeLast('.').ifBlank { "Invoice" }
-        val id = entryId
-        if (id == null) {
-            edit { it.copy(pending = it.pending + PendingAttachment(Ids.new(), title, bytes, DocumentKind.INVOICE)) }
-            return
-        }
-        viewModelScope.launch {
-            try {
-                val doc = documents.add(watchId, bytes, DocumentKind.INVOICE, title, serviceEntryId = id)
-                _state.update { it.copy(attached = it.attached + doc) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(error = e.message ?: "Couldn't attach that file.") }
-            }
-        }
+        edit { it.copy(pending = it.pending + PendingAttachment(Ids.new(), title, bytes, DocumentKind.INVOICE)) }
     }
 
     override fun removePending(key: String) = edit { it.copy(pending = it.pending.filterNot { p -> p.key == key }) }
 
-    override fun detach(doc: WatchDocument) {
-        viewModelScope.launch {
-            documents.delete(doc.id)
-            _state.update { it.copy(attached = it.attached - doc) }
-        }
-    }
+    override fun detach(doc: WatchDocument) = edit { it.copy(attached = it.attached - doc, removed = it.removed + doc) }
 
     override fun save(onDone: () -> Unit) {
         val s = _state.value
@@ -367,31 +355,57 @@ class ServiceEditViewModel(
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
             val now = time.now()
-            val saved = services.save(
-                ServiceEntry(
-                    id = original?.id.orEmpty(),
-                    watchId = watchId,
-                    servicedOn = date,
-                    servicedBy = s.by.trim().ifEmpty { null },
-                    work = s.work,
-                    cost = s.cost.takeIf { it.isNotBlank() }?.let { Money.parse(it, s.currency) },
-                    warrantyMonths = s.warrantyMonths.trim().toIntOrNull()?.takeIf { it > 0 },
-                    notes = s.notes.trim().ifEmpty { null },
-                    createdAt = original?.createdAt ?: now,
-                    updatedAt = now,
-                ),
-            )
-            val failed = s.pending.mapNotNull { p ->
+            val saved = try {
+                services.save(
+                    ServiceEntry(
+                        id = original?.id.orEmpty(),
+                        watchId = watchId,
+                        servicedOn = date,
+                        servicedBy = s.by.trim().ifEmpty { null },
+                        work = s.work,
+                        cost = s.cost.takeIf { it.isNotBlank() }?.let { Money.parse(it, s.currency) },
+                        warrantyMonths = s.warrantyMonths.trim().toIntOrNull()?.takeIf { it > 0 },
+                        notes = s.notes.trim().ifEmpty { null },
+                        createdAt = original?.createdAt ?: now,
+                        updatedAt = now,
+                    ),
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(saving = false, error = "Couldn't save this service.") }
+                return@launch
+            }
+            // From here on the entry exists, so a second Save updates it rather than adding another.
+            original = saved
+            s.removed.forEach { documents.delete(it.id) }
+            val added = mutableListOf<WatchDocument>()
+            val failed = mutableListOf<PendingAttachment>()
+            val messages = mutableListOf<String>()
+            for (p in s.pending) {
                 try {
-                    documents.add(watchId, p.bytes, p.kind, p.title, serviceEntryId = saved.id)
-                    null
+                    added += documents.add(watchId, p.bytes, p.kind, p.title, serviceEntryId = saved.id)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    "${p.title}: ${e.message}"
+                    failed += p
+                    messages += "${p.title}: ${e.message ?: "couldn't be attached"}"
                 }
             }
-            _state.update { it.copy(saving = false, dirty = false, pending = emptyList(), error = failed.takeIf { f -> f.isNotEmpty() }?.joinToString("\n")) }
+            // Files that couldn't be attached stay listed, so they can be removed or tried again.
+            val failedKeys = failed.map { it.key }.toSet()
+            val triedKeys = s.pending.map { it.key }.toSet()
+            _state.update {
+                it.copy(
+                    isNew = false,
+                    saving = false,
+                    dirty = failed.isNotEmpty(),
+                    attached = it.attached + added,
+                    pending = it.pending.filter { p -> p.key in failedKeys || p.key !in triedKeys },
+                    removed = it.removed - s.removed.toSet(),
+                    error = messages.takeIf { m -> m.isNotEmpty() }?.joinToString("\n"),
+                )
+            }
             if (failed.isEmpty()) onDone()
         }
     }
@@ -542,15 +556,22 @@ class DocumentsViewModel(
         }
     }
 
-    fun copyFrom(documentId: String) = viewModelScope.launch {
+    fun copyFrom(documentId: String) {
         transient.value = true to null
-        documents.copyTo(documentId, watchId)
-        transient.value = false to null
+        viewModelScope.launch {
+            val message = try {
+                if (documents.copyTo(documentId, watchId) == null) "That document is no longer stored." else null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                "Couldn't copy that document."
+            }
+            transient.value = false to message
+        }
     }
 
-    fun rename(doc: WatchDocument, title: String) = viewModelScope.launch { documents.update(doc.copy(title = title)) }
-
-    fun setKind(doc: WatchDocument, kind: DocumentKind) = viewModelScope.launch { documents.update(doc.copy(kind = kind)) }
+    /** Title and kind are written together, so neither change can overwrite the other. */
+    fun edit(doc: WatchDocument, title: String, kind: DocumentKind) = viewModelScope.launch { documents.update(doc.copy(title = title, kind = kind)) }
 
     fun delete(doc: WatchDocument) = viewModelScope.launch { documents.delete(doc.id) }
 

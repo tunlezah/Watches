@@ -12,11 +12,15 @@ import io.github.tunlezah.watches.core.model.Watch
 import io.github.tunlezah.watches.core.model.WatchStatus
 import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.configure
+import io.github.tunlezah.watches.core.model.NormalizedRect
 import io.github.tunlezah.watches.data.files.FileStore
+import io.github.tunlezah.watches.data.files.ImageProcessor
+import io.github.tunlezah.watches.data.files.ImageSize
 import io.github.tunlezah.watches.data.files.JvmImageProcessor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
+import okio.Path
 import okio.Path.Companion.toOkioPath
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -179,6 +183,34 @@ class CareRepositoryTest {
         val updated = watches.get(w.id)!!
         assertEquals(LocalDate(2021, 5, 1), updated.warrantyStart)
         assertEquals(60, updated.warrantyMonths)
+    }
+
+    @Test fun pdfsWithBytesBeforeTheHeaderAreAccepted() = runBlocking<Unit> {
+        val w = watches.create(watch())
+        val scanned = documents.add(w.id, "\r\n\u0000scanner preamble\n".encodeToByteArray() + pdf, DocumentKind.INVOICE, "Scan")
+        assertEquals("application/pdf", scanned.mimeType)
+    }
+
+    @Test fun heicIsStoredAsJpegAndAFailedConversionLeavesNothing() = runBlocking<Unit> {
+        val heic = byteArrayOf(0, 0, 0, 0x18) + "ftypheic".encodeToByteArray() + ByteArray(32)
+        val w = watches.create(watch())
+        val docDir = File(dir, "files/${FileStore.documentDir(w.id)}")
+
+        // The JVM decoder can't read HEIC, like a damaged file on a phone.
+        assertFailsWith<DocumentRepository.UnsupportedDocument> { documents.add(w.id, heic, DocumentKind.RECEIPT, "Receipt") }
+        assertTrue(docDir.listFiles().orEmpty().isEmpty(), "no stray files: ${docDir.listFiles()?.map { it.name }}")
+        assertTrue(documents.observe(w.id).first().isEmpty())
+
+        val converting = object : ImageProcessor by JvmImageProcessor() {
+            override suspend fun render(source: Path, crop: NormalizedRect?, maxEdge: Int, quality: Int, dest: Path): ImageSize {
+                dest.toFile().writeBytes(jpeg())
+                return ImageSize(40, 30)
+            }
+        }
+        val doc = DocumentRepository(db, files, converting, watches, clock).add(w.id, heic, DocumentKind.RECEIPT, "Receipt")
+        assertEquals("image/jpeg", doc.mimeType)
+        assertTrue(doc.file.endsWith(".jpg"))
+        assertEquals(listOf("${doc.id}.jpg"), docDir.listFiles().orEmpty().map { it.name }, "the HEIC original isn't kept")
     }
 
     @Test fun careSkipsWatchesNotOnHand() = runBlocking<Unit> {

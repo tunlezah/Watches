@@ -6,7 +6,10 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.useContents
 import kotlinx.cinterop.usePinned
+import io.github.tunlezah.watches.ui.nav.DeepLinks
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Image
 import org.koin.core.module.Module
@@ -15,6 +18,7 @@ import platform.CoreGraphics.CGSizeMake
 import platform.Foundation.NSData
 import platform.Foundation.NSDateComponents
 import platform.Foundation.NSURL
+import platform.darwin.NSObject
 import platform.PDFKit.PDFDocument
 import platform.PDFKit.kPDFDisplayBoxMediaBox
 import platform.UIKit.UIActivityViewController
@@ -25,13 +29,20 @@ import platform.UIKit.popoverPresentationController
 import platform.UserNotifications.UNAuthorizationOptionAlert
 import platform.UserNotifications.UNAuthorizationOptionSound
 import platform.UserNotifications.UNAuthorizationStatusAuthorized
+import platform.UserNotifications.UNAuthorizationStatusProvisional
 import platform.UserNotifications.UNCalendarNotificationTrigger
 import platform.UserNotifications.UNMutableNotificationContent
+import platform.UserNotifications.UNNotification
+import platform.UserNotifications.UNNotificationPresentationOptionBanner
+import platform.UserNotifications.UNNotificationPresentationOptionList
+import platform.UserNotifications.UNNotificationPresentationOptionSound
+import platform.UserNotifications.UNNotificationPresentationOptions
 import platform.UserNotifications.UNNotificationRequest
+import platform.UserNotifications.UNNotificationResponse
 import platform.UserNotifications.UNNotificationSound
 import platform.UserNotifications.UNUserNotificationCenter
+import platform.UserNotifications.UNUserNotificationCenterDelegateProtocol
 import platform.posix.memcpy
-import kotlin.concurrent.Volatile
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -40,20 +51,26 @@ actual suspend fun openPdf(path: String): PdfDocument? = withContext(Dispatchers
     PDFDocument(uRL = NSURL.fileURLWithPath(path))?.let(::IosPdf)
 }
 
+/** PDFKit isn't safe to use from several threads at once, so pages render one at a time. */
 @OptIn(ExperimentalForeignApi::class)
 private class IosPdf(private val doc: PDFDocument) : PdfDocument {
+    private val lock = Mutex()
     override val pageCount: Int = doc.pageCount.toInt()
 
     override suspend fun render(index: Int, widthPx: Int): ImageBitmap? = withContext(Dispatchers.Default) {
-        if (index !in 0 until pageCount) return@withContext null
-        val page = doc.pageAtIndex(index.toULong()) ?: return@withContext null
+        lock.withLock { draw(index, widthPx) }
+    }
+
+    private fun draw(index: Int, widthPx: Int): ImageBitmap? {
+        if (index !in 0 until pageCount) return null
+        val page = doc.pageAtIndex(index.toULong()) ?: return null
         val (w, h) = page.boundsForBox(kPDFDisplayBoxMediaBox).useContents { size.width to size.height }
-        if (w <= 0.0 || h <= 0.0) return@withContext null
+        if (w <= 0.0 || h <= 0.0) return null
         // Points, not pixels: UIKit renders at screen scale, so this is already sharp.
         val width = widthPx.coerceIn(200, 2400) / 2.0
         val image = page.thumbnailOfSize(CGSizeMake(width, width * h / w), kPDFDisplayBoxMediaBox)
-        val png = UIImagePNGRepresentation(image) ?: return@withContext null
-        runCatching { Image.makeFromEncoded(png.toByteArray()).toComposeImageBitmap() }.getOrNull()
+        val png = UIImagePNGRepresentation(image) ?: return null
+        return runCatching { Image.makeFromEncoded(png.toByteArray()).toComposeImageBitmap() }.getOrNull()
     }
 
     override fun close() = Unit
@@ -69,7 +86,7 @@ private fun NSData.toByteArray(): ByteArray {
 
 /** Pending local notifications, one per watch, at 9 am on the due date. */
 class IosReminders : ReminderScheduler {
-    override fun reschedule(reminders: List<ServiceReminder>) {
+    override suspend fun reschedule(reminders: List<ServiceReminder>) {
         val center = UNUserNotificationCenter.currentNotificationCenter()
         center.getPendingNotificationRequestsWithCompletionHandler { pending ->
             val ours = pending.orEmpty().mapNotNull { (it as? UNNotificationRequest)?.identifier }.filter { it.startsWith(PREFIX) }
@@ -90,25 +107,53 @@ class IosReminders : ReminderScheduler {
         }
     }
 
-    private companion object {
+    companion object {
         const val PREFIX = "service-"
     }
 }
 
-class IosNotificationAccess : NotificationAccess {
-    @Volatile private var known = false
+/**
+ * Shows reminders while the app is open, and opens the watch's service history when one is tapped.
+ * Set from the app delegate at launch (see `onAppLaunched`), so a tap that launches the app is caught too.
+ */
+private class ReminderTaps : NSObject(), UNUserNotificationCenterDelegateProtocol {
+    override fun userNotificationCenter(
+        center: UNUserNotificationCenter,
+        willPresentNotification: UNNotification,
+        withCompletionHandler: (UNNotificationPresentationOptions) -> Unit,
+    ) {
+        withCompletionHandler(UNNotificationPresentationOptionBanner or UNNotificationPresentationOptionList or UNNotificationPresentationOptionSound)
+    }
 
-    init {
+    override fun userNotificationCenter(
+        center: UNUserNotificationCenter,
+        didReceiveNotificationResponse: UNNotificationResponse,
+        withCompletionHandler: () -> Unit,
+    ) {
+        val id = didReceiveNotificationResponse.notification.request.identifier
+        if (id.startsWith(IosReminders.PREFIX)) DeepLinks.openServiceHistory(id.removePrefix(IosReminders.PREFIX))
+        withCompletionHandler()
+    }
+}
+
+// The notification centre holds its delegate weakly, so it's kept here for the app's lifetime.
+private var reminderTaps: ReminderTaps? = null
+
+internal fun installReminderTaps() {
+    val taps = reminderTaps ?: ReminderTaps().also { reminderTaps = it }
+    UNUserNotificationCenter.currentNotificationCenter().delegate = taps
+}
+
+class IosNotificationAccess : NotificationAccess {
+    override suspend fun granted(): Boolean = suspendCoroutine { cont ->
         UNUserNotificationCenter.currentNotificationCenter().getNotificationSettingsWithCompletionHandler { settings ->
-            known = settings?.authorizationStatus == UNAuthorizationStatusAuthorized
+            val status = settings?.authorizationStatus
+            cont.resume(status == UNAuthorizationStatusAuthorized || status == UNAuthorizationStatusProvisional)
         }
     }
 
-    override fun granted(): Boolean = known
-
     override suspend fun request(): Boolean = suspendCoroutine { cont ->
         UNUserNotificationCenter.currentNotificationCenter().requestAuthorizationWithOptions(UNAuthorizationOptionAlert or UNAuthorizationOptionSound) { granted, _ ->
-            known = granted
             cont.resume(granted)
         }
     }

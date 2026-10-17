@@ -32,7 +32,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -82,15 +81,17 @@ import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.name
 import io.github.vinceglb.filekit.readBytes
 import io.github.vinceglb.filekit.size
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class DocumentActions(
     val onBack: () -> Unit,
     val onOpen: (WatchDocument) -> Unit,
     val onAdd: (bytes: ByteArray, name: String, kind: DocumentKind) -> Unit,
     val onCopy: (documentId: String) -> Unit,
-    val onRename: (WatchDocument, String) -> Unit,
-    val onKind: (WatchDocument, DocumentKind) -> Unit,
+    val onEdit: (WatchDocument, title: String, kind: DocumentKind) -> Unit,
     val onShare: (WatchDocument) -> Unit,
     val onDelete: (WatchDocument) -> Unit,
     val onDismissMessage: () -> Unit,
@@ -167,8 +168,7 @@ fun DocumentsScreen(state: DocumentsUiState, startAdding: DocumentKind?, actions
             },
             confirmButton = {
                 WatchButton("Save", {
-                    if (title != doc.title) actions.onRename(doc, title)
-                    if (kind != doc.kind) actions.onKind(doc.copy(title = title), kind)
+                    if (title != doc.title || kind != doc.kind) actions.onEdit(doc, title, kind)
                     renaming = null
                 }, kind = ButtonKind.Primary)
             },
@@ -288,11 +288,21 @@ fun DocumentViewerScreen(state: ViewerUiState, onBack: () -> Unit, onShare: () -
 private fun PdfPages(path: String, title: String, onShare: () -> Unit) {
     val c = WatchTheme.colors
     val t = WatchTheme.values
+    // Opening can't be cancelled halfway, so a PDF opened just as the viewer leaves is still closed.
     val pdf by produceState<Result<PdfDocument>?>(null, path) {
-        value = openPdf(path)?.let { Result.success(it) } ?: Result.failure(IllegalStateException())
+        val doc = withContext(NonCancellable) { openPdf(path) }
+        if (doc == null) {
+            value = Result.failure(IllegalStateException())
+            return@produceState
+        }
+        try {
+            value = Result.success(doc)
+            awaitCancellation()
+        } finally {
+            doc.close()
+        }
     }
     val open = pdf?.getOrNull()
-    DisposableEffect(open) { onDispose { open?.close() } }
     when {
         pdf == null -> CircularProgressIndicator(color = c.accent, modifier = Modifier.padding(40.dp))
         open == null -> Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {

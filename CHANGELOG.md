@@ -11,6 +11,7 @@
   - warranty on the work;
   - notes;
   - the invoice or other paperwork attached as PDFs or photos.
+- Attaching or removing paperwork takes effect when you tap Save, so Discard leaves the stored files as they were. If a file can't be attached, the service is still saved and the file stays listed to remove or try again.
 - Only a full service restarts the interval. Without one, the next service is counted from the date acquired. Smaller jobs, such as a battery or regulation, show as "last serviced" but don't move the due date.
 - The detail view shows the last service and the next due date, in red once overdue.
 - The Service tab lists the collection by urgency:
@@ -22,10 +23,12 @@
 
 **Reminders**
 - An optional reminder per watch, off by default, sent as a notification at 9 am on the due date.
-- Tapping the notification opens that watch's service history.
+- Tapping the notification opens that watch's service history. If a form is open, it waits until you've saved or discarded it.
+- On iOS, reminders also show while the app is open.
 - Android 13+ asks for notification permission the first time you switch one on. Settings › Service reminders shows whether notifications are allowed.
 - Reminders are scheduled on the phone with WorkManager on Android and local notifications on iOS. No server is involved.
 - Reminders move when you log a service or change the interval. They are cancelled when a watch is sold, archived or deleted.
+- On Android, a reminder held back by battery saving still arrives, even if you open the app first.
 
 **Box & papers**
 - A checklist covering inner box, outer box, warranty card and papers, manual, hang tags, extra links, receipt and other.
@@ -44,7 +47,7 @@
 - The built-in viewer shows PDFs page by page, and photos, with pinch to zoom. Share opens the system share sheet, with "Open with another app" as a fallback when a PDF can't be shown.
 - Documents can be renamed, have their kind changed, or be deleted.
 - Files are kept in app-private storage and will be included in backups (milestone 4).
-- The file type is checked from its content: PDF, JPEG, PNG, WebP or HEIC, up to 50 MB.
+- The file type is checked from its content: PDF, JPEG, PNG, WebP or HEIC, up to 50 MB. HEIC photos are stored as JPEG, so every viewer and app can open them.
 - Location data is removed from photos.
 - Search now also finds watches by watchmaker, service notes, work done and document titles.
 
@@ -57,7 +60,7 @@
 - WorkManager starts only when a reminder is scheduled, not at launch. Its foreground-service permission is removed because reminders never need it.
 
 **Tests**
-- 125 automated tests, including:
+- 127 automated tests, including:
   - the due-date, warranty and full-set rules;
   - repositories for service, box & papers and documents, with file storage;
   - which watches get reminders and how the Service tab groups them.

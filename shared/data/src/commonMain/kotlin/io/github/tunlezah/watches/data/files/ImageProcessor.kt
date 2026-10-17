@@ -39,15 +39,28 @@ object ImageFormats {
 }
 
 object DocumentFormats {
+    const val HEIC = "image/heic"
+
     /** The formats a document may be, by magic bytes: PDF and the usual photo formats. Null for anything else. */
     fun detect(bytes: ByteArray): Pair<String, String>? {
-        if (bytes.size >= 5 && bytes.decodeToString(0, 5) == "%PDF-") return "application/pdf" to "pdf"
+        if (isPdf(bytes)) return "application/pdf" to "pdf"
         return when (ImageFormats.extension(bytes)) {
             "jpg" -> "image/jpeg" to "jpg"
             "png" -> "image/png" to "png"
             "webp" -> "image/webp" to "webp"
-            "heic" -> "image/heic" to "heic"
+            "heic" -> HEIC to "heic"
             else -> null
         }
+    }
+
+    /** Readers accept the `%PDF-` header anywhere in the first kilobyte, and some scanners put junk before it. */
+    private fun isPdf(bytes: ByteArray): Boolean {
+        val end = minOf(bytes.size, 1024) - 5
+        for (i in 0..end) {
+            if (bytes[i] == '%'.code.toByte() && bytes[i + 1] == 'P'.code.toByte() && bytes[i + 2] == 'D'.code.toByte() &&
+                bytes[i + 3] == 'F'.code.toByte() && bytes[i + 4] == '-'.code.toByte()
+            ) return true
+        }
+        return false
     }
 }

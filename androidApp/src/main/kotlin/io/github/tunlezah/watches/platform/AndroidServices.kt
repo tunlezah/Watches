@@ -27,6 +27,9 @@ import io.github.tunlezah.watches.ui.platform.NotificationAccess
 import io.github.tunlezah.watches.ui.platform.ReminderScheduler
 import io.github.tunlezah.watches.ui.platform.ServiceReminder
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atTime
@@ -39,13 +42,20 @@ import kotlin.time.Clock
 
 /**
  * One WorkManager job per watch, set for 9 am on its due date. Jobs survive restarts and reboots.
- * Dates already past aren't scheduled: the watch shows as overdue in the app instead, and a
- * reminder that already fired isn't repeated every time the app opens.
+ * Times already past aren't scheduled: the watch shows as overdue in the app instead, and a
+ * reminder that already fired isn't repeated every time the app opens. A job whose time has
+ * passed but which hasn't run yet (Doze can hold it back) is left to run.
  */
 class WorkManagerReminders(private val context: Context) : ReminderScheduler {
-    override fun reschedule(reminders: List<ServiceReminder>) {
+    override suspend fun reschedule(reminders: List<ServiceReminder>) = withContext(Dispatchers.IO) {
         val work = WorkManager.getInstance(context)
-        work.cancelAllWorkByTag(TAG)
+        val wanted = reminders.associateBy { it.watchId }
+        for (info in work.getWorkInfosByTagFlow(TAG).first()) {
+            if (info.state.isFinished) continue
+            val watchId = info.tags.firstNotNullOfOrNull { it.removePrefixOrNull(WATCH_TAG) }
+            val due = info.tags.firstNotNullOfOrNull { it.removePrefixOrNull(DUE_TAG) }
+            if (watchId == null || wanted[watchId]?.due?.toString() != due) work.cancelWorkById(info.id)
+        }
         val now = Clock.System.now()
         for (r in reminders) {
             val at = r.due.atTime(LocalTime(9, 0)).toInstant(TimeZone.currentSystemDefault())
@@ -55,13 +65,19 @@ class WorkManagerReminders(private val context: Context) : ReminderScheduler {
                 .setInitialDelay(delay, TimeUnit.MILLISECONDS)
                 .setInputData(workDataOf(KEY_WATCH to r.watchId, KEY_TITLE to r.title))
                 .addTag(TAG)
+                .addTag(WATCH_TAG + r.watchId)
+                .addTag(DUE_TAG + r.due)
                 .build()
             work.enqueueUniqueWork("service-${r.watchId}", ExistingWorkPolicy.REPLACE, request)
         }
     }
 
+    private fun String.removePrefixOrNull(prefix: String): String? = if (startsWith(prefix)) removePrefix(prefix) else null
+
     companion object {
         const val TAG = "service-reminder"
+        private const val WATCH_TAG = "watch:"
+        private const val DUE_TAG = "due:"
         const val KEY_WATCH = "watchId"
         const val KEY_TITLE = "title"
     }
@@ -114,11 +130,13 @@ class AndroidNotificationAccess(private val context: Context) : NotificationAcce
     var launcher: ActivityResultLauncher<String>? = null
     private var pending: CompletableDeferred<Boolean>? = null
 
-    override fun granted(): Boolean = Build.VERSION.SDK_INT < 33 ||
+    override suspend fun granted(): Boolean = allowed()
+
+    private fun allowed(): Boolean = Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     override suspend fun request(): Boolean {
-        if (granted()) return true
+        if (allowed()) return true
         val ask = launcher ?: return false
         pending?.complete(false)
         val answer = CompletableDeferred<Boolean>().also { pending = it }

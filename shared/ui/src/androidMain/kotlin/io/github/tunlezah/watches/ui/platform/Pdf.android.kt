@@ -6,7 +6,10 @@ import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -23,9 +26,10 @@ private class AndroidPdf(private val renderer: PdfRenderer, private val fd: Parc
     private var closed = false
     override val pageCount: Int = renderer.pageCount
 
-    override suspend fun render(index: Int, widthPx: Int): ImageBitmap? = lock.withLock {
-        if (closed || index !in 0 until pageCount) return@withLock null
-        withContext(Dispatchers.IO) {
+    // The lock is taken and released on the IO thread, so releasing it never waits for the UI thread.
+    override suspend fun render(index: Int, widthPx: Int): ImageBitmap? = withContext(Dispatchers.IO) {
+        lock.withLock {
+            if (closed || index !in 0 until pageCount) return@withLock null
             runCatching {
                 renderer.openPage(index).use { page ->
                     val w = widthPx.coerceIn(200, 2400)
@@ -40,14 +44,18 @@ private class AndroidPdf(private val renderer: PdfRenderer, private val fd: Parc
     }
 
     override fun close() {
-        // Closing waits for any page being drawn, so the renderer is never closed mid-render.
-        kotlinx.coroutines.runBlocking {
+        // Waits, off the UI thread, for any page being drawn, so the renderer is never closed mid-render.
+        closer.launch {
             lock.withLock {
                 if (closed) return@withLock
                 closed = true
-                renderer.close()
-                fd.close()
+                runCatching { renderer.close() }
+                runCatching { fd.close() }
             }
         }
+    }
+
+    private companion object {
+        val closer = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 }

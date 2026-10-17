@@ -95,7 +95,7 @@ fun ServiceDueScreen(state: ServiceDueUiState, onOpen: (DueItem) -> Unit) {
 private fun androidx.compose.foundation.lazy.LazyListScope.dueSection(title: String, items: List<DueItem>, onOpen: (DueItem) -> Unit) {
     if (items.isEmpty()) return
     item(key = "h-$title") { SectionTitle(title) }
-    items(items, key = { "$title-${it.watchId}-${it.headline}" }) { item -> DueRow(item) { onOpen(item) } }
+    items(items, key = { "$title-${it.key}" }) { item -> DueRow(item) { onOpen(item) } }
 }
 
 @Composable

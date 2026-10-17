@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
+import kotlin.coroutines.cancellation.CancellationException
 
 /** One watch's service and warranty inputs, as the Service tab and reminders need them. */
 data class WatchCare(
@@ -179,7 +180,8 @@ class DocumentRepository(
 
     /**
      * Keeps a PDF or photo with a watch (and optionally a service entry). The type comes from the
-     * file's own bytes, not its name. Photos lose their GPS location, as watch photos do.
+     * file's own bytes, not its name. Photos lose their GPS location, as watch photos do. HEIC is
+     * stored as JPEG, which every viewer and app it's shared with can open.
      */
     suspend fun add(
         watchId: String,
@@ -189,30 +191,54 @@ class DocumentRepository(
         serviceEntryId: String? = null,
     ): WatchDocument {
         if (bytes.size > MAX_BYTES) throw TooLarge()
-        val (mime, ext) = DocumentFormats.detect(bytes) ?: throw UnsupportedDocument()
+        val (detected, ext) = DocumentFormats.detect(bytes) ?: throw UnsupportedDocument()
+        val heic = detected == DocumentFormats.HEIC
+        val mime = if (heic) "image/jpeg" else detected
         val id = Ids.new()
-        val path = "${FileStore.documentDir(watchId)}/$id.$ext"
-        files.write(path, bytes)
+        val path = "${FileStore.documentDir(watchId)}/$id.${if (heic) "jpg" else ext}"
+        // Until the row is written the file is ours to clean up; after that the row owns it.
         try {
-            if (mime.startsWith("image/")) runCatching { processor.stripLocation(files.resolve(path)) }
-            val doc = WatchDocument(
-                id = id,
-                watchId = watchId,
-                serviceEntryId = serviceEntryId,
-                kind = kind,
-                title = title.trim().ifEmpty { kind.label },
-                file = path,
-                mimeType = mime,
-                sizeBytes = files.size(path),
-                addedAt = time.now(),
-            )
-            dao.upsert(doc.toEntity())
-            watches.reindex(watchId)
-            return doc
+            if (heic) {
+                val source = "${FileStore.documentDir(watchId)}/$id.heic"
+                files.write(source, bytes)
+                try {
+                    processor.render(files.resolve(source), null, HEIC_EDGE, HEIC_QUALITY, files.resolve(path))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    throw UnsupportedDocument()
+                } finally {
+                    withContext(NonCancellable) { files.delete(source) }
+                }
+            } else {
+                files.write(path, bytes)
+                if (mime.startsWith("image/")) runCatching { processor.stripLocation(files.resolve(path)) }
+            }
         } catch (e: Throwable) {
             withContext(NonCancellable) { files.delete(path) }
             throw e
         }
+        val doc = WatchDocument(
+            id = id,
+            watchId = watchId,
+            serviceEntryId = serviceEntryId,
+            kind = kind,
+            title = title.trim().ifEmpty { kind.label },
+            file = path,
+            mimeType = mime,
+            sizeBytes = files.size(path),
+            addedAt = time.now(),
+        )
+        withContext(NonCancellable) {
+            try {
+                dao.upsert(doc.toEntity())
+            } catch (e: Throwable) {
+                files.delete(path)
+                throw e
+            }
+            watches.reindex(watchId)
+        }
+        return doc
     }
 
     /** Copies a document (a manual, typically) to another watch. Each watch keeps its own file. */
@@ -220,10 +246,22 @@ class DocumentRepository(
         val source = dao.get(documentId)?.toModel() ?: return null
         val id = Ids.new()
         val path = "${FileStore.documentDir(watchId)}/$id.${source.file.substringAfterLast('.', "bin")}"
-        files.copy(source.file, path)
+        try {
+            files.copy(source.file, path)
+        } catch (e: Throwable) {
+            withContext(NonCancellable) { files.delete(path) }
+            throw e
+        }
         val copy = source.copy(id = id, watchId = watchId, serviceEntryId = null, file = path, addedAt = time.now())
-        dao.upsert(copy.toEntity())
-        watches.reindex(watchId)
+        withContext(NonCancellable) {
+            try {
+                dao.upsert(copy.toEntity())
+            } catch (e: Throwable) {
+                files.delete(path)
+                throw e
+            }
+            watches.reindex(watchId)
+        }
         return copy
     }
 
@@ -241,5 +279,7 @@ class DocumentRepository(
 
     companion object {
         const val MAX_BYTES = 50 * 1024 * 1024
+        private const val HEIC_EDGE = 4096
+        private const val HEIC_QUALITY = 92
     }
 }

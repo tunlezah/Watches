@@ -9,12 +9,12 @@ data class ServiceReminder(val watchId: String, val title: String, val due: Loca
 /** Schedules local notifications only; nothing leaves the device. */
 interface ReminderScheduler {
     /** Replaces every scheduled service reminder with [reminders]. */
-    fun reschedule(reminders: List<ServiceReminder>)
+    suspend fun reschedule(reminders: List<ServiceReminder>)
 }
 
 /** Whether the app may post notifications, and asking for it. */
 interface NotificationAccess {
-    fun granted(): Boolean
+    suspend fun granted(): Boolean
     suspend fun request(): Boolean
 }
 

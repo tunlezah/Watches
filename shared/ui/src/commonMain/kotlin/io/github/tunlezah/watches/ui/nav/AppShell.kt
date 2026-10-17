@@ -60,7 +60,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
@@ -148,10 +151,14 @@ fun AppShell() {
     val navigator = rememberNavigator()
     val animations = remember { systemAnimationsEnabled() }
 
-    // A tapped service reminder opens that watch's service history, from the collection.
+    // Tabs hide while a form is open, so switching tab can't throw unsaved work away.
+    val editing = navigator.backStack.any { it is Route.Edit || it is Route.Crop || it is Route.ServiceEdit }
+
+    // A tapped service reminder opens that watch's service history, from the collection. It waits
+    // while a form is open, because jumping there clears the back stack and the form with it.
     val reminderWatch by DeepLinks.serviceHistory.collectAsStateWithLifecycle()
-    LaunchedEffect(reminderWatch) {
-        reminderWatch?.let { id ->
+    LaunchedEffect(reminderWatch, editing) {
+        if (!editing) reminderWatch?.let { id ->
             navigator.selectTab(Route.Collection)
             navigator.openDetail(id)
             navigator.push(Route.ServiceHistory(id))
@@ -166,8 +173,6 @@ fun AppShell() {
         val directive = calculatePaneScaffoldDirective(currentWindowAdaptiveInfo())
         val twoPane = directive.maxHorizontalPartitions > 1
         val listDetail = rememberListDetailSceneStrategy<Route>(directive = directive)
-        // Tabs hide while a form is open, so switching tab can't throw unsaved work away.
-        val editing = navigator.backStack.any { it is Route.Edit || it is Route.Crop || it is Route.ServiceEdit }
         Row(Modifier.fillMaxSize()) {
             if (wide && !editing) NavRail(navigator)
             Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -459,8 +464,7 @@ private fun DocumentsEntry(watchId: String, addKind: String?, navigator: Navigat
             onOpen = { navigator.push(Route.DocumentViewer(it.id)) },
             onAdd = vm::add,
             onCopy = { vm.copyFrom(it) },
-            onRename = { d, title -> vm.rename(d, title) },
-            onKind = { d, kind -> vm.setKind(d, kind) },
+            onEdit = { d, title, kind -> vm.edit(d, title, kind) },
             onShare = vm::share,
             onDelete = { vm.delete(it) },
             onDismissMessage = vm::dismissMessage,
@@ -520,7 +524,12 @@ private fun SettingsEntry(navigator: Navigator) {
     val sources = koinViewModel<SourcesViewModel>()
     val sourcesState by sources.state.collectAsStateWithLifecycle()
     val notifications = koinInject<NotificationAccess>()
-    var notificationsGranted by remember { mutableStateOf(notifications.granted()) }
+    // Checked again on every return to the app, in case it was changed in the phone's settings.
+    var notificationsGranted by remember { mutableStateOf<Boolean?>(null) }
+    val lifecycle = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { notificationsGranted = notifications.granted() }
+    }
     val scope = rememberCoroutineScope()
     settings?.let { s ->
         SettingsScreen(
@@ -538,7 +547,9 @@ private fun SettingsEntry(navigator: Navigator) {
                 )
             },
             remindersSection = {
-                RemindersSettings(notificationsGranted) { scope.launch { notificationsGranted = notifications.request() } }
+                notificationsGranted?.let { granted ->
+                    RemindersSettings(granted) { scope.launch { notificationsGranted = notifications.request() } }
+                }
             },
         )
     }

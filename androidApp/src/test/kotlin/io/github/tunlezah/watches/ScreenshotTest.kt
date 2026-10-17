@@ -310,7 +310,7 @@ class ScreenshotTest {
             ),
             entryDates = mapOf("s1" to "14/12/2021"),
         )
-        val actions = DocumentActions({}, {}, { _, _, _ -> }, {}, { _, _ -> }, { _, _ -> }, {}, {}, {}, {})
+        val actions = DocumentActions({}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {}, {}, {}, {})
         themed(Direction.GALLERY) { DocumentsScreen(state, null, actions) }
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/documents-gallery.png")
     }
