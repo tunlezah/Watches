@@ -56,7 +56,7 @@ fun ViewerScreen(photos: List<PhotoUi>, start: Int, onBack: () -> Unit) {
 }
 
 @Composable
-private fun ZoomableImage(path: String, description: String) {
+internal fun ZoomableImage(path: String, description: String) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     val model = remember(path) { path.toPath() }

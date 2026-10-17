@@ -4,6 +4,7 @@ import androidx.compose.ui.window.ComposeUIViewController
 import io.github.tunlezah.watches.data.dataModule
 import io.github.tunlezah.watches.data.iosDataModule
 import io.github.tunlezah.watches.search.iosSearchModule
+import io.github.tunlezah.watches.ui.platform.iosPlatformModule
 import io.github.tunlezah.watches.search.searchModule
 import org.koin.core.context.startKoin
 import platform.UIKit.UIViewController
@@ -14,7 +15,7 @@ private var started = false
 fun initKoin() {
     if (started) return
     started = true
-    startKoin { modules(dataModule, iosDataModule(), searchModule, iosSearchModule(), uiModule) }
+    startKoin { modules(dataModule, iosDataModule(), searchModule, iosSearchModule(), iosPlatformModule(), uiModule) }
 }
 
 /** The whole app as a UIKit view controller, hosted by the SwiftUI shell. */

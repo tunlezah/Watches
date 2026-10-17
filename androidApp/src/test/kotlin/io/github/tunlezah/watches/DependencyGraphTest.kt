@@ -27,7 +27,7 @@ class DependencyGraphTest {
     @Test
     fun everyDefinitionCanBeBuilt() {
         val context: Context = ApplicationProvider.getApplicationContext()
-        module { includes(dataModule, androidDataModule(context), searchModule, androidSearchModule(context), uiModule) }.verify(
+        module { includes(dataModule, androidDataModule(context), searchModule, androidSearchModule(context), io.github.tunlezah.watches.platform.androidPlatformModule(context), uiModule) }.verify(
             // Plain values passed inline rather than injected.
             extraTypes = listOf(
                 Context::class, SavedStateHandle::class, okio.Path::class, okio.FileSystem::class,
@@ -42,6 +42,11 @@ class DependencyGraphTest {
                 definition<io.github.tunlezah.watches.ui.photos.CropViewModel>(String::class),
                 definition<io.github.tunlezah.watches.ui.lookup.LookupViewModel>(io.github.tunlezah.watches.ui.lookup.LookupTarget::class, String::class),
                 definition<io.github.tunlezah.watches.ui.lookup.ResultViewModel>(String::class),
+                definition<io.github.tunlezah.watches.ui.care.ServiceHistoryViewModel>(String::class),
+                definition<io.github.tunlezah.watches.ui.care.ServiceEditViewModel>(String::class),
+                definition<io.github.tunlezah.watches.ui.care.BoxPapersViewModel>(String::class),
+                definition<io.github.tunlezah.watches.ui.care.DocumentsViewModel>(String::class),
+                definition<io.github.tunlezah.watches.ui.care.DocumentViewerViewModel>(String::class),
                 // The source list is built in the search module's definition, not resolved by type.
                 definition<io.github.tunlezah.watches.search.LookupService>(List::class),
                 definition<io.github.tunlezah.watches.ui.lookup.ApplyViewModel>(io.github.tunlezah.watches.ui.lookup.LookupTarget::class),

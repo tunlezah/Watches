@@ -109,6 +109,24 @@ import io.github.tunlezah.watches.ui.lookup.RequestLogScreen
 import io.github.tunlezah.watches.ui.lookup.ResultScreen
 import io.github.tunlezah.watches.ui.lookup.ResultViewModel
 import io.github.tunlezah.watches.ui.lookup.SourcesViewModel
+import io.github.tunlezah.watches.core.model.DocumentKind
+import io.github.tunlezah.watches.ui.care.BoxPapersScreen
+import io.github.tunlezah.watches.ui.care.BoxPapersViewModel
+import io.github.tunlezah.watches.ui.care.DocumentActions
+import io.github.tunlezah.watches.ui.care.DocumentViewerScreen
+import io.github.tunlezah.watches.ui.care.DocumentViewerViewModel
+import io.github.tunlezah.watches.ui.care.DocumentsScreen
+import io.github.tunlezah.watches.ui.care.DocumentsViewModel
+import io.github.tunlezah.watches.ui.care.RemindersSettings
+import io.github.tunlezah.watches.ui.care.ServiceDueScreen
+import io.github.tunlezah.watches.ui.platform.NotificationAccess
+import io.github.tunlezah.watches.ui.care.ServiceDueViewModel
+import io.github.tunlezah.watches.ui.care.ServiceEditScreen
+import io.github.tunlezah.watches.ui.care.ServiceEditViewModel
+import io.github.tunlezah.watches.ui.care.ServiceHistoryScreen
+import io.github.tunlezah.watches.ui.care.ServiceHistoryViewModel
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -130,6 +148,17 @@ fun AppShell() {
     val navigator = rememberNavigator()
     val animations = remember { systemAnimationsEnabled() }
 
+    // A tapped service reminder opens that watch's service history, from the collection.
+    val reminderWatch by DeepLinks.serviceHistory.collectAsStateWithLifecycle()
+    LaunchedEffect(reminderWatch) {
+        reminderWatch?.let { id ->
+            navigator.selectTab(Route.Collection)
+            navigator.openDetail(id)
+            navigator.push(Route.ServiceHistory(id))
+            DeepLinks.consumed()
+        }
+    }
+
     BoxWithConstraints(Modifier.fillMaxSize().background(c.bg)) {
         val wide = maxWidth >= 600.dp
         // Two panes only when the adaptive directive says so (840 dp and up by default), which can
@@ -138,7 +167,7 @@ fun AppShell() {
         val twoPane = directive.maxHorizontalPartitions > 1
         val listDetail = rememberListDetailSceneStrategy<Route>(directive = directive)
         // Tabs hide while a form is open, so switching tab can't throw unsaved work away.
-        val editing = navigator.backStack.any { it is Route.Edit || it is Route.Crop }
+        val editing = navigator.backStack.any { it is Route.Edit || it is Route.Crop || it is Route.ServiceEdit }
         Row(Modifier.fillMaxSize()) {
             if (wide && !editing) NavRail(navigator)
             Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -175,11 +204,12 @@ fun AppShell() {
                                 entry<Route.LookupResult> { r -> InEntry { ResultEntry(r.hitId, navigator) } }
                                 entry<Route.Apply> { r -> InEntry { ApplyEntry(r.target, navigator) } }
                                 entry<Route.RequestLog> { InEntry { RequestLogEntry(navigator) } }
-                                entry<Route.Service> {
-                                    InEntry {
-                                        ComingSoonScreen("Service", "Service history, what's due across the collection, reminders, box and papers, and documents. Arrives in milestone 3.")
-                                    }
-                                }
+                                entry<Route.Service> { InEntry { ServiceDueEntry(navigator) } }
+                                entry<Route.ServiceHistory> { r -> InEntry { ServiceHistoryEntry(r.watchId, navigator) } }
+                                entry<Route.ServiceEdit> { r -> InEntry { ServiceEditEntry(r.watchId, r.entryId, navigator) } }
+                                entry<Route.BoxPapers> { r -> InEntry { BoxPapersEntry(r.watchId, navigator) } }
+                                entry<Route.Documents> { r -> InEntry { DocumentsEntry(r.watchId, r.addKind, navigator) } }
+                                entry<Route.DocumentViewer> { r -> InEntry { DocumentViewerEntry(r.documentId, navigator) } }
                                 entry<Route.Settings> { InEntry { SettingsEntry(navigator) } }
                                 entry<Route.Diagnostics> { InEntry { DiagnosticsEntry(navigator) } }
                                 entry<Route.Licences> { InEntry { LicencesScreen(onBack = { navigator.pop() }) } }
@@ -285,6 +315,11 @@ private fun DetailEntry(watchId: String, navigator: Navigator, showBack: Boolean
                 if (state.reviewReady) navigator.push(Route.Apply(LookupTarget.Watch(watchId)))
                 vm.dismissNotice()
             },
+            onService = { navigator.push(Route.ServiceHistory(watchId)) },
+            onBoxPapers = { navigator.push(Route.BoxPapers(watchId)) },
+            onDocuments = { navigator.push(Route.Documents(watchId)) },
+            onOpenDocument = { navigator.push(Route.DocumentViewer(it.id)) },
+            onAddGuide = { navigator.push(Route.Documents(watchId, it.key)) },
         ),
     )
 }
@@ -375,6 +410,73 @@ private fun ApplyEntry(target: LookupTarget, navigator: Navigator) {
 }
 
 @Composable
+private fun ServiceDueEntry(navigator: Navigator) {
+    val vm = koinViewModel<ServiceDueViewModel>()
+    val state by vm.state.collectAsStateWithLifecycle()
+    ServiceDueScreen(state) { item ->
+        navigator.push(if (item.opensPapers) Route.BoxPapers(item.watchId) else Route.ServiceHistory(item.watchId))
+    }
+}
+
+@Composable
+private fun ServiceHistoryEntry(watchId: String, navigator: Navigator) {
+    val vm = koinViewModel<ServiceHistoryViewModel>(key = "service-$watchId") { parametersOf(watchId) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    ServiceHistoryScreen(
+        state = state,
+        onBack = { navigator.pop() },
+        onAdd = { navigator.push(Route.ServiceEdit(watchId, null)) },
+        onOpenEntry = { navigator.push(Route.ServiceEdit(watchId, it)) },
+        onOpenDocument = { navigator.push(Route.DocumentViewer(it.id)) },
+        onInterval = { vm.setInterval(it) },
+        onReminder = { vm.setReminder(it) },
+    )
+}
+
+@Composable
+private fun ServiceEditEntry(watchId: String, entryId: String?, navigator: Navigator) {
+    val vm = koinViewModel<ServiceEditViewModel>(key = "service-edit-$watchId-${entryId.orEmpty()}") { parametersOf(watchId, entryId) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    ServiceEditScreen(state, vm, onClose = { navigator.pop() }, onOpenDocument = { navigator.push(Route.DocumentViewer(it.id)) })
+}
+
+@Composable
+private fun BoxPapersEntry(watchId: String, navigator: Navigator) {
+    val vm = koinViewModel<BoxPapersViewModel>(key = "papers-$watchId") { parametersOf(watchId) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    BoxPapersScreen(state, vm, onBack = { navigator.pop() }, onManual = { navigator.push(Route.Documents(watchId)) })
+}
+
+@Composable
+private fun DocumentsEntry(watchId: String, addKind: String?, navigator: Navigator) {
+    val vm = koinViewModel<DocumentsViewModel>(key = "documents-$watchId") { parametersOf(watchId) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    DocumentsScreen(
+        state = state,
+        startAdding = addKind?.let { k -> DocumentKind.entries.firstOrNull { it.key == k } },
+        actions = DocumentActions(
+            onBack = { navigator.pop() },
+            onOpen = { navigator.push(Route.DocumentViewer(it.id)) },
+            onAdd = vm::add,
+            onCopy = { vm.copyFrom(it) },
+            onRename = { d, title -> vm.rename(d, title) },
+            onKind = { d, kind -> vm.setKind(d, kind) },
+            onShare = vm::share,
+            onDelete = { vm.delete(it) },
+            onDismissMessage = vm::dismissMessage,
+            onTooLarge = vm::tooLarge,
+        ),
+    )
+}
+
+@Composable
+private fun DocumentViewerEntry(documentId: String, navigator: Navigator) {
+    val vm = koinViewModel<DocumentViewerViewModel>(key = "document-$documentId") { parametersOf(documentId) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    DocumentViewerScreen(state, onBack = { navigator.pop() }, onShare = vm::share)
+}
+
+@Composable
 private fun RequestLogEntry(navigator: Navigator) {
     val log = koinInject<RequestLog>()
     val entries by log.entries.collectAsStateWithLifecycle()
@@ -417,6 +519,9 @@ private fun SettingsEntry(navigator: Navigator) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val sources = koinViewModel<SourcesViewModel>()
     val sourcesState by sources.state.collectAsStateWithLifecycle()
+    val notifications = koinInject<NotificationAccess>()
+    var notificationsGranted by remember { mutableStateOf(notifications.granted()) }
+    val scope = rememberCoroutineScope()
     settings?.let { s ->
         SettingsScreen(
             settings = s,
@@ -431,6 +536,9 @@ private fun SettingsEntry(navigator: Navigator) {
                     onRequestLog = { navigator.push(Route.RequestLog) },
                     onClearRecent = { sources.clearRecent() },
                 )
+            },
+            remindersSection = {
+                RemindersSettings(notificationsGranted) { scope.launch { notificationsGranted = notifications.request() } }
             },
         )
     }

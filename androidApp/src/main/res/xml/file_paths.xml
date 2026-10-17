@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only stored documents can be shared out; photos and the database are never exposed. -->
+<paths>
+    <files-path name="documents" path="documents/" />
+</paths>

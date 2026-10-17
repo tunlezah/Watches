@@ -22,6 +22,31 @@ import io.github.tunlezah.watches.ui.collection.CollectionItem
 import io.github.tunlezah.watches.ui.collection.CollectionScreen
 import io.github.tunlezah.watches.ui.collection.CollectionUiState
 import io.github.tunlezah.watches.ui.components.WatchLook
+import io.github.tunlezah.watches.core.care.CarePlan
+import io.github.tunlezah.watches.core.model.BoxItem
+import io.github.tunlezah.watches.core.model.BoxItemState
+import io.github.tunlezah.watches.core.model.BoxPapersItem
+import io.github.tunlezah.watches.core.model.DocumentKind
+import io.github.tunlezah.watches.core.model.ServiceWork
+import io.github.tunlezah.watches.core.model.WatchDocument
+import io.github.tunlezah.watches.ui.care.BoxPapersActions
+import io.github.tunlezah.watches.ui.care.BoxPapersScreen
+import io.github.tunlezah.watches.ui.care.BoxPapersUiState
+import io.github.tunlezah.watches.ui.care.DocumentActions
+import io.github.tunlezah.watches.ui.care.DocumentGroup
+import io.github.tunlezah.watches.ui.care.DocumentsScreen
+import io.github.tunlezah.watches.ui.care.DocumentsUiState
+import io.github.tunlezah.watches.ui.care.DueItem
+import io.github.tunlezah.watches.ui.care.EntryUi
+import io.github.tunlezah.watches.ui.care.PendingAttachment
+import io.github.tunlezah.watches.ui.care.ServiceDueScreen
+import io.github.tunlezah.watches.ui.care.ServiceDueUiState
+import io.github.tunlezah.watches.ui.care.ServiceEditActions
+import io.github.tunlezah.watches.ui.care.ServiceEditScreen
+import io.github.tunlezah.watches.ui.care.ServiceEditUiState
+import io.github.tunlezah.watches.ui.care.ServiceHistoryScreen
+import io.github.tunlezah.watches.ui.care.ServiceHistoryUiState
+import io.github.tunlezah.watches.ui.detail.DetailCare
 import io.github.tunlezah.watches.ui.detail.DetailActions
 import io.github.tunlezah.watches.ui.detail.DetailScreen
 import io.github.tunlezah.watches.ui.detail.DetailStat
@@ -111,11 +136,19 @@ class ScreenshotTest {
             .associateWith { Provenance(it, "ranfft", "https://ranfft.org", t0) } +
         mapOf("case.lug_to_lug_mm" to Provenance("case.lug_to_lug_mm", "watchbase", null, t0, userEdited = true))
 
+    private val manualPdf = WatchDocument("d1", "w1", null, DocumentKind.MANUAL, "Calibre 3861 instructions", "documents/w1/d1.pdf", WatchDocument.MIME_PDF, 2_480_000, t0)
+    private val quickStart = WatchDocument("d2", "w1", null, DocumentKind.QUICK_START, "Speedmaster quick start", "documents/w1/d2.pdf", WatchDocument.MIME_PDF, 380_000, t0)
+
     private fun detailState() = DetailUiState(
         loading = false, watch = speedmaster, brand = "Omega", title = "Speedmaster Professional", subtitle = "“Moonwatch”",
         reference = speedmaster.reference, statusLabel = "Owned", look = WatchLook.guess("Black", "Steel", speedmaster.complications),
         stats = listOf(DetailStat("Status", "Owned", true), DetailStat("Case", "42 mm"), DetailStat("Movement", "Manual"), DetailStat("Next service", "03/2028")),
         groups = SpecSheet.build(speedmaster, provenance, DisplayPrefs()), footer = "Added 14/03/2023",
+        care = DetailCare(
+            service = "Due 14/03/2028 (in 1 years)", serviceUrgent = false, serviceBadge = null,
+            papers = "Full set", fullSet = true, warranty = "Warranty until 14/03/2028 (in 1 years)", warrantyEnded = false,
+            documents = "4 documents", guides = listOf(manualPdf), hasManual = true, hasQuickStart = false,
+        ),
     )
 
     private fun themed(direction: Direction, dark: Boolean = true, content: @Composable () -> Unit) {
@@ -188,6 +221,98 @@ class ScreenshotTest {
             }
         }
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings-sources-gallery.png")
+    }
+
+    // Service, box & papers, documents
+
+    private fun due(title: String, headline: String, detail: String?, urgent: Boolean = false) =
+        DueItem(title.lowercase().replace(' ', '-'), title, null, null, headline, detail, urgent)
+
+    @Test fun serviceDue() {
+        val state = ServiceDueUiState(
+            loaded = true,
+            overdue = listOf(due("Rolex Explorer", "Overdue since 01/09/2026 (6 weeks ago)", "Counted from the date acquired", urgent = true)),
+            soon = listOf(due("Omega Speedmaster Professional", "Due 14/12/2026 (in 8 weeks)", "Counted from the last full service, last serviced 14/12/2021")),
+            inService = listOf(due("Tudor Black Bay 58", "At the watchmaker", "Counted from the date acquired")),
+            warranties = listOf(due("Grand Seiko SBGA211", "Warranty until 02/01/2027 (in 11 weeks)", "Watch warranty")),
+            later = listOf(due("Seiko SPB143", "Due 01/06/2029 (in 2 years)", "Counted from the date acquired")),
+            noInterval = 7, onHand = 12,
+        )
+        themed(Direction.INSTRUMENT) { ServiceDueScreen(state) {} }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/service-due-instrument.png")
+    }
+
+    @Test fun serviceHistory() {
+        val invoice = WatchDocument("i1", "w1", "s1", DocumentKind.INVOICE, "Omega invoice 2021", "documents/w1/i1.pdf", WatchDocument.MIME_PDF, 210_000, t0)
+        val state = ServiceHistoryUiState(
+            loaded = true, title = "Omega Speedmaster Professional", intervalMonths = 60, reminder = true,
+            due = "Due 14/12/2026 (in 8 weeks)", lastService = "02/05/2025",
+            entries = listOf(
+                EntryUi("s2", "02/05/2025", "Regulation", "Swiss Time Services, Melbourne", "A$120", null, "Running +2 s/day after regulation.", emptyList()),
+                EntryUi("s1", "14/12/2021", "Full service, Gaskets, Crystal", "Omega Service Centre Sydney", "A$850", "Work guaranteed until 14/12/2023",
+                    "New mainspring, crystal and gaskets. Water resistance tested to 5 bar.", listOf(invoice)),
+            ),
+        )
+        themed(Direction.ATELIER) { ServiceHistoryScreen(state, {}, {}, {}, {}, {}, {}) }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/service-history-atelier.png")
+    }
+
+    private val noEdits = object : ServiceEditActions {
+        override fun edit(transform: (ServiceEditUiState) -> ServiceEditUiState) = Unit
+        override fun toggleWork(w: ServiceWork) = Unit
+        override fun attach(bytes: ByteArray, name: String) = Unit
+        override fun removePending(key: String) = Unit
+        override fun detach(doc: WatchDocument) = Unit
+        override fun save(onDone: () -> Unit) = Unit
+        override fun delete(withDocuments: Boolean, onDone: () -> Unit) = Unit
+    }
+
+    @Test fun serviceEdit() {
+        val state = ServiceEditUiState(
+            loaded = true, isNew = true, date = LocalDate(2026, 10, 12), by = "Omega Service Centre Sydney",
+            work = setOf(ServiceWork.FULL_SERVICE, ServiceWork.GASKETS), cost = "850", currency = "AUD", warrantyMonths = "24",
+            notes = "New mainspring and crown seal.", pending = listOf(PendingAttachment("p", "Invoice 4471", ByteArray(0), DocumentKind.INVOICE)),
+        )
+        themed(Direction.GALLERY) { ServiceEditScreen(state, noEdits, {}, {}) }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/service-edit-gallery.png")
+    }
+
+    @Test fun boxPapers() {
+        val states = mapOf(
+            BoxItem.INNER_BOX to BoxItemState.PRESENT, BoxItem.OUTER_BOX to BoxItemState.PRESENT, BoxItem.WARRANTY_CARD to BoxItemState.PRESENT,
+            BoxItem.MANUAL to BoxItemState.MISSING, BoxItem.HANG_TAGS to BoxItemState.NOT_APPLICABLE,
+        )
+        val state = BoxPapersUiState(
+            loaded = true, title = "Omega Speedmaster Professional", states = states, notes = mapOf(BoxItem.WARRANTY_CARD to "Card dated 14 March 2023"),
+            summary = CarePlan.boxPapers(states.map { (k, v) -> BoxPapersItem(k, v) }),
+            warrantyStart = LocalDate(2023, 3, 14), warrantyMonths = 60, warranty = "Warranty until 14/03/2028 (in 1 years)", hasElectronicManual = true,
+        )
+        val stub = object : BoxPapersActions {
+            override fun set(item: BoxItem, value: BoxItemState) = Unit
+            override fun setNote(item: BoxItem, note: String) = Unit
+            override fun markRestNotApplicable() = Unit
+            override fun setWarranty(start: LocalDate?, months: Int?) = Unit
+        }
+        themed(Direction.ATELIER, dark = false) { BoxPapersScreen(state, stub, {}, {}) }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/box-papers-atelier-light.png")
+    }
+
+    @Test fun documents() {
+        val receipt = WatchDocument("d3", "w1", null, DocumentKind.RECEIPT, "Receipt, Hardy Brothers", "documents/w1/d3.jpg", "image/jpeg", 1_200_000, t0)
+        val cosc = WatchDocument("d4", "w1", null, DocumentKind.CERTIFICATE, "Master Chronometer certificate", "documents/w1/d4.pdf", WatchDocument.MIME_PDF, 540_000, t0)
+        val invoice = WatchDocument("i1", "w1", "s1", DocumentKind.INVOICE, "Omega invoice 2021", "documents/w1/i1.pdf", WatchDocument.MIME_PDF, 210_000, t0)
+        val state = DocumentsUiState(
+            loaded = true, title = "Omega Speedmaster Professional",
+            groups = listOf(
+                DocumentGroup("Manual & quick start", listOf(manualPdf, quickStart)),
+                DocumentGroup("Purchase & warranty", listOf(receipt, cosc)),
+                DocumentGroup("Service", listOf(invoice)),
+            ),
+            entryDates = mapOf("s1" to "14/12/2021"),
+        )
+        val actions = DocumentActions({}, {}, { _, _, _ -> }, {}, { _, _ -> }, { _, _ -> }, {}, {}, {}, {})
+        themed(Direction.GALLERY) { DocumentsScreen(state, null, actions) }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/documents-gallery.png")
     }
 
     // Lookup

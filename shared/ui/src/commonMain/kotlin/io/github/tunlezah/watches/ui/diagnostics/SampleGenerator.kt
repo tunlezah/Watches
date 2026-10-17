@@ -23,6 +23,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import io.github.tunlezah.watches.core.model.BoxItem
+import io.github.tunlezah.watches.core.model.BoxItemState
+import io.github.tunlezah.watches.core.model.ServiceEntry
+import io.github.tunlezah.watches.core.model.ServiceWork
+import io.github.tunlezah.watches.core.model.Watch
+import io.github.tunlezah.watches.data.BoxPapersRepository
+import io.github.tunlezah.watches.data.ServiceRepository
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
+import kotlin.random.Random
 
 /**
  * Creates sample watches with a drawn "photo" each, for the 500-watch performance check.
@@ -32,6 +44,8 @@ class SampleGenerator(
     private val watches: WatchRepository,
     private val photos: PhotoRepository,
     private val time: TimeSource,
+    private val services: ServiceRepository,
+    private val papers: BoxPapersRepository,
 ) {
     /** Runs outside any screen, so leaving Diagnostics doesn't stop a long generation. */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -48,9 +62,30 @@ class SampleGenerator(
         samples.forEachIndexed { i, sample ->
             val created = watches.create(sample.watch, id = sample.watch.id)
             photos.add(created.id, render(WatchLook.from(sample.look)))
+            addCare(created, Random(i))
             _status.value = "Created ${i + 1} of $count"
         }
         _status.value = "Added $count sample watches"
+    }
+
+    /** Some history for the Service tab: a full service for about half, and a partly recorded box & papers. */
+    private suspend fun addCare(w: Watch, random: Random) {
+        val acquired = w.acquiredOn ?: return
+        val today = time.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+        if (w.serviceIntervalMonths != null && random.nextBoolean()) {
+            val on = acquired.plus(random.nextInt(18, 66), DateTimeUnit.MONTH)
+            if (on < today) {
+                services.save(ServiceEntry("", w.id, on, servicedBy = "Sample Watchmaker", work = setOf(ServiceWork.FULL_SERVICE),
+                    warrantyMonths = 24, createdAt = time.now(), updatedAt = time.now()))
+            }
+        }
+        for (item in BoxItem.entries) {
+            when (random.nextInt(5)) {
+                0, 1, 2 -> papers.set(w.id, item, BoxItemState.PRESENT)
+                3 -> papers.set(w.id, item, if (item == BoxItem.OTHER) BoxItemState.NOT_APPLICABLE else BoxItemState.MISSING)
+                else -> Unit
+            }
+        }
     }
 
     fun removeAll() = launchWork {

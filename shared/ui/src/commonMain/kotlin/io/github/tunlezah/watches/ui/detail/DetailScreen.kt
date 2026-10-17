@@ -3,6 +3,12 @@ package io.github.tunlezah.watches.ui.detail
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.text.style.TextOverflow
+import io.github.tunlezah.watches.core.model.DocumentKind
+import io.github.tunlezah.watches.core.model.WatchDocument
+import io.github.tunlezah.watches.ui.care.CareText
+import io.github.tunlezah.watches.ui.components.NavCard
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -78,6 +84,11 @@ data class DetailActions(
     val onLookUp: () -> Unit = {},
     val onRefresh: () -> Unit = {},
     val onDismissNotice: () -> Unit = {},
+    val onService: () -> Unit = {},
+    val onBoxPapers: () -> Unit = {},
+    val onDocuments: () -> Unit = {},
+    val onOpenDocument: (WatchDocument) -> Unit = {},
+    val onAddGuide: (DocumentKind) -> Unit = {},
 )
 
 @Composable
@@ -124,6 +135,9 @@ fun DetailScreen(state: DetailUiState, watchId: String, actions: DetailActions, 
                         io.github.tunlezah.watches.ui.lookup.Notice(notice)
                     }
                 }
+            }
+            state.care?.let { care ->
+                item("care") { CareSection(care, actions, Modifier.padding(horizontal = style.screenPadding).padding(top = 18.dp)) }
             }
             itemsIndexed(state.groups, key = { _, g -> g.group.name }) { index, group ->
                 SpecGroupView(
@@ -348,4 +362,44 @@ private fun StatsStrip(state: DetailUiState) {
 private fun Modifier.topBottomRules(color: Color) = drawBehind {
     drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx())
     drawLine(color, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx())
+}
+
+/** Manuals and quick start guides first (one tap to open), then service, box & papers and documents. */
+@Composable
+private fun CareSection(care: DetailCare, actions: DetailActions, modifier: Modifier = Modifier) {
+    val c = WatchTheme.colors
+    val t = WatchTheme.values
+    val style = WatchTheme.style
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth().clip(style.cardShape).background(c.surface).padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(t.label("Manual & quick start"), style = t.type.label, color = c.fg3, modifier = Modifier.padding(vertical = 4.dp))
+            for (g in care.guides) {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClickLabel = "Open") { actions.onOpenDocument(g) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(WatchIcons.Info, null, tint = c.accent, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(g.title, style = t.type.body, color = c.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${g.kind.label} · ${CareText.docType(g)} · ${CareText.size(g.sizeBytes)}", style = t.type.specSource, color = c.fg3)
+                    }
+                    Icon(WatchIcons.Forward, null, tint = c.fg3, modifier = Modifier.size(18.dp))
+                }
+            }
+            if (!care.hasManual || !care.hasQuickStart) {
+                Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (!care.hasManual) WatchButton("Add manual", { actions.onAddGuide(DocumentKind.MANUAL) }, kind = ButtonKind.Tonal, icon = WatchIcons.Plus)
+                    if (!care.hasQuickStart) WatchButton("Add quick start", { actions.onAddGuide(DocumentKind.QUICK_START) }, kind = ButtonKind.Tonal, icon = WatchIcons.Plus)
+                }
+            }
+        }
+        NavCard(WatchIcons.Service, "Service", care.service, actions.onService, emphasis = care.serviceUrgent, badge = care.serviceBadge)
+        NavCard(
+            WatchIcons.Archive, "Box & papers",
+            listOfNotNull(care.papers, care.warranty).joinToString(" · "),
+            actions.onBoxPapers, emphasis = care.warrantyEnded && !care.fullSet, badge = if (care.fullSet) "Full set" else null,
+        )
+        NavCard(WatchIcons.Copy, "Documents", care.documents, actions.onDocuments)
+    }
 }

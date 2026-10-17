@@ -15,6 +15,13 @@ import coil3.compose.setSingletonImageLoaderFactory
 import coil3.request.crossfade
 import io.github.tunlezah.watches.data.SettingsRepository
 import io.github.tunlezah.watches.data.WatchRepository
+import io.github.tunlezah.watches.ui.care.BoxPapersViewModel
+import io.github.tunlezah.watches.ui.care.DocumentViewerViewModel
+import io.github.tunlezah.watches.ui.care.DocumentsViewModel
+import io.github.tunlezah.watches.ui.care.ReminderSync
+import io.github.tunlezah.watches.ui.care.ServiceDueViewModel
+import io.github.tunlezah.watches.ui.care.ServiceEditViewModel
+import io.github.tunlezah.watches.ui.care.ServiceHistoryViewModel
 import io.github.tunlezah.watches.ui.collection.CollectionViewModel
 import io.github.tunlezah.watches.ui.detail.DetailViewModel
 import io.github.tunlezah.watches.ui.diagnostics.SampleGenerator
@@ -41,7 +48,7 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val uiModule = module {
-    single { SampleGenerator(get(), get(), get()) }
+    single { SampleGenerator(get(), get(), get(), get(), get()) }
     single { PhotoImporter(get()) }
     single { LookupSession() }
     single { LookupDrafts() }
@@ -49,7 +56,7 @@ val uiModule = module {
     single { RefreshSpecs(get(), get(), get()) }
     single<RobotsStore> { FileRobotsStore(get()) }
     viewModel { CollectionViewModel(get(), get(), get()) }
-    viewModel { params -> DetailViewModel(params.get(), get(), get(), get(), get(), get()) }
+    viewModel { params -> DetailViewModel(params.get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { params ->
         // Two optional strings: the watch being edited, and a lookup draft for a new watch.
         EditViewModel(params.values.getOrNull(0) as String?, params.values.getOrNull(1) as String?, get(), get(), get(), get(), get())
@@ -62,6 +69,16 @@ val uiModule = module {
     viewModel { params -> ResultViewModel(params.get(), get(), get(), get()) }
     viewModel { params -> ApplyViewModel(params.get(), get(), get(), get(), get(), get()) }
     viewModel { SourcesViewModel(get(), get(), get()) }
+    single { ReminderSync(get(), get(), get()) }
+    viewModel { ServiceDueViewModel(get(), get(), get()) }
+    viewModel { params -> ServiceHistoryViewModel(params.get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { params ->
+        // The watch, and the entry being edited (null for a new one).
+        ServiceEditViewModel(params.values[0] as String, params.values.getOrNull(1) as String?, get(), get(), get(), get())
+    }
+    viewModel { params -> BoxPapersViewModel(params.get(), get(), get(), get(), get(), get()) }
+    viewModel { params -> DocumentsViewModel(params.get(), get(), get(), get(), get(), get()) }
+    viewModel { params -> DocumentViewerViewModel(params.get(), get(), get()) }
 }
 
 /** Root of the shared UI. Koin must already be started by the platform shell. */
@@ -74,7 +91,10 @@ fun WatchesApp() {
     val settingsRepo = koinInject<SettingsRepository>()
     val watches = koinInject<WatchRepository>()
     val settings by settingsRepo.settings.collectAsStateWithLifecycle(initialValue = null)
+    val reminders = koinInject<ReminderSync>()
     LaunchedEffect(Unit) { watches.ensureSearchIndex() }
+    // Keeps scheduled service reminders in step with the collection while the app runs.
+    LaunchedEffect(Unit) { reminders.start(this) }
 
     val loaded = settings
     if (loaded == null) {

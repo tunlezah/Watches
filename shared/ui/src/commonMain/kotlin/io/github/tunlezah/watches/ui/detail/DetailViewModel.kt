@@ -21,6 +21,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import io.github.tunlezah.watches.ui.lookup.RefreshSpecs
+import io.github.tunlezah.watches.core.care.CarePlan
+import io.github.tunlezah.watches.core.care.DueState
+import io.github.tunlezah.watches.core.care.WarrantyState
+import io.github.tunlezah.watches.core.model.BoxPapersItem
+import io.github.tunlezah.watches.core.model.DocumentKind
+import io.github.tunlezah.watches.core.model.ServiceEntry
+import io.github.tunlezah.watches.core.model.WatchDocument
+import io.github.tunlezah.watches.data.BoxPapersRepository
+import io.github.tunlezah.watches.data.DocumentRepository
+import io.github.tunlezah.watches.data.ServiceRepository
+import io.github.tunlezah.watches.ui.care.CareText
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
@@ -62,6 +73,24 @@ data class DetailUiState(
     val refreshing: Boolean = false,
     /** A refresh finished while another screen was open; tapping the notice opens the review. */
     val reviewReady: Boolean = false,
+    val care: DetailCare? = null,
+)
+
+/** The watch's service, box & papers, warranty and documents at a glance. */
+@Immutable
+data class DetailCare(
+    val service: String,
+    val serviceUrgent: Boolean,
+    val serviceBadge: String?,
+    val papers: String,
+    val fullSet: Boolean,
+    val warranty: String?,
+    val warrantyEnded: Boolean,
+    val documents: String,
+    /** Manuals and quick start guides, shown up front. */
+    val guides: List<WatchDocument>,
+    val hasManual: Boolean,
+    val hasQuickStart: Boolean,
 )
 
 class DetailViewModel(
@@ -71,12 +100,17 @@ class DetailViewModel(
     private val files: FileStore,
     private val time: TimeSource,
     private val refresher: RefreshSpecs,
+    services: ServiceRepository,
+    papers: BoxPapersRepository,
+    documents: DocumentRepository,
 ) : ViewModel() {
 
     private data class Transient(val refreshing: Boolean = false, val notice: String? = null, val reviewReady: Boolean = false)
     private val transient = MutableStateFlow(Transient())
 
-    val state: StateFlow<DetailUiState> = combine(watches.observeDetail(watchId), settings.settings, transient) { detail, s, tr ->
+    private val careInputs = combine(services.observe(watchId), papers.observe(watchId), documents.observe(watchId)) { e, p, d -> Triple(e, p, d) }
+
+    val state: StateFlow<DetailUiState> = combine(watches.observeDetail(watchId), settings.settings, transient, careInputs) { detail, s, tr, (entries, items, docs) ->
         if (detail == null) return@combine DetailUiState(loading = false, missing = true)
         val w = detail.watch
         val prefs = s.display
@@ -96,7 +130,7 @@ class DetailViewModel(
             archived = w.isArchived,
             photos = photos.map { PhotoUi(it.id, files.absolute(it.displayFile), files.absolute(it.thumbFile), it.attribution) },
             look = WatchLook.guess(w.dialColour, w.caseMaterial, w.complications),
-            stats = stats(w, prefs),
+            stats = stats(w, prefs, entries),
             groups = SpecSheet.build(w, detail.provenance, prefs),
             other = otherSheet(detail.otherSpecs),
             footer = footer(w, prefs),
@@ -104,6 +138,7 @@ class DetailViewModel(
             notice = tr.notice,
             refreshing = tr.refreshing,
             reviewReady = tr.reviewReady,
+            care = care(w, entries, items, docs, prefs),
         )
     }
         .flowOn(Dispatchers.Default)
@@ -111,23 +146,54 @@ class DetailViewModel(
 
     private fun today(): LocalDate = time.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
 
-    private fun stats(w: Watch, prefs: DisplayPrefs): List<DetailStat> = buildList {
+    private fun service(w: Watch, entries: List<ServiceEntry>) = CarePlan.service(
+        w.serviceIntervalMonths, w.acquiredOn, entries.maxOfOrNull { it.servicedOn },
+        entries.filter { it.isFullService }.maxOfOrNull { it.servicedOn }, today(),
+    )
+
+    private fun stats(w: Watch, prefs: DisplayPrefs, entries: List<ServiceEntry>): List<DetailStat> = buildList {
         add(DetailStat("Status", if (w.isArchived) "Archived" else w.status.label, emphasis = true))
         w.diameterMm?.let { add(DetailStat("Case", "${Numbers.decimal(it, 1)} mm")) }
         w.movementType?.let { add(DetailStat("Movement", it.label.replace(" winding", ""))) }
-        val interval = w.serviceIntervalMonths
-        val since = w.acquiredOn
-        if (interval != null && since != null) {
-            val due = since.plus(interval, DateTimeUnit.MONTH)
-            add(DetailStat(if (due < today()) "Service overdue" else "Next service", prefs.dateFormat.formatMonth(due), emphasis = due < today()))
+        val status = service(w, entries)
+        status.nextDue?.let { due ->
+            val overdue = status.state == DueState.OVERDUE
+            add(DetailStat(if (overdue) "Service overdue" else "Next service", prefs.dateFormat.formatMonth(due), emphasis = overdue))
         }
-        val wStart = w.warrantyStart
-        val wMonths = w.warrantyMonths
-        if (wStart != null && wMonths != null) {
-            val end = wStart.plus(wMonths, DateTimeUnit.MONTH)
-            add(DetailStat("Warranty", if (end < today()) "Expired" else "to ${prefs.dateFormat.formatMonth(end)}"))
+        CarePlan.warranty(w.warrantyStart, w.warrantyMonths, today())?.let { ws ->
+            add(DetailStat("Warranty", if (ws.state == WarrantyState.EXPIRED) "Expired" else "to ${prefs.dateFormat.formatMonth(ws.until)}"))
         }
     }.take(4)
+
+    private fun care(w: Watch, entries: List<ServiceEntry>, items: List<BoxPapersItem>, docs: List<WatchDocument>, prefs: DisplayPrefs): DetailCare {
+        val status = service(w, entries)
+        val summary = CarePlan.boxPapers(items)
+        val ws = CarePlan.warranty(w.warrantyStart, w.warrantyMonths, today())
+        val guides = docs.filter { it.kind.isGuide }.sortedBy { it.kind.ordinal }
+        return DetailCare(
+            service = CareText.due(status, prefs)
+                ?: status.lastService?.let { "Last serviced ${prefs.dateFormat.format(it)}. No interval set." }
+                ?: "Log services and set an interval to see when it's due",
+            serviceUrgent = status.state == DueState.OVERDUE,
+            serviceBadge = when (status.state) {
+                DueState.OVERDUE -> "Overdue"
+                DueState.DUE_SOON -> "Due soon"
+                else -> null
+            },
+            papers = CareText.boxPapers(summary),
+            fullSet = summary.fullSet,
+            warranty = ws?.let { CareText.warranty(it, prefs) },
+            warrantyEnded = ws?.state == WarrantyState.EXPIRED,
+            documents = when (docs.size) {
+                0 -> "Receipts, warranty cards, certificates"
+                1 -> "1 document"
+                else -> "${docs.size} documents"
+            },
+            guides = guides,
+            hasManual = guides.any { it.kind == DocumentKind.MANUAL },
+            hasQuickStart = guides.any { it.kind == DocumentKind.QUICK_START },
+        )
+    }
 
     private fun otherSheet(other: List<OtherSpec>): SpecGroupSheet? {
         if (other.isEmpty()) return null

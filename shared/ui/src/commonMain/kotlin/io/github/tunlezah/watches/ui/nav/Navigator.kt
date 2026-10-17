@@ -21,6 +21,12 @@ sealed interface Route {
     data class LookupResult(val hitId: String) : Route
     data class Apply(val target: LookupTarget) : Route
     data object RequestLog : Route
+    data class ServiceHistory(val watchId: String) : Route
+    data class ServiceEdit(val watchId: String, val entryId: String?) : Route
+    data class BoxPapers(val watchId: String) : Route
+    /** [addKind] opens the add dialog straight away, for "Add manual" on a watch. */
+    data class Documents(val watchId: String, val addKind: String? = null) : Route
+    data class DocumentViewer(val documentId: String) : Route
     data object Service : Route
     data object Settings : Route
     data object Diagnostics : Route
@@ -43,6 +49,11 @@ sealed interface Route {
             is LookupResult -> "result|${r.hitId}"
             is Apply -> "apply|${r.target.encode()}"
             RequestLog -> "requestlog"
+            is ServiceHistory -> "service-history|${r.watchId}"
+            is ServiceEdit -> "service-edit|${r.watchId}|${r.entryId ?: ""}"
+            is BoxPapers -> "papers|${r.watchId}"
+            is Documents -> "documents|${r.watchId}|${r.addKind ?: ""}"
+            is DocumentViewer -> "document|${r.documentId}"
             Service -> "service"
             Settings -> "settings"
             Diagnostics -> "diagnostics"
@@ -63,6 +74,12 @@ sealed interface Route {
                 "result" -> LookupResult(p[1])
                 "apply" -> Apply(LookupTarget.decode(p[1]))
                 "requestlog" -> RequestLog
+                "service-history" -> ServiceHistory(p[1])
+                "service-edit" -> ServiceEdit(p[1], p.getOrNull(2)?.ifEmpty { null })
+                "papers" -> BoxPapers(p[1])
+                // A restored screen doesn't reopen the add dialog.
+                "documents" -> Documents(p[1])
+                "document" -> DocumentViewer(p[1])
                 "service" -> Service
                 "settings" -> Settings
                 "diagnostics" -> Diagnostics

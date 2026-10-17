@@ -55,6 +55,7 @@ fun SettingsScreen(
     onDiagnostics: () -> Unit,
     onLicences: () -> Unit,
     lookupSection: @Composable () -> Unit = {},
+    remindersSection: @Composable () -> Unit = {},
 ) {
     val c = WatchTheme.colors
     val t = WatchTheme.values
@@ -129,6 +130,10 @@ fun SettingsScreen(
 
         Section("Lookup sources") {
             lookupSection()
+        }
+
+        Section("Service reminders") {
+            remindersSection()
         }
 
         Section("Coming in later milestones") {

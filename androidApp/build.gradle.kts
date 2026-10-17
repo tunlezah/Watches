@@ -23,8 +23,8 @@ android {
         applicationId = "io.github.tunlezah.watches"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 2
-        versionName = "0.2.0-m2"
+        versionCode = 3
+        versionName = "0.3.0-m3"
     }
 
     signingConfigs {
@@ -75,6 +75,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.koin.android)
     implementation(libs.androidx.profileinstaller)
+    implementation(libs.androidx.work.runtime)
 
     // Screenshot tests render real screens on the JVM (Robolectric), so every direction can be checked without a device.
     testImplementation(libs.junit)
