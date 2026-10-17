@@ -1,6 +1,6 @@
 # Watch Collection App: questions and plan (milestone 0)
 
-Status: **milestone 2 built** (14 Oct 2026). Researched 12 October 2026. Versions were checked against Maven Central, Google Maven and services.gradle.org on that date.
+Status: **milestone 3 built** (17 Oct 2026). Researched 12 October 2026. Versions were checked against Maven Central, Google Maven and services.gradle.org on that date.
 
 ## Decisions so far
 
@@ -236,7 +236,7 @@ service_entry             id PK, watch_id, serviced_on, serviced_by?, work (set 
                           warranty_months?, notes?, created_at, updated_at
 box_papers_item           (watch_id, item) PK, state(present|missing|not_applicable), label?, note?
                           -- items: inner_box, outer_box, warranty_card, manual, hang_tags, extra_links, receipt, other
-document                  id PK, watch_id, service_entry_id?, kind(receipt|warranty|invoice|certificate|manual|other),
+document                  id PK, watch_id, service_entry_id?, kind(manual|quick_start|receipt|invoice|warranty|certificate|other),
                           title, file, mime_type, size_bytes, added_at
 source_snapshot           id PK, watch_id, source, url, fetched_at, content_type, body_file
                           -- cached detail payload, kept only for saved watches; lets us re-parse later

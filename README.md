@@ -4,6 +4,7 @@ A private, offline-first watch collection app for one collector. Kotlin Multipla
 
 - Everything lives on the phone. No accounts, servers, analytics, ads or crash reporting.
 - The network is used by Lookup only, and only when you press Search, open a result or save a picture. Every request is listed in Settings › Request log.
+- Service history, reminders, box & papers, warranties, and documents such as manuals, quick start guides, receipts and invoices.
 - Designed for 500+ watches with photos.
 
 Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md). Data sources: [`docs/SOURCES.md`](docs/SOURCES.md). Changes: [`CHANGELOG.md`](CHANGELOG.md).
@@ -61,6 +62,8 @@ For CI, add these repository secrets: `WATCHES_KEYSTORE_BASE64` (the keystore, b
 
 The app needs Android 11 or newer.
 
+Permissions: internet and network state (Lookup only), and notifications (service reminders, asked for only when you switch one on). WorkManager adds wake lock and "run at start-up" so reminders survive a restart. None of these is a location, contacts, storage or camera permission. Photos are taken with the phone's camera app.
+
 ## iOS
 
 iOS needs a Mac with Xcode. The `iOS` GitHub Actions workflow builds the app for the simulator on every push, launches it and saves a screenshot. Locally:
@@ -86,6 +89,15 @@ Settings › Diagnostics shows cold-start, search and detail-open timings measur
   - `Retry-After` is honoured. A bot-protection page is reported, never bypassed.
 - **Your values win:** in the review screen, any value you typed or edited starts unticked. A lookup replaces it only if you tick it. Applied values record their source, page and fetch date. Changing one later marks it "Edited".
 - **Pictures:** pictures from Ranfft and Grail are shown, never saved. Freely licensed Wikimedia Commons pictures can be saved to a watch with their credit. They never become the cover unless you choose it.
+
+## Service, box & papers and documents
+
+- **When a service is due:** one interval after the last *full* service, or after the date acquired if none is logged. Other work (battery, regulation, a crystal) is recorded as the last service but doesn't move the due date. "Due soon" means within 90 days. The rules are in `CarePlan` (`shared/core/.../care`) and its tests.
+- **Reminders:** per watch, off by default. `ReminderSync` watches the collection and keeps one local notification per watch on hand (owned or at the watchmaker, not archived) at 9 am on the due date. Android uses WorkManager, initialised on demand rather than at launch. iOS uses `UNUserNotificationCenter`. Only future dates are scheduled, so an overdue watch isn't re-announced on every launch. The Service tab lists it instead.
+- **Full set:** every checklist item is recorded, none is missing and at least one is present.
+- **Documents:** PDFs and images (JPEG, PNG, WebP, HEIC) up to 50 MB, identified by their content rather than their name. They are stored in app-private storage under `documents/<watchId>/`. Location data is stripped from images. A document can belong to a service entry, and when that entry is deleted you choose whether its documents go too.
+- **Manuals and quick start guides** are document kinds of their own. They are shown first on the watch, can be reused from another watch, and are copied when a watch is duplicated.
+- **Viewer and sharing:** PDFs render on the phone, with `PdfRenderer` on Android and PDFKit on iOS. Share hands one file to the system share sheet. On Android it goes through a `FileProvider` limited to the documents folder.
 
 ## Adding a spec source
 
