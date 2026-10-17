@@ -4,6 +4,9 @@ import io.github.tunlezah.watches.core.Ids
 import io.github.tunlezah.watches.core.TimeSource
 import io.github.tunlezah.watches.core.format.DisplayPrefs
 import io.github.tunlezah.watches.core.model.Complication
+import io.github.tunlezah.watches.core.model.DocumentKind
+import io.github.tunlezah.watches.core.model.ServiceWork
+import io.github.tunlezah.watches.core.model.keyedOf
 import io.github.tunlezah.watches.core.model.OtherSpec
 import io.github.tunlezah.watches.core.model.Provenance
 import io.github.tunlezah.watches.core.model.Sources
@@ -145,6 +148,15 @@ class WatchRepository(
             .filter { p -> SpecFields.byKey(p.fieldKey)?.let { it.get(copy) != null } == true }
         val otherSpecs = dao.getOtherSpecs(id).map { it.toModel().copy(id = Ids.new()) }
         write(copy, provenance, otherSpecs)
+        // Manuals and quick start guides belong to the model, so the copy gets its own copies of them.
+        val docs = db.documentDao()
+        for (doc in docs.forWatch(id).filter { it.serviceEntryId == null && keyedOf<DocumentKind>(it.kind)?.isGuide == true }) {
+            val newId = Ids.new()
+            val path = "${FileStore.documentDir(copy.id)}/$newId.${doc.file.substringAfterLast('.', "bin")}"
+            files.copy(doc.file, path)
+            docs.upsert(doc.copy(id = newId, watchId = copy.id, file = path, addedAt = now.toEpochMilliseconds()))
+        }
+        reindex(copy.id)
         return copy
     }
 
@@ -186,7 +198,7 @@ class WatchRepository(
         val ids = db.useReaderConnection { c ->
             c.usePrepared("SELECT id FROM watch") { st -> buildList { while (st.step()) add(st.getText(0)) } }
         }
-        val bodies = ids.mapNotNull { id -> get(id)?.let { id to searchBody(it, dao.getOtherSpecs(id).map { o -> o.toModel() }) } }
+        val bodies = ids.mapNotNull { id -> get(id)?.let { id to searchBody(it, dao.getOtherSpecs(id).map { o -> o.toModel() }, careText(id)) } }
         db.useWriterConnection { connection ->
             connection.immediateTransaction {
                 execSQL("DELETE FROM ${SearchIndex.TABLE}")
@@ -197,9 +209,34 @@ class WatchRepository(
         }
     }
 
+    /** Rewrites one watch's search entry, after its service history or documents change. */
+    suspend fun reindex(id: String) {
+        val watch = get(id) ?: return
+        val body = searchBody(watch, dao.getOtherSpecs(id).map { it.toModel() }, careText(id))
+        db.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                usePrepared(SearchIndex.DELETE_SQL) { it.bindText(1, id); it.step() }
+                usePrepared(SearchIndex.INSERT_SQL) { it.bindText(1, id); it.bindText(2, body); it.step() }
+            }
+        }
+    }
+
+    /** Searchable words from service history and documents: who serviced it, notes, document titles. */
+    private suspend fun careText(id: String): List<String> = buildList {
+        for (e in db.serviceDao().forWatch(id)) {
+            e.servicedBy?.let(::add)
+            e.notes?.let(::add)
+            e.work.split(',').mapNotNull { keyedOf<ServiceWork>(it) }.forEach { add(it.label) }
+        }
+        for (d in db.documentDao().forWatch(id)) {
+            add(d.title)
+            keyedOf<DocumentKind>(d.kind)?.let { add(it.label) }
+        }
+    }
+
     private suspend fun write(watch: Watch, provenance: List<Provenance>, otherSpecs: List<OtherSpec>?) {
         val other = otherSpecs ?: dao.getOtherSpecs(watch.id).map { it.toModel() }
-        val body = searchBody(watch, other)
+        val body = searchBody(watch, other, careText(watch.id))
         db.useWriterConnection { connection ->
             connection.immediateTransaction {
                 dao.upsertWatch(watch.toEntity())
@@ -230,7 +267,7 @@ class WatchRepository(
         }
 
         /** Every searchable word for a watch: all fields as shown, complications, notes and extra specs. */
-        fun searchBody(watch: Watch, otherSpecs: List<OtherSpec>): String = buildString {
+        fun searchBody(watch: Watch, otherSpecs: List<OtherSpec>, care: List<String> = emptyList()): String = buildString {
             for (field in SpecFields.all) {
                 val value = field.get(watch) ?: continue
                 append(SpecFormatter.format(field, value, prefs).value).append(' ')
@@ -240,6 +277,7 @@ class WatchRepository(
             watch.complications.forEach { append(Complication.labelFor(it)).append(' ') }
             watch.status.let { append(it.label).append(' ') }
             otherSpecs.forEach { append(it.label).append(' ').append(it.value).append(' ') }
+            care.forEach { append(it).append(' ') }
         }.trim()
     }
 }

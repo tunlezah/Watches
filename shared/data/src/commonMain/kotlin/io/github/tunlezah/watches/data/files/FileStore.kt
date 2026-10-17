@@ -43,6 +43,12 @@ class FileStore(val root: Path, val fileSystem: FileSystem = FileSystem.SYSTEM) 
         if (fileSystem.exists(path)) fileSystem.deleteRecursively(path)
     }
 
+    suspend fun copy(from: String, to: String) = withContext(Dispatchers.IO) {
+        val target = resolve(to)
+        target.parent?.let { fileSystem.createDirectories(it) }
+        fileSystem.copy(resolve(from), target)
+    }
+
     suspend fun ensureDir(relative: String) = withContext(Dispatchers.IO) {
         fileSystem.createDirectories(resolve(relative))
     }

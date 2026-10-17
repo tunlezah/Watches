@@ -37,3 +37,17 @@ object ImageFormats {
         }
     }
 }
+
+object DocumentFormats {
+    /** The formats a document may be, by magic bytes: PDF and the usual photo formats. Null for anything else. */
+    fun detect(bytes: ByteArray): Pair<String, String>? {
+        if (bytes.size >= 5 && bytes.decodeToString(0, 5) == "%PDF-") return "application/pdf" to "pdf"
+        return when (ImageFormats.extension(bytes)) {
+            "jpg" -> "image/jpeg" to "jpg"
+            "png" -> "image/png" to "png"
+            "webp" -> "image/webp" to "webp"
+            "heic" -> "image/heic" to "heic"
+            else -> null
+        }
+    }
+}

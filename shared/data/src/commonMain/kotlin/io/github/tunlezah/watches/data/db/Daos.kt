@@ -159,3 +159,97 @@ interface LookupDao {
     @Query("DELETE FROM source_snapshot WHERE id = :id")
     suspend fun deleteSnapshot(id: String)
 }
+
+@Dao
+interface ServiceDao {
+
+    @Query("SELECT * FROM service_entry WHERE watch_id = :watchId ORDER BY serviced_on DESC, created_at DESC")
+    fun observeForWatch(watchId: String): Flow<List<ServiceEntryEntity>>
+
+    @Query("SELECT * FROM service_entry WHERE watch_id = :watchId ORDER BY serviced_on DESC, created_at DESC")
+    suspend fun forWatch(watchId: String): List<ServiceEntryEntity>
+
+    @Query("SELECT * FROM service_entry WHERE id = :id")
+    suspend fun get(id: String): ServiceEntryEntity?
+
+    @Upsert
+    suspend fun upsert(entry: ServiceEntryEntity)
+
+    @Query("DELETE FROM service_entry WHERE id = :id")
+    suspend fun delete(id: String)
+
+    @Query("SELECT DISTINCT serviced_by FROM service_entry WHERE serviced_by IS NOT NULL AND serviced_by != '' ORDER BY serviced_by COLLATE NOCASE")
+    fun observeServicers(): Flow<List<String>>
+
+    /** Service entries whose work carries its own warranty, newest first. */
+    @Query("SELECT * FROM service_entry WHERE warranty_months IS NOT NULL AND warranty_months > 0 ORDER BY serviced_on DESC")
+    fun observeWithWarranty(): Flow<List<ServiceEntryEntity>>
+
+    @Query(
+        """
+        SELECT w.id, w.brand, w.model_name, w.collection, w.reference, w.nickname, w.status, w.archived_at,
+               w.acquired_on, w.service_interval_months, w.service_reminder, w.warranty_start, w.warranty_months,
+               (SELECT MAX(s.serviced_on) FROM service_entry s WHERE s.watch_id = w.id) AS last_service,
+               (SELECT MAX(s.serviced_on) FROM service_entry s WHERE s.watch_id = w.id
+                    AND (',' || s.work || ',') LIKE '%,full_service,%') AS last_full_service,
+               p.thumb_file AS cover_thumb
+        FROM watch w
+        LEFT JOIN photo p ON p.id = COALESCE(
+            (SELECT p1.id FROM photo p1 WHERE p1.id = w.cover_photo_id),
+            (SELECT p2.id FROM photo p2 WHERE p2.watch_id = w.id AND p2.kind = 'user' ORDER BY p2.position LIMIT 1))
+        """,
+    )
+    fun observeCare(): Flow<List<CareRow>>
+}
+
+@Dao
+interface BoxPapersDao {
+
+    @Query("SELECT * FROM box_papers_item WHERE watch_id = :watchId")
+    fun observe(watchId: String): Flow<List<BoxPapersItemEntity>>
+
+    @Query("SELECT * FROM box_papers_item WHERE watch_id = :watchId")
+    suspend fun get(watchId: String): List<BoxPapersItemEntity>
+
+    @Upsert
+    suspend fun upsert(rows: List<BoxPapersItemEntity>)
+
+    @Query("DELETE FROM box_papers_item WHERE watch_id = :watchId AND item = :item")
+    suspend fun delete(watchId: String, item: String)
+}
+
+@Dao
+interface DocumentDao {
+
+    @Query("SELECT * FROM document WHERE watch_id = :watchId ORDER BY added_at DESC")
+    fun observeForWatch(watchId: String): Flow<List<DocumentEntity>>
+
+    @Query("SELECT * FROM document WHERE watch_id = :watchId")
+    suspend fun forWatch(watchId: String): List<DocumentEntity>
+
+    @Query("SELECT * FROM document WHERE service_entry_id = :entryId ORDER BY added_at")
+    suspend fun forEntry(entryId: String): List<DocumentEntity>
+
+    @Query("SELECT * FROM document WHERE id = :id")
+    suspend fun get(id: String): DocumentEntity?
+
+    @Query("SELECT * FROM document WHERE id = :id")
+    fun observe(id: String): Flow<DocumentEntity?>
+
+    @Upsert
+    suspend fun upsert(row: DocumentEntity)
+
+    @Query("DELETE FROM document WHERE id = :id")
+    suspend fun delete(id: String)
+
+    /** Manuals and quick start guides kept with other watches, for "use the manual from another watch". */
+    @Query(
+        """
+        SELECT d.*, w.brand AS watch_brand, w.model_name AS watch_model, w.collection AS watch_collection, w.caliber AS watch_caliber
+        FROM document d JOIN watch w ON w.id = d.watch_id
+        WHERE d.kind IN ('manual', 'quick_start') AND d.watch_id != :exceptWatchId
+        ORDER BY w.brand COLLATE NOCASE, w.model_name COLLATE NOCASE, d.added_at DESC
+        """,
+    )
+    fun observeGuidesElsewhere(exceptWatchId: String): Flow<List<GuideRow>>
+}

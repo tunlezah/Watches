@@ -233,3 +233,32 @@ data class WatchSummaryRow(
     @ColumnInfo(name = "dial_colour") val dialColour: String?,
     @ColumnInfo(name = "case_material") val caseMaterial: String?,
 )
+
+/** One watch's service and warranty inputs, for the Service tab and reminders. */
+data class CareRow(
+    val id: String,
+    val brand: String?,
+    @ColumnInfo(name = "model_name") val modelName: String?,
+    val collection: String?,
+    val reference: String?,
+    val nickname: String?,
+    val status: String,
+    @ColumnInfo(name = "archived_at") val archivedAt: Long?,
+    @ColumnInfo(name = "acquired_on") val acquiredOn: String?,
+    @ColumnInfo(name = "service_interval_months") val serviceIntervalMonths: Int?,
+    @ColumnInfo(name = "service_reminder") val serviceReminder: Boolean,
+    @ColumnInfo(name = "warranty_start") val warrantyStart: String?,
+    @ColumnInfo(name = "warranty_months") val warrantyMonths: Int?,
+    @ColumnInfo(name = "last_service") val lastService: String?,
+    @ColumnInfo(name = "last_full_service") val lastFullService: String?,
+    @ColumnInfo(name = "cover_thumb") val coverThumb: String?,
+)
+
+/** A manual or quick start guide, with the watch it belongs to. */
+data class GuideRow(
+    @androidx.room.Embedded val document: DocumentEntity,
+    @ColumnInfo(name = "watch_brand") val watchBrand: String?,
+    @ColumnInfo(name = "watch_model") val watchModel: String?,
+    @ColumnInfo(name = "watch_collection") val watchCollection: String?,
+    @ColumnInfo(name = "watch_caliber") val watchCaliber: String?,
+)

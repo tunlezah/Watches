@@ -16,4 +16,7 @@ val dataModule = module {
     single { get<AppDatabase>().settingDao() }
     single { SettingsRepository(get()) }
     single { LookupRepository(get(), get(), get()) }
+    single { DocumentRepository(get(), get(), get(), get(), get()) }
+    single { ServiceRepository(get(), get(), get(), get(), get()) }
+    single { BoxPapersRepository(get(), get()) }
 }

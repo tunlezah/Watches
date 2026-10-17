@@ -104,12 +104,16 @@ enum class ServiceWork(override val key: String, override val label: String) : K
 }
 
 enum class DocumentKind(override val key: String, override val label: String) : Keyed {
-    RECEIPT("receipt", "Receipt"),
-    WARRANTY("warranty", "Warranty"),
-    INVOICE("invoice", "Invoice"),
-    CERTIFICATE("certificate", "Certificate"),
     MANUAL("manual", "Manual"),
-    OTHER("other", "Other"),
+    QUICK_START("quick_start", "Quick start guide"),
+    RECEIPT("receipt", "Receipt"),
+    INVOICE("invoice", "Invoice"),
+    WARRANTY("warranty", "Warranty"),
+    CERTIFICATE("certificate", "Certificate"),
+    OTHER("other", "Other");
+
+    /** Manuals and quick start guides: shown up front on the watch, and offered to other watches of the same model. */
+    val isGuide: Boolean get() = this == MANUAL || this == QUICK_START
 }
 
 enum class PhotoKind(override val key: String, override val label: String) : Keyed {

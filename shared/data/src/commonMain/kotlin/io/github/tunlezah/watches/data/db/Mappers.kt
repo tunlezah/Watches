@@ -1,6 +1,14 @@
 package io.github.tunlezah.watches.data.db
 
+import io.github.tunlezah.watches.core.model.BoxItem
+import io.github.tunlezah.watches.core.model.BoxItemState
+import io.github.tunlezah.watches.core.model.BoxPapersItem
 import io.github.tunlezah.watches.core.model.Condition
+import io.github.tunlezah.watches.core.model.Currencies
+import io.github.tunlezah.watches.core.model.DocumentKind
+import io.github.tunlezah.watches.core.model.ServiceEntry
+import io.github.tunlezah.watches.core.model.ServiceWork
+import io.github.tunlezah.watches.core.model.WatchDocument
 import io.github.tunlezah.watches.core.model.Money
 import io.github.tunlezah.watches.core.model.MovementType
 import io.github.tunlezah.watches.core.model.NormalizedRect
@@ -202,3 +210,52 @@ fun OtherSpecEntity.toModel() = OtherSpec(id, label, value, source, sourceUrl, f
 
 fun OtherSpec.toEntity(watchId: String) =
     OtherSpecEntity(id, watchId, label, value, source, sourceUrl, fetchedAt?.toEpochMilliseconds(), position)
+
+fun ServiceEntryEntity.toModel() = ServiceEntry(
+    id = id,
+    watchId = watchId,
+    servicedOn = servicedOn.toDate() ?: LocalDate(1970, 1, 1),
+    servicedBy = servicedBy,
+    work = work.split(',').mapNotNull { keyedOf<ServiceWork>(it.trim()) }.toSet(),
+    cost = costMinor?.let { Money(it, costCurrency ?: Currencies.DEFAULT) },
+    warrantyMonths = warrantyMonths,
+    notes = notes,
+    createdAt = createdAt.toInstant(),
+    updatedAt = updatedAt.toInstant(),
+)
+
+fun ServiceEntry.toEntity() = ServiceEntryEntity(
+    id = id,
+    watchId = watchId,
+    servicedOn = servicedOn.toString(),
+    servicedBy = servicedBy?.trim()?.ifEmpty { null },
+    work = ServiceWork.entries.filter { it in work }.joinToString(",") { it.key },
+    costMinor = cost?.amountMinor,
+    costCurrency = cost?.currency,
+    warrantyMonths = warrantyMonths,
+    notes = notes?.trim()?.ifEmpty { null },
+    createdAt = createdAt.toEpochMilliseconds(),
+    updatedAt = updatedAt.toEpochMilliseconds(),
+)
+
+fun BoxPapersItemEntity.toModel(): BoxPapersItem? {
+    val i = keyedOf<BoxItem>(item) ?: return null
+    val st = keyedOf<BoxItemState>(state) ?: return null
+    return BoxPapersItem(i, st, note)
+}
+
+fun BoxPapersItem.toEntity(watchId: String) = BoxPapersItemEntity(watchId, item.key, state.key, null, note)
+
+fun DocumentEntity.toModel() = WatchDocument(
+    id = id,
+    watchId = watchId,
+    serviceEntryId = serviceEntryId,
+    kind = keyedOf<DocumentKind>(kind) ?: DocumentKind.OTHER,
+    title = title,
+    file = file,
+    mimeType = mimeType,
+    sizeBytes = sizeBytes,
+    addedAt = addedAt.toInstant(),
+)
+
+fun WatchDocument.toEntity() = DocumentEntity(id, watchId, serviceEntryId, kind.key, title, file, mimeType, sizeBytes, addedAt.toEpochMilliseconds())
