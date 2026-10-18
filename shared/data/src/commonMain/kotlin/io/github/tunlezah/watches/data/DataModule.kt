@@ -1,6 +1,8 @@
 package io.github.tunlezah.watches.data
 
 import io.github.tunlezah.watches.core.TimeSource
+import io.github.tunlezah.watches.data.backup.AppInfo
+import io.github.tunlezah.watches.data.backup.BackupRepository
 import io.github.tunlezah.watches.data.db.AppDatabase
 import org.koin.dsl.module
 
@@ -19,4 +21,5 @@ val dataModule = module {
     single { DocumentRepository(get(), get(), get(), get(), get()) }
     single { ServiceRepository(get(), get(), get(), get(), get()) }
     single { BoxPapersRepository(get(), get()) }
+    single { BackupRepository(get(), get(), get(), get(), getOrNull<AppInfo>() ?: AppInfo.Unknown, get()) }
 }

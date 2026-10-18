@@ -253,3 +253,46 @@ interface DocumentDao {
     )
     fun observeGuidesElsewhere(exceptWatchId: String): Flow<List<GuideRow>>
 }
+
+/** Whole-table reads and writes for backup export and import. */
+@Dao
+interface BackupDao {
+    @Query("SELECT * FROM watch ORDER BY created_at, id") suspend fun watches(): List<WatchEntity>
+    @Query("SELECT * FROM watch_complication ORDER BY watch_id, `key`") suspend fun complications(): List<WatchComplicationEntity>
+    @Query("SELECT * FROM field_provenance ORDER BY watch_id, field_key") suspend fun provenance(): List<FieldProvenanceEntity>
+    @Query("SELECT * FROM other_spec ORDER BY watch_id, position") suspend fun otherSpecs(): List<OtherSpecEntity>
+    @Query("SELECT * FROM photo ORDER BY watch_id, position") suspend fun photos(): List<PhotoEntity>
+    @Query("SELECT * FROM service_entry ORDER BY watch_id, serviced_on") suspend fun serviceEntries(): List<ServiceEntryEntity>
+    @Query("SELECT * FROM box_papers_item ORDER BY watch_id, item") suspend fun boxPapers(): List<BoxPapersItemEntity>
+    @Query("SELECT * FROM document ORDER BY watch_id, added_at") suspend fun documents(): List<DocumentEntity>
+    @Query("SELECT * FROM source_snapshot ORDER BY watch_id, fetched_at") suspend fun snapshots(): List<SourceSnapshotEntity>
+    @Query("SELECT * FROM setting ORDER BY `key`") suspend fun settings(): List<SettingEntity>
+
+    @Upsert suspend fun upsertWatches(rows: List<WatchEntity>)
+    @Upsert suspend fun upsertComplications(rows: List<WatchComplicationEntity>)
+    @Upsert suspend fun upsertProvenance(rows: List<FieldProvenanceEntity>)
+    @Upsert suspend fun upsertOtherSpecs(rows: List<OtherSpecEntity>)
+    @Upsert suspend fun upsertPhotos(rows: List<PhotoEntity>)
+    @Upsert suspend fun upsertServiceEntries(rows: List<ServiceEntryEntity>)
+    @Upsert suspend fun upsertBoxPapers(rows: List<BoxPapersItemEntity>)
+    @Upsert suspend fun upsertDocuments(rows: List<DocumentEntity>)
+    @Upsert suspend fun upsertSnapshots(rows: List<SourceSnapshotEntity>)
+    @Upsert suspend fun upsertSettings(rows: List<SettingEntity>)
+
+    /** Removes every watch; foreign keys cascade to everything that hangs off one. */
+    @Query("DELETE FROM watch") suspend fun deleteAllWatches()
+    @Query("DELETE FROM setting") suspend fun deleteAllSettings()
+
+    // A watch's own lists, replaced as a whole when a merge takes the backup's version of it.
+    @Query("DELETE FROM watch_complication WHERE watch_id = :watchId") suspend fun deleteComplications(watchId: String)
+    @Query("DELETE FROM field_provenance WHERE watch_id = :watchId") suspend fun deleteProvenance(watchId: String)
+    @Query("DELETE FROM other_spec WHERE watch_id = :watchId") suspend fun deleteOtherSpecs(watchId: String)
+    @Query("DELETE FROM box_papers_item WHERE watch_id = :watchId") suspend fun deleteBoxPapers(watchId: String)
+
+    /** A cover must be one of the watch's own photos; anything else falls back to the first photo. */
+    @Query("UPDATE watch SET cover_photo_id = NULL WHERE cover_photo_id IS NOT NULL AND cover_photo_id NOT IN (SELECT p.id FROM photo p WHERE p.watch_id = watch.id)")
+    suspend fun clearDanglingCovers()
+
+    @Query("SELECT original_file FROM photo UNION ALL SELECT display_file FROM photo UNION ALL SELECT thumb_file FROM photo UNION ALL SELECT file FROM document UNION ALL SELECT body_file FROM source_snapshot")
+    suspend fun referencedFiles(): List<String>
+}

@@ -44,6 +44,13 @@ subprojects {
     }
 }
 
+// iOS simulator tests run on the simulator CI picks (-PiosSimulator=<udid>), not a hard-coded model.
+subprojects {
+    tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeSimulatorTest>().configureEach {
+        providers.gradleProperty("iosSimulator").orNull?.let { device.set(it) }
+    }
+}
+
 tasks.register("checkNetworkIsolation") {
     group = "verification"
     description = "Fails if any module other than :shared:search can compile against a network library."

@@ -8,7 +8,10 @@ import io.github.tunlezah.watches.data.files.ImageProcessor
 import io.github.tunlezah.watches.data.files.IosImageProcessor
 import kotlinx.cinterop.ExperimentalForeignApi
 import okio.Path.Companion.toPath
+import io.github.tunlezah.watches.data.backup.AppInfo
 import org.koin.dsl.module
+import platform.Foundation.NSBundle
+import platform.UIKit.UIDevice
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
@@ -32,4 +35,8 @@ fun iosDataModule() = module {
     single { Room.databaseBuilder<AppDatabase>(name = "$root/${AppDatabase.FILE_NAME}").configure() }
     single { FileStore("$root/files".toPath()) }
     single<ImageProcessor> { IosImageProcessor() }
+    single {
+        val version = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String
+        AppInfo(version ?: "unknown", "iOS ${UIDevice.currentDevice.systemVersion}")
+    }
 }

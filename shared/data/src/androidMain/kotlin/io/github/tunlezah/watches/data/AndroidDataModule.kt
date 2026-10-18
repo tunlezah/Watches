@@ -2,6 +2,7 @@ package io.github.tunlezah.watches.data
 
 import android.content.Context
 import androidx.room.Room
+import io.github.tunlezah.watches.data.backup.AppInfo
 import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.configure
 import io.github.tunlezah.watches.data.files.AndroidImageProcessor
@@ -19,4 +20,8 @@ fun androidDataModule(context: Context) = module {
     }
     single { FileStore(context.filesDir.toOkioPath()) }
     single<ImageProcessor> { AndroidImageProcessor() }
+    single {
+        val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+        AppInfo(version ?: "unknown", "Android ${android.os.Build.VERSION.RELEASE}")
+    }
 }

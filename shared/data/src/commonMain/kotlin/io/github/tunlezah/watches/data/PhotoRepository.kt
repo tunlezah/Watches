@@ -103,6 +103,15 @@ class PhotoRepository(
         files.delete(current.thumbFile)
     }
 
+    /** Re-renders a photo's display image and thumbnail from its original, for a restored photo that came without them. */
+    suspend fun rerender(photoId: String) {
+        val current = dao.get(photoId)?.toModel() ?: return
+        val (display, thumb) = renderRenditions(FileStore.photoDir(current.watchId), current.id, current.originalFile, current.crop)
+        dao.upsert(current.copy(displayFile = display, thumbFile = thumb).toEntity())
+        if (current.displayFile != current.originalFile) files.delete(current.displayFile)
+        if (current.thumbFile != current.originalFile) files.delete(current.thumbFile)
+    }
+
     suspend fun delete(photoId: String) {
         val photo = dao.get(photoId)?.toModel() ?: return
         dao.delete(photoId)

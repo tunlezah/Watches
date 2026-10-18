@@ -5,10 +5,13 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
-// Schema v1. Column names are part of the backup format, so they are spelled out explicitly.
+// Schema v1. Column names are part of the backup format, so they are spelled out explicitly: the
+// archive's JSON keys are these names (see backup/ArchiveFormat.kt and docs/ARCHIVE_FORMAT.md).
 // Timestamps are epoch milliseconds, dates ISO "YYYY-MM-DD", money in minor units plus ISO currency.
 
+@Serializable
 @Entity(tableName = "watch", indices = [Index("brand"), Index("status")])
 data class WatchEntity(
     @PrimaryKey val id: String,
@@ -67,6 +70,7 @@ data class WatchEntity(
     @ColumnInfo(name = "warranty_months") val warrantyMonths: Int?,
 )
 
+@Serializable
 @Entity(
     tableName = "watch_complication",
     primaryKeys = ["watch_id", "key"],
@@ -78,6 +82,7 @@ data class WatchComplicationEntity(
     val key: String,
 )
 
+@Serializable
 @Entity(
     tableName = "field_provenance",
     primaryKeys = ["watch_id", "field_key"],
@@ -92,6 +97,7 @@ data class FieldProvenanceEntity(
     @ColumnInfo(name = "user_edited") val userEdited: Boolean,
 )
 
+@Serializable
 @Entity(
     tableName = "other_spec",
     foreignKeys = [ForeignKey(WatchEntity::class, ["id"], ["watch_id"], onDelete = ForeignKey.CASCADE)],
@@ -108,6 +114,7 @@ data class OtherSpecEntity(
     val position: Int,
 )
 
+@Serializable
 @Entity(
     tableName = "photo",
     foreignKeys = [ForeignKey(WatchEntity::class, ["id"], ["watch_id"], onDelete = ForeignKey.CASCADE)],
@@ -132,6 +139,7 @@ data class PhotoEntity(
     @ColumnInfo(name = "added_at") val addedAt: Long,
 )
 
+@Serializable
 @Entity(
     tableName = "service_entry",
     foreignKeys = [ForeignKey(WatchEntity::class, ["id"], ["watch_id"], onDelete = ForeignKey.CASCADE)],
@@ -152,6 +160,7 @@ data class ServiceEntryEntity(
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
 )
 
+@Serializable
 @Entity(
     tableName = "box_papers_item",
     primaryKeys = ["watch_id", "item"],
@@ -165,6 +174,7 @@ data class BoxPapersItemEntity(
     val note: String?,
 )
 
+@Serializable
 @Entity(
     tableName = "document",
     foreignKeys = [
@@ -186,6 +196,7 @@ data class DocumentEntity(
 )
 
 /** A source's raw detail payload, kept only for saved watches so a fixed parser can re-read it later. */
+@Serializable
 @Entity(
     tableName = "source_snapshot",
     foreignKeys = [ForeignKey(WatchEntity::class, ["id"], ["watch_id"], onDelete = ForeignKey.CASCADE)],
@@ -207,6 +218,7 @@ data class RecentSearchEntity(
     @ColumnInfo(name = "used_at") val usedAt: Long,
 )
 
+@Serializable
 @Entity(tableName = "setting")
 data class SettingEntity(
     @PrimaryKey val key: String,

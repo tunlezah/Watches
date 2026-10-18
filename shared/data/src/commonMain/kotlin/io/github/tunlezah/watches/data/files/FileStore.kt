@@ -6,6 +6,8 @@ import kotlinx.coroutines.withContext
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
+import okio.Sink
+import okio.Source
 
 /**
  * App-private file storage. The database only ever stores paths relative to [root],
@@ -53,6 +55,29 @@ class FileStore(val root: Path, val fileSystem: FileSystem = FileSystem.SYSTEM) 
         fileSystem.createDirectories(resolve(relative))
     }
 
+    /** Every file under [relative], as paths relative to the root. Empty if the folder doesn't exist. */
+    suspend fun listFiles(relative: String): List<String> = withContext(Dispatchers.IO) {
+        val dir = resolve(relative)
+        if (!fileSystem.exists(dir)) return@withContext emptyList()
+        fileSystem.listRecursively(dir)
+            .filter { fileSystem.metadataOrNull(it)?.isRegularFile == true }
+            .map { it.relativeTo(root).segments.joinToString("/") }
+            .toList()
+    }
+
+    /** Reads a file as a stream. The caller closes it; call off the main thread. */
+    fun source(relative: String): Source = fileSystem.source(resolve(relative))
+
+    /** Writes a file as a stream, creating its folder. The caller closes it; call off the main thread. */
+    fun sink(relative: String): Sink {
+        val path = resolve(relative)
+        path.parent?.let { fileSystem.createDirectories(it) }
+        return fileSystem.sink(path)
+    }
+
+    /** Free space on the volume holding the app's files, if the platform says. */
+    suspend fun availableBytes(): Long? = withContext(Dispatchers.IO) { runCatching { freeSpace(root) }.getOrNull() }
+
     companion object {
         fun photoDir(watchId: String) = "photos/$watchId"
         fun documentDir(watchId: String) = "documents/$watchId"
@@ -60,5 +85,11 @@ class FileStore(val root: Path, val fileSystem: FileSystem = FileSystem.SYSTEM) 
 
         /** Rebuildable data (robots.txt cache). Never part of a backup. */
         const val CACHE_DIR = "cache"
+
+        /** The folders that hold photos, documents and source snapshots: everything a backup carries. */
+        val MEDIA_DIRS = listOf("photos", "documents", "snapshots")
     }
 }
+
+/** Bytes free for the app on the volume holding [path], or null if unknown. */
+internal expect fun freeSpace(path: Path): Long?

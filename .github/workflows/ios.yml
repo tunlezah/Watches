@@ -71,6 +71,9 @@ jobs:
           echo "Using simulator $UDID"
           echo "UDID=$UDID" >> "$GITHUB_ENV"
 
+      - name: Shared tests on the simulator
+        run: ./gradlew --stacktrace :shared:core:iosSimulatorArm64Test :shared:data:iosSimulatorArm64Test -PiosSimulator="$UDID"
+
       - name: Build app for the simulator
         run: >
           xcodebuild
