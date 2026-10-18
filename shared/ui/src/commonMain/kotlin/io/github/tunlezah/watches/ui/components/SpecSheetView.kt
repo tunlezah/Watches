@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.input.pointer.pointerInput
@@ -147,7 +148,8 @@ fun SpecRowView(row: SpecRow, revealed: Boolean, onReveal: () -> Unit, onCopy: (
         return
     }
 
-    if (style.dottedLeaders) {
+    val largeText = LocalDensity.current.fontScale > 1.3f
+    if (style.dottedLeaders && !largeText) {
         Row(rowModifier, verticalAlignment = Alignment.Bottom) {
             Text(row.label, style = t.type.specLabel, color = c.fg2)
             if (source != null) {
@@ -161,6 +163,13 @@ fun SpecRowView(row: SpecRow, revealed: Boolean, onReveal: () -> Unit, onCopy: (
                 },
             )
             Text(value, style = t.type.specValue, color = c.fg, textAlign = TextAlign.End, modifier = Modifier.widthIn(max = 200.dp))
+        }
+    } else if (largeText) {
+        // Large text: the label sits above its value, so neither is squeezed into a narrow column.
+        Column(rowModifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(row.label, style = t.type.specLabel, color = c.fg2)
+            Text(value, style = t.type.specValue, color = c.fg)
+            if (source != null) Text(source, style = t.type.specSource, color = sourceColor)
         }
     } else {
         Row(rowModifier, verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(16.dp)) {

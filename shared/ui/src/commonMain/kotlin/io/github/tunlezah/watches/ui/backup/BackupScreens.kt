@@ -31,6 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -84,6 +87,14 @@ fun BackupScreen(state: BackupUiState, prefs: DisplayPrefs, today: LocalDate, ac
     val job = state.job
     val busy = job.running
     if (busy) KeepScreenOn()
+    val haptics = LocalHapticFeedback.current
+    LaunchedEffect(job::class) {
+        when (job) {
+            is BackupState.BackedUp, is BackupState.CsvExported -> haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+            is BackupState.Failed -> haptics.performHapticFeedback(HapticFeedbackType.Reject)
+            else -> Unit
+        }
+    }
     var confirmCancel by remember { mutableStateOf(false) }
     BackHandler(enabled = busy) { confirmCancel = true }
 
@@ -234,6 +245,10 @@ fun RestoreScreen(job: BackupState, prefs: DisplayPrefs, actions: RestoreActions
     val busy = job.running
     if (busy) KeepScreenOn()
     BackHandler(enabled = busy) { }
+    val haptics = LocalHapticFeedback.current
+    LaunchedEffect(job::class) {
+        if (job is BackupState.Restored) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+    }
     Column(Modifier.fillMaxSize().background(c.bg)) {
         val title = when (job) {
             is BackupState.Restored -> "Restore complete"

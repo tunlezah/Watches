@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import io.github.tunlezah.watches.ui.components.BottomActionBar
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.clip
@@ -119,13 +120,15 @@ fun ApplyScreen(
                 is LookupTarget.Form -> "Fill the form"
                 is LookupTarget.Watch -> if (state.changeCount == 0) "Nothing to apply" else "Apply ${state.changeCount} ${if (state.changeCount == 1) "change" else "changes"}"
             }
-            WatchButton(
-                if (state.applying) "Saving…" else label,
-                onApply,
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(16.dp),
-                kind = ButtonKind.Primary,
-                enabled = !state.applying && (state.target !is LookupTarget.Watch || state.changeCount > 0),
-            )
+            BottomActionBar {
+                WatchButton(
+                    if (state.applying) "Saving…" else label,
+                    onApply,
+                    Modifier.fillMaxWidth(),
+                    kind = ButtonKind.Primary,
+                    enabled = !state.applying && (state.target !is LookupTarget.Watch || state.changeCount > 0),
+                )
+            }
         }
     }
 }

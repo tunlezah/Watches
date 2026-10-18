@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import io.github.tunlezah.watches.ui.components.BottomActionBar
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.heading
@@ -133,13 +134,15 @@ fun ResultScreen(
                             SpecGroupView(sheet, i + 1, emptySet(), {}, {}, title = if (isExtras) extrasTitle else sheet.group.label)
                         }
                     }
-                    WatchButton(
-                        if (state.inTray) "Chosen · tap to remove" else "Use these specs",
-                        onToggle,
-                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(16.dp),
-                        kind = if (state.inTray) ButtonKind.Secondary else ButtonKind.Primary,
-                        icon = if (state.inTray) WatchIcons.Check else null,
-                    )
+                    BottomActionBar {
+                        WatchButton(
+                            if (state.inTray) "Chosen · tap to remove" else "Use these specs",
+                            onToggle,
+                            Modifier.fillMaxWidth(),
+                            kind = if (state.inTray) ButtonKind.Secondary else ButtonKind.Primary,
+                            icon = if (state.inTray) WatchIcons.Check else null,
+                        )
+                    }
                 }
             }
         }

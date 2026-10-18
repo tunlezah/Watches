@@ -43,6 +43,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import io.github.tunlezah.watches.ui.components.BottomActionBar
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -132,11 +133,13 @@ fun DocumentsScreen(state: DocumentsUiState, startAdding: DocumentKind?, actions
                     item { Text(m, style = t.type.bodySmall, color = c.danger, modifier = Modifier.padding(top = 16.dp).clickable(onClick = actions.onDismissMessage)) }
                 }
             }
-            WatchButton(
-                if (state.busy) "Adding…" else "Add a document", { adding = DocumentKind.MANUAL.key },
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(16.dp),
-                kind = ButtonKind.Primary, icon = WatchIcons.Plus, enabled = !state.busy,
-            )
+            BottomActionBar {
+                WatchButton(
+                    if (state.busy) "Adding…" else "Add a document", { adding = DocumentKind.MANUAL.key },
+                    Modifier.fillMaxWidth(),
+                    kind = ButtonKind.Primary, icon = WatchIcons.Plus, enabled = !state.busy,
+                )
+            }
         }
     }
 

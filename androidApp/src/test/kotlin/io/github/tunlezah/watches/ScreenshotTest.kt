@@ -209,6 +209,19 @@ class ScreenshotTest {
     @Test fun detailGallery() = detail(Direction.GALLERY)
     @Test fun detailGalleryLight() = detail(Direction.GALLERY, dark = false)
 
+    /** Text at 200%, the largest size the brief asks for: nothing may clip. */
+    @Test fun detailLargeText() {
+        themed(Direction.ATELIER) {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale = 2f),
+            ) {
+                DetailScreen(detailState(), "w1", DetailActions({}, {}, {}, {}, {}, {}, {}))
+            }
+        }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/detail-atelier-text-200.png")
+    }
+
     @Test fun emptyCollection() {
         themed(Direction.ATELIER) { CollectionScreen(CollectionUiState(loaded = true), {}, {}, {}, {}, {}, {}, {}) }
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/collection-empty.png")

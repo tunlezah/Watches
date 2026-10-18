@@ -39,6 +39,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -158,6 +160,8 @@ fun SelectChip(
     val t = WatchTheme.values
     val style = WatchTheme.style
     val shape = style.chipShape
+    val haptics = LocalHapticFeedback.current
+    val tap = { if (role == Role.Tab && !selected) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); onClick() }
     val fg by animateColorAsState(
         when {
             selected && (underline || style.direction == Direction.ATELIER) -> c.fg
@@ -171,8 +175,8 @@ fun SelectChip(
         .heightIn(min = 48.dp)
         .clip(shape)
         .then(
-            if (role == Role.Checkbox) Modifier.toggleable(value = selected, role = role, onValueChange = { onClick() })
-            else Modifier.selectable(selected = selected, role = role, onClick = onClick),
+            if (role == Role.Checkbox) Modifier.toggleable(value = selected, role = role, onValueChange = { tap() })
+            else Modifier.selectable(selected = selected, role = role, onClick = tap),
         )
     when {
         underline -> Box(mod.padding(horizontal = 2.dp), contentAlignment = Alignment.Center) {

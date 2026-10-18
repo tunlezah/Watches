@@ -247,7 +247,13 @@ fun RemoteImage(url: String, images: ImageSource, modifier: Modifier = Modifier,
     val c = WatchTheme.colors
     val bytes by produceState<ByteArray?>(null, url) { value = images.load(this, url) }
     Box(modifier.background(c.surface2), contentAlignment = Alignment.Center) {
-        bytes?.let { AsyncImage(it, contentDescription = description, contentScale = contentScale, modifier = Modifier.fillMaxSize()) }
+        val b = bytes
+        if (b == null) {
+            // Pictures trickle in at one request per second per site; a quiet glyph holds the place.
+            Icon(WatchIcons.Image, null, tint = c.fg3.copy(alpha = 0.6f), modifier = Modifier.size(24.dp))
+        } else {
+            AsyncImage(b, contentDescription = description, contentScale = contentScale, modifier = Modifier.fillMaxSize())
+        }
     }
 }
 

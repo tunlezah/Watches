@@ -34,6 +34,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -100,6 +105,12 @@ private val placeholders: Map<String, String> = mapOf(
     SpecFields.AcquiredFrom.key to "Boutique, dealer, private sale…",
 )
 
+private val wordFields = setOf(
+    SpecFields.Brand.key, SpecFields.Collection.key, SpecFields.ModelName.key, SpecFields.Nickname.key,
+    SpecFields.CaseMaterial.key, SpecFields.AcquiredFrom.key, SpecFields.StrapMaterial.key,
+)
+private val codeFields = setOf(SpecFields.Reference.key, SpecFields.SerialNumber.key, SpecFields.Caliber.key, SpecFields.BaseCaliber.key)
+
 @Composable
 fun EditScreen(
     state: EditUiState,
@@ -124,7 +135,7 @@ fun EditScreen(
             IconAction(WatchIcons.Close, "Close", close)
             Text(
                 t.title(if (state.isNew) "Add watch" else "Edit watch"),
-                style = t.type.groupTitle, color = c.fg,
+                style = t.type.headerTitle, color = c.fg,
                 modifier = Modifier.weight(1f).padding(start = 4.dp).semantics { heading() },
             )
             WatchButton(
@@ -137,8 +148,26 @@ fun EditScreen(
         }
         if (!state.loaded) return@Column
         val draft = state.draft ?: return@Column
+        val listState = rememberLazyListState()
+        val haptics = LocalHapticFeedback.current
+        // A Save with mistakes scrolls to the first one and says how many there are.
+        LaunchedEffect(state.errors) {
+            if (state.errors.isEmpty()) return@LaunchedEffect
+            haptics.performHapticFeedback(HapticFeedbackType.Reject)
+            var index = 2
+            for ((_, rows) in layout) {
+                index++
+                val at = rows.indexOfFirst { row -> row.any { it.key in state.errors } }
+                if (at >= 0) {
+                    listState.animateScrollToItem(index + at)
+                    break
+                }
+                index += rows.size
+            }
+        }
         LazyColumn(
             Modifier.fillMaxSize().imePadding(),
+            state = listState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = style.screenPadding, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
@@ -246,6 +275,13 @@ private fun TextFieldEditor(field: SpecField, state: EditUiState, vm: EditViewMo
             label = field.label,
             value = text,
             onValueChange = { vm.setText(field, it) },
+            capitalization = when (field.key) {
+                SpecFields.Reference.key, SpecFields.SerialNumber.key -> KeyboardCapitalization.Characters
+                in wordFields -> KeyboardCapitalization.Words
+                else -> KeyboardCapitalization.Sentences
+            },
+            // References, serials and calibres aren't words: autocorrect would only mangle them.
+            autoCorrect = field.key !in codeFields,
             placeholder = placeholders[field.key],
             suffix = unit,
             keyboardType = keyboard,

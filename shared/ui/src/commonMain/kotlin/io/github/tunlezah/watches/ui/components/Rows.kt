@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,6 +33,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -146,12 +149,16 @@ enum class Tone { Normal, Success, Warning, Danger }
 @Composable
 fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit, detail: String? = null, icon: ImageVector? = null, enabled: Boolean = true) {
     val c = WatchTheme.colors
+    val haptics = LocalHapticFeedback.current
     ListRow(
         title = title,
         detail = detail,
         icon = icon,
         enabled = enabled,
-        modifier = Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
+        modifier = Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = { on ->
+            haptics.performHapticFeedback(if (on) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
+            onChange(on)
+        }),
         trailing = {
             Switch(
                 checked = checked, onCheckedChange = null, enabled = enabled,
@@ -282,5 +289,18 @@ fun IconBadge(icon: ImageVector, tone: Tone = Tone.Normal, size: Int = 44) {
     }
     Box(Modifier.size(size.dp).clip(CircleShape).background(tint.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
         Icon(icon, null, tint = tint, modifier = Modifier.size((size * 0.5f).dp))
+    }
+}
+
+/**
+ * A screen's main action, pinned to the bottom: a solid strip with a short fade above it, so the
+ * list scrolling underneath never shows through the button. Lists keep bottom padding for it.
+ */
+@Composable
+fun androidx.compose.foundation.layout.BoxScope.BottomActionBar(content: @Composable () -> Unit) {
+    val c = WatchTheme.colors
+    Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().height(24.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, c.bg))))
+        Box(Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) { content() }
     }
 }

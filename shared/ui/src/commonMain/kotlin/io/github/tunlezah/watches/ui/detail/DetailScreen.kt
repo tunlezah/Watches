@@ -45,6 +45,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.semantics.invisibleToUser
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
@@ -352,35 +355,48 @@ private fun StatsStrip(state: DetailUiState) {
     // Gallery shows status as a card; the strip directions carry it in the title block and keep three figures.
     val items = if (style.direction == Direction.GALLERY) state.stats else state.stats.filterNot { it.label == "Status" }.take(3)
     if (items.isEmpty()) return
+    // With large text, figures go two to a row instead of squeezing four (or three) across.
+    val perRow = if (LocalDensity.current.fontScale > 1.3f) 2 else items.size
     when (style.direction) {
-        Direction.GALLERY -> Row(
+        Direction.GALLERY -> Column(
             Modifier.padding(horizontal = style.screenPadding).padding(top = 16.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            for (s in items) {
-                Column(
-                    Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(if (s.emphasis) c.accentTint else c.surface).padding(12.dp)
-                        .semantics(mergeDescendants = true) { contentDescription = "${s.label}: ${s.value}" },
-                ) {
-                    Text(s.value, style = t.type.button, color = if (s.emphasis) c.accent else c.fg, maxLines = 1)
-                    Text(s.label, style = t.type.specSource, color = c.fg3, maxLines = 1)
+            for (row in items.chunked(perRow)) {
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (s in row) {
+                        Column(
+                            Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(18.dp)).background(if (s.emphasis) c.accentTint else c.surface).padding(12.dp)
+                                .semantics(mergeDescendants = true) { contentDescription = "${s.label}: ${s.value}" },
+                        ) {
+                            Text(s.value, style = t.type.button, color = if (s.emphasis) c.accent else c.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(s.label, style = t.type.specSource, color = c.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
-        else -> Row(
+        else -> Column(
             Modifier
                 .padding(horizontal = style.screenPadding).padding(top = 20.dp).fillMaxWidth()
                 .then(if (style.direction == Direction.INSTRUMENT) Modifier.border(1.dp, c.line) else Modifier.topBottomRules(c.line)),
         ) {
-            items.forEachIndexed { i, s ->
-                if (i > 0) Box(Modifier.width(1.dp).height(56.dp).background(c.line))
-                Column(
-                    Modifier.weight(1f).padding(horizontal = if (style.direction == Direction.INSTRUMENT || i > 0) 10.dp else 0.dp, vertical = 12.dp)
-                        .semantics(mergeDescendants = true) { contentDescription = "${s.label}: ${s.value}" },
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(t.label(s.label), style = t.type.label, color = c.fg3, maxLines = 2)
-                    Text(s.value, style = t.type.stat.copy(fontSize = t.type.specValue.fontSize), color = if (s.emphasis) c.accent else c.fg, maxLines = 1)
+            items.chunked(perRow).forEachIndexed { r, row ->
+                if (r > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    row.forEachIndexed { i, s ->
+                        if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().padding(vertical = 8.dp).background(c.line))
+                        Column(
+                            Modifier.weight(1f).padding(horizontal = if (style.direction == Direction.INSTRUMENT || i > 0) 10.dp else 0.dp, vertical = 12.dp)
+                                .semantics(mergeDescendants = true) { contentDescription = "${s.label}: ${s.value}" },
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(t.label(s.label), style = t.type.label, color = c.fg3, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(s.value, style = t.type.stat.copy(fontSize = t.type.specValue.fontSize), color = if (s.emphasis) c.accent else c.fg,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                 }
             }
         }
@@ -416,7 +432,7 @@ private fun CareSection(care: DetailCare, actions: DetailActions, modifier: Modi
                 }
             }
             if (!care.hasManual || !care.hasQuickStart) {
-                Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FlowRow(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (!care.hasManual) WatchButton("Add manual", { actions.onAddGuide(DocumentKind.MANUAL) }, kind = ButtonKind.Tonal, icon = WatchIcons.Plus)
                     if (!care.hasQuickStart) WatchButton("Add quick start", { actions.onAddGuide(DocumentKind.QUICK_START) }, kind = ButtonKind.Tonal, icon = WatchIcons.Plus)
                 }
