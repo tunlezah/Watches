@@ -339,6 +339,56 @@ class BackupRepositoryTest {
         assertEquals(70_000, count)
     }
 
+    @Test fun csvHasOneRowPerWatchAndIsSpreadsheetSafe() = runBlocking<Unit> {
+        val phone = Phone()
+        val (seamaster) = phone.seed()
+        phone.watches.update(phone.watches.get(seamaster.id)!!.copy(nickname = "=HYPERLINK(\"x\")", privateNotes = "Line one, with a comma\nLine \"two\""))
+        val out = File(phone.dir, "watches.csv")
+        val rows = io.github.tunlezah.watches.data.backup.CsvExporter(phone.db, clock).export(out.sink())
+        assertEquals(2, rows)
+        val bytes = out.readBytes()
+        assertEquals(listOf(0xEF, 0xBB, 0xBF), bytes.take(3).map { it.toInt() and 0xFF }, "UTF-8 byte-order mark")
+        val records = parseCsv(bytes.drop(3).toByteArray().decodeToString())
+        assertEquals(3, records.size)
+        val header = records[0]
+        assertEquals(header.size, header.toSet().size, "column names are unique")
+        assertTrue(records.all { it.size == header.size }, "every row has every column")
+        val row = records.first { it[0] == seamaster.id }.let { r -> header.zip(r).toMap() }
+        assertEquals("41", row["Diameter (mm)"])
+        assertEquals("10900.00", row["Price paid"])
+        assertEquals("AUD", row["Price paid currency"])
+        assertEquals("Date; Helium valve", row["Complications"])
+        assertEquals("'=HYPERLINK(\"x\")", row["Nickname"], "formulas are neutralised")
+        assertEquals("Line one, with a comma\nLine \"two\"", row["Private notes"])
+        assertEquals("2024-02-01", row["Last full service"])
+        assertEquals("2029-02-01", row["Next service due"])
+        assertEquals("1 present, 1 missing", row["Box & papers"])
+        assertTrue("Case: Material" in header && "Strap & bracelet: Material" in header)
+    }
+
+    /** A strict RFC 4180 reader, so the test checks the quoting rather than trusting it. */
+    private fun parseCsv(text: String): List<List<String>> {
+        val rows = mutableListOf<List<String>>()
+        var row = mutableListOf<String>()
+        val cell = StringBuilder()
+        var i = 0
+        var quoted = false
+        while (i < text.length) {
+            val c = text[i]
+            when {
+                quoted && c == '"' && i + 1 < text.length && text[i + 1] == '"' -> { cell.append('"'); i++ }
+                quoted && c == '"' -> quoted = false
+                quoted -> cell.append(c)
+                c == '"' -> quoted = true
+                c == ',' -> { row += cell.toString(); cell.clear() }
+                c == '\r' && i + 1 < text.length && text[i + 1] == '\n' -> { row += cell.toString(); cell.clear(); rows += row; row = mutableListOf(); i++ }
+                else -> cell.append(c)
+            }
+            i++
+        }
+        return rows
+    }
+
     private fun findDataOffset(bytes: ByteArray, name: String): Int {
         val needle = name.encodeToByteArray()
         outer@ for (i in 30 until bytes.size - needle.size) {
