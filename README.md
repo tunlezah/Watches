@@ -120,8 +120,8 @@ Settings › Diagnostics shows cold-start, search and detail-open timings measur
 Settings › Backup & restore.
 - **Back up now** writes one ZIP through the system save dialog. The manifest comes first, then `collection.json` (every table, keys = column names), then every photo, document and saved source page. The full format is in [`docs/ARCHIVE_FORMAT.md`](docs/ARCHIVE_FORMAT.md). The code is in `shared/data/.../backup`: a streaming ZIP64 writer and reader written for this app, with no extra library.
 - **Restoring** checks every file's SHA-256 before the database changes, and commits in one transaction.
-  - Incoming files are written beside existing ones. Unused files are removed only after the commit.
-  - A journal undoes an interrupted restore at the next launch.
+  - Incoming files are written beside existing ones. After the commit, only the files the restore itself stopped using are removed (worked out inside the transaction), so a photo being added at the same time is never touched.
+  - A journal undoes an interrupted restore at the next launch, or finishes one that was saved but not tidied up (search index, photo renditions).
   - **Replace** swaps the collection and settings. **Merge** matches on IDs, never deletes, lets the more recently edited side win each watch, and reports every watch that differed.
 - **CSV export** gives one row per watch with every registry field. It's UTF-8 with a BOM, quoted per RFC 4180, with formula-like text neutralised.
 - **Device-only settings** (`device.*`: the app lock and the last-backup date) never travel in a backup.
@@ -132,6 +132,8 @@ Settings › Backup & restore.
 Settings › Privacy & security. It's optional and uses the phone's own unlock: Android's `BiometricPrompt` (strong biometrics or the device PIN), or LocalAuthentication on iOS.
 - The app locks at launch, and again after a chosen delay in the background. Time spent in the unlock prompt doesn't count.
 - Turning it on requires one successful unlock.
+- The lock screen is a full-screen window of its own, above any open dialog or sheet, and takes the back gesture.
+- If the phone's own screen lock is removed, the app lock pauses instead of locking its owner out, and resumes once one is set up again.
 - On Android 13+ the app switcher shows a blank card while the lock is on.
 
 The rules are in `ui/security/AppLock.kt`, and `AppLockTest` covers them.

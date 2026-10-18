@@ -86,6 +86,7 @@ sealed class BackupException(message: String) : Exception(message) {
     class Damaged(detail: String) : BackupException("This backup is damaged and can't be restored ($detail). Nothing on this phone was changed.")
     class Changed : BackupException("The backup file changed after it was checked. Choose it again.")
     class NotEnoughSpace(val needed: Long, val available: Long) : BackupException("Not enough free space on this phone to restore this backup.")
+    class CollectionChanged : BackupException("Your collection changed while the backup was being made. Try again.")
 }
 
 /**
@@ -94,9 +95,9 @@ sealed class BackupException(message: String) : Exception(message) {
  * Restoring is careful about the collection already on the phone:
  * - the archive's own checks (manifest, every file's SHA-256) all pass before the database is touched;
  * - the database changes in one transaction;
- * - incoming files are written beside the existing ones, never over them, and old files are only
- *   removed once the new rows are committed. A journal lets an interrupted restore be undone at the
- *   next launch ([recoverInterruptedRestore]).
+ * - incoming files are written beside the existing ones, never over them, and only the files the
+ *   restore itself stopped using are removed, once the new rows are committed. A journal lets an
+ *   interrupted restore be tidied up at the next launch ([recoverInterruptedRestore]).
  */
 class BackupRepository(
     private val db: AppDatabase,
@@ -125,8 +126,18 @@ class BackupRepository(
      * cancelled the output is incomplete, and the caller should delete it.
      */
     suspend fun export(sink: Sink, onProgress: (BackupProgress) -> Unit = {}): ExportResult = withContext(Dispatchers.IO) {
-        busy.withLock {
-            val job = currentCoroutineContext()[Job]
+        try {
+            busy.withLock { writeArchive(sink, onProgress) }
+        } catch (e: okio.FileNotFoundException) {
+            // A photo or document was removed (or re-cropped) between the two passes.
+            throw BackupException.CollectionChanged()
+        }
+    }
+
+    private suspend fun writeArchive(sink: Sink, onProgress: (BackupProgress) -> Unit): ExportResult {
+        val job = currentCoroutineContext()[Job]
+        var zip: ZipWriter? = null
+        try {
             val data = snapshot()
             val present = data.referencedFiles.filter { ArchivePaths.isSafe(it) && files.exists(it) }.sorted()
             val missing = data.referencedFiles.size - present.size
@@ -154,25 +165,25 @@ class BackupRepository(
                     digests.map { (path, d) -> ManifestFile(ARCHIVE_FILES_PREFIX + path, d.size, d.sha256) },
             )
             val now = time.now().toLocalDateTime(TimeZone.currentSystemDefault())
-            val zip = ZipWriter(sink, DosTime.of(now.year, now.month.ordinal + 1, now.day, now.hour, now.minute, now.second))
-            try {
-                zip.add(ARCHIVE_MANIFEST, ArchiveJson.encodeToString(Manifest.serializer(), manifest).encodeToByteArray())
-                zip.add(ARCHIVE_COLLECTION, collection)
-                var written = 0L
-                for ((path, d) in digests) {
-                    files.source(path).use { source ->
-                        zip.add(ARCHIVE_FILES_PREFIX + path, d.crc, d.size, source) { n ->
-                            job?.ensureActive()
-                            written += n
-                            onProgress(BackupProgress(BackupProgress.Step.WRITING, written, total))
-                        }
+            val writer = ZipWriter(sink, DosTime.of(now.year, now.month.ordinal + 1, now.day, now.hour, now.minute, now.second))
+            zip = writer
+            writer.add(ARCHIVE_MANIFEST, ArchiveJson.encodeToString(Manifest.serializer(), manifest).encodeToByteArray())
+            writer.add(ARCHIVE_COLLECTION, collection)
+            var written = 0L
+            for ((path, d) in digests) {
+                files.source(path).use { source ->
+                    writer.add(ARCHIVE_FILES_PREFIX + path, d.crc, d.size, source) { n ->
+                        job?.ensureActive()
+                        written += n
+                        onProgress(BackupProgress(BackupProgress.Step.WRITING, written, total))
                     }
                 }
-                zip.finish()
-            } finally {
-                zip.close()
             }
-            ExportResult(data.counts, zip.size, missing)
+            writer.finish()
+            return ExportResult(data.counts, writer.size, missing)
+        } finally {
+            // The sink is ours to close either way, even when the first pass failed before any writing.
+            zip?.close() ?: runCatching { sink.close() }
         }
     }
 
@@ -208,6 +219,8 @@ class BackupRepository(
         preview: ArchivePreview,
         mode: RestoreMode,
         onProgress: (BackupProgress) -> Unit = {},
+        /** Called once the restore has been saved, even if the caller is cancelled while it tidies up. */
+        onCommitted: (RestoreReport) -> Unit = {},
     ): RestoreReport = withContext(Dispatchers.IO) {
         busy.withLock {
             val job = currentCoroutineContext()[Job]
@@ -276,61 +289,81 @@ class BackupRepository(
                 if (absent.isNotEmpty()) throw BackupException.Damaged("${absent.size} files are missing")
 
                 onProgress(BackupProgress(BackupProgress.Step.SAVING, 0, 1))
-                val report = withContext(NonCancellable) {
-                    val result = write(rows.remap(placed), mode, plan, preview, warnings)
-                    committed = true
-                    files.delete(JOURNAL)
-                    result
-                }
                 withContext(NonCancellable) {
-                    sweepUnreferencedFiles()
-                    rerenderMissing(rows)
-                    watches.rebuildSearchIndex()
-                }
-                onProgress(BackupProgress(BackupProgress.Step.SAVING, 1, 1))
-                report
-            } catch (e: Throwable) {
-                // Before the commit nothing refers to the new files, so they go. After it, they are in use.
-                if (!committed) {
-                    withContext(NonCancellable) {
-                        written.forEach { files.delete(it) }
+                    // The search index and photo renditions are redone after the commit. The marker
+                    // gets that finished at the next launch if the app stops first.
+                    files.write(AFTERCARE, ByteArray(0))
+                    val outcome = write(rows.remap(placed), mode, plan, preview, warnings)
+                    committed = true
+                    // The restore stands from here. What follows is tidying, and it can't undo that.
+                    runCatching {
+                        // The journal now lists the files the restore stopped using, so an interruption
+                        // still gets them removed at the next launch.
+                        files.write(JOURNAL, outcome.released.joinToString("\n").encodeToByteArray())
+                        outcome.released.forEach { files.delete(it) }
                         files.delete(JOURNAL)
                     }
+                    aftercare()
+                    onProgress(BackupProgress(BackupProgress.Step.SAVING, 1, 1))
+                    onCommitted(outcome.report)
+                    outcome.report
+                }
+            } catch (e: Throwable) {
+                if (committed) throw e
+                // Before the commit nothing refers to the new files, so they go.
+                withContext(NonCancellable) {
+                    written.forEach { files.delete(it) }
+                    files.delete(JOURNAL)
+                    files.delete(AFTERCARE)
                 }
                 throw if (e is ZipFormatException || e is okio.IOException) BackupException.Damaged(e.message ?: "unreadable") else e
             }
         }
     }
 
-    /** Removes files left by a restore that was interrupted before it finished, keeping any a committed restore uses. */
+    /**
+     * Finishes a restore the app stopped in the middle of: removes the files a journal lists that no
+     * row uses (from before the commit, the incoming files; after it, the ones the restore replaced),
+     * and redoes the search index and missing photo renditions if the restore didn't get to them.
+     */
     suspend fun recoverInterruptedRestore() = withContext(Dispatchers.IO) {
-        if (!files.exists(JOURNAL)) return@withContext
+        if (!files.exists(JOURNAL) && !files.exists(AFTERCARE)) return@withContext
         busy.withLock {
-            val listed = files.read(JOURNAL).decodeToString().lines().filter { it.isNotBlank() }
-            val used = dao.referencedFiles().toSet()
-            listed.filter { it !in used && ArchivePaths.isSafe(it) }.forEach { files.delete(it) }
-            files.delete(JOURNAL)
+            if (files.exists(JOURNAL)) {
+                val listed = files.read(JOURNAL).decodeToString().lines().filter { it.isNotBlank() }
+                val used = dao.referencedFiles().toSet()
+                listed.filter { it !in used && ArchivePaths.isSafe(it) }.forEach { files.delete(it) }
+                files.delete(JOURNAL)
+            }
+            if (files.exists(AFTERCARE)) aftercare()
         }
     }
 
-    /** Deletes photos, documents and snapshots no row refers to any more. Returns how many. */
-    suspend fun sweepUnreferencedFiles(): Int = withContext(Dispatchers.IO) {
-        val used = dao.referencedFiles().toSet()
-        var removed = 0
-        for (dir in FileStore.MEDIA_DIRS) {
-            for (path in files.listFiles(dir)) {
-                if (path !in used) {
-                    files.delete(path)
-                    removed++
-                }
+    /**
+     * Rebuilds the search index, then the display image and thumbnail of any photo that came without
+     * them. Each step is tried once; a photo that can't be rendered keeps showing its original.
+     */
+    private suspend fun aftercare() {
+        runCatching { watches.rebuildSearchIndex() }
+        runCatching {
+            for (p in dao.photos()) {
+                if (p.displayFile == p.originalFile || p.thumbFile == p.originalFile) runCatching { photos.rerender(p.id) }
             }
         }
-        removed
+        runCatching { files.delete(AFTERCARE) }
     }
 
-    private suspend fun write(rows: CollectionData, mode: RestoreMode, plan: MergePlan?, preview: ArchivePreview, warnings: MutableList<String>): RestoreReport {
-        db.useWriterConnection { connection ->
+    private class Outcome(val report: RestoreReport, val released: Set<String>)
+
+    /**
+     * Saves [rows] in one transaction. Returns the report, and the files that rows referred to
+     * before and no longer do: only those may be deleted, so a photo being added or cropped
+     * alongside the restore keeps its files.
+     */
+    private suspend fun write(rows: CollectionData, mode: RestoreMode, plan: MergePlan?, preview: ArchivePreview, warnings: MutableList<String>): Outcome {
+        val released = db.useWriterConnection { connection ->
             connection.immediateTransaction {
+                val before = dao.referencedFiles().toSet()
                 when (mode) {
                     RestoreMode.REPLACE -> {
                         dao.deleteAllWatches()
@@ -352,10 +385,11 @@ class BackupRepository(
                     }
                 }
                 dao.clearDanglingCovers()
+                before - dao.referencedFiles().toSet()
             }
         }
         val merge = plan ?: preview.merge
-        return when (mode) {
+        val report = when (mode) {
             RestoreMode.REPLACE -> RestoreReport(
                 mode = mode,
                 watchesAdded = rows.watch.size,
@@ -381,6 +415,7 @@ class BackupRepository(
                 warnings = warnings,
             )
         }
+        return Outcome(report, released)
     }
 
     /** Parents before children, so every foreign key is satisfied as rows go in. */
@@ -492,12 +527,6 @@ class BackupRepository(
         )
     }
 
-    private suspend fun rerenderMissing(rows: CollectionData) {
-        for (p in rows.photo) {
-            if (p.displayFile == p.originalFile || p.thumbFile == p.originalFile) runCatching { photos.rerender(p.id) }
-        }
-    }
-
     private fun CollectionData.remap(placed: Map<String, String>): CollectionData {
         fun at(path: String) = placed[path] ?: path
         return copy(
@@ -545,6 +574,8 @@ class BackupRepository(
         /** The database schema version (AppDatabase). Bump with it. */
         const val SCHEMA_VERSION = 1
         const val JOURNAL = "restore-journal.txt"
+        /** Present while a committed restore's search index and renditions still need redoing. */
+        const val AFTERCARE = "restore-aftercare"
         /** Settings that belong to one phone (app lock, last backup) and never travel. */
         const val DEVICE_SETTING = "device."
         const val MAX_MANIFEST = 32L * 1024 * 1024

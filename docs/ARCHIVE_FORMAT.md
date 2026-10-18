@@ -96,7 +96,7 @@ Then:
   - Settings on the phone are kept.
   - Every watch that differed is listed in the restore report, with which side won.
 
-All database changes happen in one transaction. Incoming files are written next to the existing ones (a `-r<tag>` suffix avoids any name clash), and files that are no longer used are removed only after the transaction commits. If the app is stopped partway, the next launch removes the half-restored files using a journal (`restore-journal.txt`), and the collection stays as it was.
+All database changes happen in one transaction. Incoming files are written next to the existing ones (a `-r<tag>` suffix avoids any name clash), and after the transaction commits, only the files that rows referred to before it and no longer do are removed (both lists are read inside the transaction). Files nothing referred to before the restore, such as a photo still being imported, are left alone. If the app is stopped before the commit, the next launch removes the half-restored files using a journal (`restore-journal.txt`), and the collection stays as it was. If it's stopped after the commit, the journal lists the replaced files instead and the next launch removes them, and a marker (`restore-aftercare`) has the search index and any missing photo renditions rebuilt.
 
 A backup restored onto the phone it came from writes almost nothing: files already there with the same SHA-256 are reused.
 

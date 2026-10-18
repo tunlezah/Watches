@@ -12,7 +12,8 @@
 - Safe by design:
   - Every file is checked against its SHA-256 before the collection is touched, and the changes are saved in one step.
   - A damaged backup changes nothing.
-  - A restore stopped halfway is undone at the next launch.
+  - A restore stopped halfway is undone at the next launch, or finished if it had already been saved.
+  - Only files the restore itself replaced are removed, so a photo added while it runs is safe.
   - Restoring onto the same phone reuses the files already there.
 - Long backups keep running if you leave the screen, show progress, can be cancelled, and keep the screen awake.
 - A backup re-zipped on a computer, for example with macOS Archive Utility, still restores.
@@ -26,7 +27,8 @@
 
 **App lock** (Settings › Privacy & security)
 - Optional. Unlocks with your fingerprint, face or phone PIN. It locks again after a delay you choose (immediately, or after 1, 5 or 15 minutes), so a trip to the camera or file picker doesn't ask again.
-- Turning it on needs one successful unlock, so nobody locks themselves out.
+- Turning it on needs one successful unlock, so nobody locks themselves out. If the phone's screen lock is later removed, the app lock pauses rather than locking you out.
+- The lock screen covers any open dialog or sheet, and the back gesture can't get past it.
 - On Android 13+ the app switcher shows a blank card while the lock is on.
 - App lock and the last-backup date belong to the phone. They're never written to a backup or replaced by a restore.
 

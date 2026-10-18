@@ -244,7 +244,8 @@ fun RestoreScreen(job: BackupState, prefs: DisplayPrefs, actions: RestoreActions
     val style = WatchTheme.style
     val busy = job.running
     if (busy) KeepScreenOn()
-    BackHandler(enabled = busy) { }
+    // Back does what the header's back does. While a restore runs it does nothing: Cancel is in the card.
+    BackHandler { if (!busy) (if (job is BackupState.Restored) actions.onDone else actions.onBack)() }
     val haptics = LocalHapticFeedback.current
     LaunchedEffect(job::class) {
         if (job is BackupState.Restored) haptics.performHapticFeedback(HapticFeedbackType.Confirm)

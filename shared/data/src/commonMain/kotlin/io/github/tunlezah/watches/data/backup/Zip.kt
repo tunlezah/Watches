@@ -243,7 +243,10 @@ class ZipStreamReader(source: Source) {
         if (descriptor && method == METHOD_STORED && compressed == 0L) {
             throw ZipFormatException("$name is stored without its size")
         }
-        val entry = ZipEntry(name, method, crc, if (descriptor) -1 else compressed, if (descriptor) -1 else size, descriptor, zip64)
+        // A stored entry's sizes must be in its header (checked above); only a deflated entry with a
+        // descriptor leaves them to the descriptor.
+        val known = !descriptor || method == METHOD_STORED
+        val entry = ZipEntry(name, method, crc, if (known) compressed else -1, if (known) size else -1, descriptor, zip64)
         pending = entry
         return entry
     }

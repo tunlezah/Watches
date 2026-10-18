@@ -673,7 +673,12 @@ private fun SettingsPageEntry(key: String, navigator: Navigator) {
             val lock = koinInject<AppLock>()
             val scope = rememberCoroutineScope()
             var message by remember { mutableStateOf<String?>(null) }
-            val availability = remember(s.device.appLock) { lock.availability() }
+            var availability by remember { mutableStateOf(lock.availability()) }
+            // Read again on return, so a screen lock just set up (or removed) in the phone's settings shows straight away.
+            LifecycleResumeEffect(s.device.appLock) {
+                availability = lock.availability()
+                onPauseOrDispose { }
+            }
             PrivacyPage(
                 PrivacyState(s.device.appLock, s.device.lockAfter, availability, message),
                 onAppLock = { on ->
@@ -711,16 +716,20 @@ private fun BackupEntry(navigator: Navigator) {
     val pickBackup = rememberFilePickerLauncher(type = FileKitType.File(setOf("zip"))) { file ->
         if (file != null) coordinator.inspect(file.name) { file.okioSource() }
     }
-    // A checked backup opens the review screen.
+    // A backup that has just been checked opens the review screen. Only the change opens it, so
+    // coming back to this page with a review still pending doesn't bounce straight back to it.
+    var seen by remember { mutableStateOf(state.job) }
     LaunchedEffect(state.job) {
-        if (state.job is BackupState.Previewing && navigator.current !is Route.RestoreBackup) navigator.push(Route.RestoreBackup)
+        val opened = state.job is BackupState.Previewing && seen !is BackupState.Previewing
+        seen = state.job
+        if (opened && navigator.current !is Route.RestoreBackup) navigator.push(Route.RestoreBackup)
     }
     BackupScreen(
         state = state,
         prefs = settings?.display ?: DisplayPrefs(),
         today = today,
         actions = BackupActions(
-            onBack = { navigator.pop(); Unit },
+            onBack = { navigator.pop() },
             onBackUp = { saveBackup.launch(coordinator.backupFileName(), "zip") },
             onRestore = { pickBackup.launch() },
             onExportCsv = { saveCsv.launch(coordinator.csvFileName(), "csv") },
@@ -739,8 +748,9 @@ private fun RestoreEntry(navigator: Navigator) {
         coordinator.dismiss()
         navigator.pop()
     }
-    // Nothing to show (the app was restarted, or the result was dismissed elsewhere): go back.
-    LaunchedEffect(job) { if (job is BackupState.Idle) navigator.pop() }
+    // Nothing to show (the app was restarted, or the result was dismissed elsewhere): go back. Not
+    // while this screen is already leaving, or the page beneath would go too.
+    LaunchedEffect(job) { if (job is BackupState.Idle && navigator.current is Route.RestoreBackup) navigator.pop() }
     RestoreScreen(
         job = job,
         prefs = settings?.display ?: DisplayPrefs(),

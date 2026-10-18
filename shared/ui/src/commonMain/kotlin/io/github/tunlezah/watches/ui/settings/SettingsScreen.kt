@@ -276,10 +276,13 @@ fun PrivacyPage(state: PrivacyState, onAppLock: (Boolean) -> Unit, onLockAfter: 
     SettingsPageScaffold(SettingsPage.PRIVACY.title, onBack) {
         RowGroup(
             "App lock",
-            footer = when (state.availability) {
-                DeviceAuth.Availability.READY -> "Asks for your fingerprint, face or phone PIN when you open Watches. It also hides the app's contents in the app switcher."
-                DeviceAuth.Availability.NOT_SET_UP -> "Set up a screen lock in your phone's settings first, then come back to turn this on."
-                DeviceAuth.Availability.UNSUPPORTED -> "This phone can't lock apps with its screen lock."
+            footer = when {
+                state.availability == DeviceAuth.Availability.READY ->
+                    "Asks for your fingerprint, face or phone PIN when you open Watches. On Android 13 and later it also hides the app's contents in the app switcher."
+                state.appLock ->
+                    "Paused: this phone has no screen lock now, so Watches opens without asking. Set one up in your phone's settings and the lock resumes."
+                state.availability == DeviceAuth.Availability.NOT_SET_UP -> "Set up a screen lock in your phone's settings first, then come back to turn this on."
+                else -> "This phone can't lock apps with its screen lock."
             },
         ) {
             SwitchRow(

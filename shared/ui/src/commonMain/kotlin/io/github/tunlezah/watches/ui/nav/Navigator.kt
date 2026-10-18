@@ -89,8 +89,8 @@ sealed interface Route {
                 "service" -> Service
                 "settings" -> Settings
                 "settings-page" -> SettingsPage(p[1])
-                // A restore can't resume after the app was killed; land on Backup & restore instead.
-                "restore" -> SettingsPage("backup")
+                // A restore can't resume after the app was killed; dropping it lands on Backup & restore, beneath it.
+                "restore" -> null
                 "diagnostics" -> Diagnostics
                 "licences" -> Licences
                 else -> null

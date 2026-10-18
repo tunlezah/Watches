@@ -1,6 +1,8 @@
 package io.github.tunlezah.watches.data
 
 import androidx.room.Room
+import androidx.room.execSQL
+import androidx.room.useWriterConnection
 import io.github.tunlezah.watches.core.TimeSource
 import io.github.tunlezah.watches.core.lookup.RawPayload
 import io.github.tunlezah.watches.core.lookup.SourceRecord
@@ -21,6 +23,7 @@ import io.github.tunlezah.watches.data.backup.BackupRepository
 import io.github.tunlezah.watches.data.backup.CollectionData
 import io.github.tunlezah.watches.data.backup.RestoreMode
 import io.github.tunlezah.watches.data.db.AppDatabase
+import io.github.tunlezah.watches.data.db.SearchIndex
 import io.github.tunlezah.watches.data.db.configure
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.data.files.JvmImageProcessor
@@ -323,6 +326,51 @@ class BackupRepositoryTest {
         assertTrue(stray !in phone.mediaFiles())
         assertTrue(kept in phone.mediaFiles(), "files the database uses are never removed")
         assertTrue(!phone.files.exists("restore-journal.txt"))
+    }
+
+    @Test fun onlyFilesTheRestoreStoppedUsingAreRemoved() = runBlocking<Unit> {
+        val phone = Phone()
+        val (seamaster) = phone.seed()
+        val archive = phone.archive()
+        // A photo being added while the restore runs: its file is written before its row.
+        val importing = "photos/${seamaster.id}/arriving-original.jpg"
+        phone.files.write(importing, jpeg(7))
+        val replaced = phone.everything().photo.first()
+        phone.photos.crop(replaced.id, NormalizedRect(0.2f, 0.2f, 0.8f, 0.8f))
+
+        phone.backup.restore({ archive.source() }, phone.backup.inspect { archive.source() }, RestoreMode.REPLACE)
+        val files = phone.mediaFiles().keys
+        assertTrue(importing in files, "a file no row used before the restore isn't the restore's to remove")
+        assertTrue(replaced.displayFile in files, "the backup's crop is back")
+        assertTrue(phone.everything().photo.none { it.displayFile !in files || it.thumbFile !in files })
+        assertEquals(phone.everything().referencedFiles + importing, files, "the crop the restore replaced is gone")
+        assertTrue(!phone.files.exists("restore-journal.txt") && !phone.files.exists("restore-aftercare"))
+    }
+
+    @Test fun aRestoreStoppedAfterSavingIsFinishedAtNextLaunch() = runBlocking<Unit> {
+        val phone = Phone()
+        val (seamaster) = phone.seed()
+        // Saved, but the app stopped before the search index and renditions were redone.
+        phone.db.useWriterConnection { it.execSQL("DELETE FROM ${SearchIndex.TABLE}") }
+        val photo = phone.everything().photo.first()
+        phone.db.backupDao().upsertPhotos(listOf(photo.copy(displayFile = photo.originalFile, thumbFile = photo.originalFile)))
+        phone.files.write("restore-aftercare", ByteArray(0))
+
+        phone.backup.recoverInterruptedRestore()
+        assertEquals(setOf(seamaster.id), phone.watches.search("mainspring"))
+        val redone = phone.everything().photo.first { it.id == photo.id }
+        assertTrue(redone.displayFile != redone.originalFile && phone.files.exists(redone.displayFile))
+        assertTrue(phone.files.exists(redone.originalFile), "the original is kept")
+        assertTrue(!phone.files.exists("restore-aftercare"))
+    }
+
+    @Test fun croppingARestoredPhotoWithoutRenditionsKeepsItsOriginal() = runBlocking<Unit> {
+        val phone = Phone()
+        phone.seed()
+        val photo = phone.everything().photo.first()
+        phone.db.backupDao().upsertPhotos(listOf(photo.copy(displayFile = photo.originalFile, thumbFile = photo.originalFile)))
+        phone.photos.crop(photo.id, NormalizedRect(0.1f, 0.1f, 0.9f, 0.9f))
+        assertTrue(phone.files.exists(photo.originalFile))
     }
 
     @Test fun zip64KicksInPastSixtyFiveThousandEntries() {

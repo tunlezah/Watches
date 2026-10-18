@@ -13,6 +13,9 @@ import kotlin.time.Instant
  * The optional app lock. The app starts locked when the lock is on, and locks again once it has
  * been in the background for longer than the chosen delay. Time spent in the system unlock prompt
  * itself never counts (the PIN screen sends the app to the background on Android).
+ *
+ * The lock only holds while the phone can unlock it. If the phone's own screen lock is removed,
+ * the app opens rather than locking its owner out, and the lock resumes once one is set again.
  */
 class AppLock(
     private val settings: SettingsRepository,
@@ -27,14 +30,14 @@ class AppLock(
 
     /** Locks straight away at launch if the lock is on, before anything is drawn. */
     fun prime(device: DeviceSettings) {
-        if (!started && device.appLock) _locked.value = true
+        if (!started && device.appLock && canUnlock()) _locked.value = true
     }
 
     /** The app came to the foreground (or launched). */
     suspend fun onForeground() {
         if (authenticating) return
         val device = settings.current().device
-        if (!device.appLock) {
+        if (!device.appLock || !canUnlock()) {
             _locked.value = false
         } else if (!started) {
             _locked.value = true
@@ -51,11 +54,16 @@ class AppLock(
         if (authenticating) return
         leftAt = time.now()
         val device = settings.current().device
-        if (device.appLock && device.lockAfter.seconds == 0) _locked.value = true
+        if (device.appLock && device.lockAfter.seconds == 0 && canUnlock()) _locked.value = true
     }
 
     suspend fun unlock(): Boolean {
         if (authenticating) return false
+        if (!canUnlock()) {
+            _locked.value = false
+            leftAt = null
+            return true
+        }
         authenticating = true
         val ok = try {
             auth.authenticate("Unlock Watches", "Confirm it's you to open your collection")
@@ -86,6 +94,8 @@ class AppLock(
     }
 
     fun availability(): DeviceAuth.Availability = auth.availability()
+
+    private fun canUnlock() = auth.availability() == DeviceAuth.Availability.READY
 
     suspend fun device(): DeviceSettings = settings.current().device
 }

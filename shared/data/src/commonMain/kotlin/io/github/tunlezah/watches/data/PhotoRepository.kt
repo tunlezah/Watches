@@ -99,8 +99,9 @@ class PhotoRepository(
         val dir = FileStore.photoDir(current.watchId)
         val (display, thumb) = renderRenditions(dir, current.id, current.originalFile, effective)
         dao.upsert(current.copy(displayFile = display, thumbFile = thumb, crop = effective).toEntity())
-        files.delete(current.displayFile)
-        files.delete(current.thumbFile)
+        // A restored photo can stand in for its own renditions until they are rebuilt.
+        if (current.displayFile != current.originalFile) files.delete(current.displayFile)
+        if (current.thumbFile != current.originalFile) files.delete(current.thumbFile)
     }
 
     /** Re-renders a photo's display image and thumbnail from its original, for a restored photo that came without them. */

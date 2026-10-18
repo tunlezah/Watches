@@ -28,6 +28,7 @@ import io.github.tunlezah.watches.search.SourceStatus
 import io.github.tunlezah.watches.search.http.LookupFailure
 import io.github.tunlezah.watches.search.sources.WikidataSource
 import io.github.tunlezah.watches.ui.photos.PhotoImporter
+import io.github.tunlezah.watches.ui.components.UndoableActions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -90,6 +91,7 @@ class LookupViewModel(
     private val drafts: LookupDrafts,
     private val images: RemoteImages,
     private val connectivity: Connectivity,
+    private val undoable: UndoableActions,
 ) : ViewModel() {
 
     private val targetTitle = MutableStateFlow<String?>(null)
@@ -152,9 +154,10 @@ class LookupViewModel(
 
     fun clearTray() = session.clearTray()
 
-    /** Watches for the "Apply to a watch" picker. */
-    val watchChoices: StateFlow<List<WatchSummary>> = watches.observeSummaries()
-        .map { all -> all.filter { !it.archived }.sortedWith(compareBy({ it.brand?.lowercase() }, { it.modelName?.lowercase() })) }
+    /** Watches for the "Apply to a watch" picker, leaving out one deleted a moment ago. */
+    val watchChoices: StateFlow<List<WatchSummary>> = combine(watches.observeSummaries(), undoable.hidden) { all, hidden ->
+        all.filter { !it.archived && it.id !in hidden }.sortedWith(compareBy({ it.brand?.lowercase() }, { it.modelName?.lowercase() }))
+    }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 }
 

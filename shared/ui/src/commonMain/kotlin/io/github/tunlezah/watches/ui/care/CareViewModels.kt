@@ -29,6 +29,7 @@ import io.github.tunlezah.watches.data.WatchCare
 import io.github.tunlezah.watches.data.WatchRepository
 import io.github.tunlezah.watches.ui.platform.FileSharer
 import io.github.tunlezah.watches.ui.platform.NotificationAccess
+import io.github.tunlezah.watches.ui.components.UndoableActions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -119,10 +120,16 @@ data class ServiceDueUiState(
     val onHand: Int = 0,
 )
 
-class ServiceDueViewModel(services: ServiceRepository, settings: SettingsRepository, private val time: TimeSource) : ViewModel() {
+class ServiceDueViewModel(
+    services: ServiceRepository,
+    settings: SettingsRepository,
+    private val time: TimeSource,
+    undoable: UndoableActions,
+) : ViewModel() {
 
-    val state: StateFlow<ServiceDueUiState> = combine(services.observeCare(), services.observeWithWarranty(), settings.settings) { care, serviceWarranties, s ->
-        build(care, serviceWarranties, s.display, time.today())
+    // A watch deleted a moment ago is left out while its Undo is on offer.
+    val state: StateFlow<ServiceDueUiState> = combine(services.observeCare(), services.observeWithWarranty(), settings.settings, undoable.hidden) { care, serviceWarranties, s, hidden ->
+        build(care.filterNot { it.id in hidden }, serviceWarranties, s.display, time.today())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ServiceDueUiState())
 
     companion object {

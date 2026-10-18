@@ -19,17 +19,39 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import io.github.tunlezah.watches.ui.components.ButtonKind
 import io.github.tunlezah.watches.ui.components.IconBadge
 import io.github.tunlezah.watches.ui.components.WatchButton
 import io.github.tunlezah.watches.ui.theme.WatchIcons
 import io.github.tunlezah.watches.ui.theme.WatchTheme
 
-/** Covers the app while it's locked. Asks for the unlock straight away, and again on a tap. */
+/**
+ * Covers the app while it's locked, in a full-screen window of its own: it sits above any dialog
+ * or sheet that was open, takes back presses, and closes the keyboard, so nothing beneath can be
+ * seen or used.
+ */
+@Composable
+fun LockCover(onUnlock: () -> Unit) {
+    val focus = LocalFocusManager.current
+    LaunchedEffect(Unit) { focus.clearFocus(force = true) }
+    Dialog(onDismissRequest = {}, properties = coverWindowProperties()) {
+        BackHandler { }
+        LockScreen(onUnlock)
+    }
+}
+
+/** A window that fills the screen, edge to edge, and can't be dismissed. */
+internal expect fun coverWindowProperties(): DialogProperties
+
+/** The lock screen itself. Asks for the unlock straight away, and again on a tap. */
 @Composable
 fun LockScreen(onUnlock: () -> Unit) {
     val c = WatchTheme.colors

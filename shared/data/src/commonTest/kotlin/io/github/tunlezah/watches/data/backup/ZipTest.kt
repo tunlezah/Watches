@@ -44,6 +44,27 @@ class ZipTest {
         assertNull(reader.next())
     }
 
+    @Test fun storedEntriesWithADescriptorUseTheSizesInTheirHeader() {
+        // Some writers set the descriptor flag on stored entries and still fill in the header.
+        val archive = Buffer()
+        val entries = listOf("a.txt" to "first, stored", "b.txt" to "second")
+        for ((name, text) in entries) {
+            val data = text.encodeToByteArray()
+            val crc = Crc32().apply { update(data) }.value.toInt()
+            archive.writeIntLe(0x04034b50).writeShortLe(20).writeShortLe(0x0008).writeShortLe(0).writeShortLe(0).writeShortLe(0)
+            archive.writeIntLe(crc).writeIntLe(data.size).writeIntLe(data.size).writeShortLe(name.length).writeShortLe(0)
+            archive.writeUtf8(name).write(data)
+            archive.writeIntLe(0x08074b50).writeIntLe(crc).writeIntLe(data.size).writeIntLe(data.size)
+        }
+        archive.writeIntLe(0x02014b50)
+
+        val reader = ZipStreamReader(archive)
+        val first = reader.next()!!
+        assertEquals("first, stored", reader.readBytes(first).decodeToString())
+        reader.skip(reader.next()!!)
+        assertNull(reader.next(), "the stream stays in step past each descriptor")
+    }
+
     @Test fun skippingADeflatedEntryLandsOnTheNext() {
         val reader = ZipStreamReader(Buffer().write(PYTHON_STREAMED.decodeBase64()!!))
         reader.next()

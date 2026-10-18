@@ -62,6 +62,8 @@ class BackupCoordinator(
     val state: StateFlow<BackupState> = _state.asStateFlow()
     private var job: Job? = null
     private var reopen: (() -> Source)? = null
+    /** A result that stands even if the task is then cancelled or fails: a restore that has been saved. */
+    private var settled: BackupState? = null
 
     fun backupFileName(): String = backup.suggestedFileName().removeSuffix(".zip")
     fun csvFileName(): String = csv.suggestedFileName().removeSuffix(".csv")
@@ -87,17 +89,21 @@ class BackupCoordinator(
         val previewing = _state.value as? BackupState.Previewing ?: return
         val open = reopen ?: return
         start(BackupTask.RESTORE) {
-            val report = backup.restore(open, previewing.preview, mode, progress(BackupTask.RESTORE))
-            reopen = null
-            // The backup just restored exists, so it counts as this phone's latest if it's newer.
-            val made = previewing.preview.createdAt
-            if (made != null) {
-                settings.update { s ->
-                    val last = s.device.lastBackup
-                    if (last == null || last.at < made) s.copy(device = s.device.copy(lastBackup = LastBackup(made, previewing.preview.mediaBytes, previewing.preview.counts.watches))) else s
-                }
+            val report = backup.restore(open, previewing.preview, mode, progress(BackupTask.RESTORE)) { saved ->
+                reopen = null
+                settled = BackupState.Restored(saved)
+                scope.launch { noteRestored(previewing.preview) }
             }
             BackupState.Restored(report)
+        }
+    }
+
+    /** The backup just restored exists, so it counts as this phone's latest if it's newer. */
+    private suspend fun noteRestored(preview: ArchivePreview) {
+        val made = preview.createdAt ?: return
+        settings.update { s ->
+            val last = s.device.lastBackup
+            if (last == null || last.at < made) s.copy(device = s.device.copy(lastBackup = LastBackup(made, preview.mediaBytes, preview.counts.watches))) else s
         }
     }
 
@@ -116,17 +122,22 @@ class BackupCoordinator(
 
     private fun start(task: BackupTask, discard: (suspend () -> Unit)? = null, work: suspend () -> BackupState) {
         if (_state.value.running) return
+        settled = null
         _state.value = BackupState.Working(task)
         job = scope.launch {
             try {
                 _state.value = work()
             } catch (e: CancellationException) {
-                withContext(NonCancellable) { discard?.let { runCatching { it() } } }
-                _state.value = BackupState.Idle
+                _state.value = settled ?: run {
+                    withContext(NonCancellable) { discard?.let { runCatching { it() } } }
+                    BackupState.Idle
+                }
                 throw e
             } catch (e: Exception) {
-                withContext(NonCancellable) { discard?.let { runCatching { it() } } }
-                _state.value = BackupState.Failed(task, message(task, e))
+                _state.value = settled ?: run {
+                    withContext(NonCancellable) { discard?.let { runCatching { it() } } }
+                    BackupState.Failed(task, message(task, e))
+                }
             }
         }
     }

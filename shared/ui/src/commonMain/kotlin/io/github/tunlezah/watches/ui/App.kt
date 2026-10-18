@@ -16,7 +16,7 @@ import io.github.tunlezah.watches.ui.components.AppMessages
 import io.github.tunlezah.watches.ui.components.UndoableActions
 import io.github.tunlezah.watches.ui.backup.BackupViewModel
 import io.github.tunlezah.watches.ui.security.AppLock
-import io.github.tunlezah.watches.ui.security.LockScreen
+import io.github.tunlezah.watches.ui.security.LockCover
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,12 +80,12 @@ val uiModule = module {
     viewModel { params -> CropViewModel(params.get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get()) }
     viewModel { DiagnosticsViewModel(get(), get()) }
-    viewModel { params -> LookupViewModel(params.get(), params.getOrNull(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { params -> LookupViewModel(params.get(), params.getOrNull(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { params -> ResultViewModel(params.get(), get(), get(), get()) }
     viewModel { params -> ApplyViewModel(params.get(), get(), get(), get(), get(), get()) }
     viewModel { SourcesViewModel(get(), get(), get()) }
     single { ReminderSync(get(), get(), get()) }
-    viewModel { ServiceDueViewModel(get(), get(), get()) }
+    viewModel { ServiceDueViewModel(get(), get(), get(), get()) }
     viewModel { params -> ServiceHistoryViewModel(params.get(), get(), get(), get(), get(), get(), get()) }
     viewModel { params ->
         // The watch, and the entry being edited (null for a new one).
@@ -136,7 +136,7 @@ fun WatchesApp() {
         Box(Modifier.fillMaxSize()) {
             // While locked the app stays composed underneath (it keeps its place), hidden from screen readers.
             Box(Modifier.fillMaxSize().then(if (locked) Modifier.clearAndSetSemantics { } else Modifier)) { AppShell() }
-            if (locked) LockScreen(onUnlock = { scope.launch { lock.unlock() } })
+            if (locked) LockCover(onUnlock = { scope.launch { lock.unlock() } })
         }
     }
 }

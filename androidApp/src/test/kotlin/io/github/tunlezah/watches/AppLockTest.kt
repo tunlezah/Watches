@@ -98,6 +98,35 @@ class AppLockTest {
         assertFalse(lock.locked.value)
     }
 
+    @Test fun removingThePhonesScreenLockNeverLocksTheOwnerOut() = runBlocking {
+        lockOn()
+        auth.availability = DeviceAuth.Availability.NOT_SET_UP
+        val fresh = AppLock(settings, auth, TimeSource { now })
+        fresh.prime(settings.current().device)
+        assertFalse("no prompt could unlock it", fresh.locked.value)
+        fresh.onForeground()
+        assertFalse(fresh.locked.value)
+
+        // Removed while the app was locked: the next unlock opens it without a prompt.
+        auth.availability = DeviceAuth.Availability.READY
+        fresh.onBackground()
+        pass(2.minutes)
+        fresh.onForeground()
+        assertTrue(fresh.locked.value)
+        auth.availability = DeviceAuth.Availability.NOT_SET_UP
+        val prompts = auth.prompts
+        assertTrue(fresh.unlock())
+        assertFalse(fresh.locked.value)
+        assertTrue(auth.prompts == prompts)
+
+        // Set up again: the lock resumes.
+        auth.availability = DeviceAuth.Availability.READY
+        fresh.onBackground()
+        pass(2.minutes)
+        fresh.onForeground()
+        assertTrue(fresh.locked.value)
+    }
+
     @Test fun turningOnNeedsAWorkingUnlock() = runBlocking {
         auth.ok = false
         assertFalse(lock.setEnabled(true))
