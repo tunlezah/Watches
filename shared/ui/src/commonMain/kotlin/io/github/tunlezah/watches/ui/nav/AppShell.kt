@@ -94,7 +94,37 @@ import io.github.tunlezah.watches.ui.settings.DiagnosticsScreen
 import io.github.tunlezah.watches.ui.settings.DiagnosticsViewModel
 import io.github.tunlezah.watches.ui.settings.ComingSoonScreen
 import io.github.tunlezah.watches.ui.settings.LicencesScreen
-import io.github.tunlezah.watches.ui.settings.SettingsScreen
+import io.github.tunlezah.watches.ui.settings.AboutPage
+import io.github.tunlezah.watches.ui.settings.AppearancePage
+import io.github.tunlezah.watches.ui.settings.PrivacyPage
+import io.github.tunlezah.watches.ui.settings.PrivacyState
+import io.github.tunlezah.watches.ui.settings.RemindersPage
+import io.github.tunlezah.watches.ui.settings.SettingsHome
+import io.github.tunlezah.watches.ui.settings.SettingsPage
+import io.github.tunlezah.watches.ui.settings.SettingsSummary
+import io.github.tunlezah.watches.ui.settings.SourcesPage
+import io.github.tunlezah.watches.ui.settings.UnitsPage
+import io.github.tunlezah.watches.ui.backup.BackupActions
+import io.github.tunlezah.watches.ui.backup.BackupCoordinator
+import io.github.tunlezah.watches.ui.backup.BackupScreen
+import io.github.tunlezah.watches.ui.backup.BackupState
+import io.github.tunlezah.watches.ui.backup.BackupViewModel
+import io.github.tunlezah.watches.ui.backup.RestoreActions
+import io.github.tunlezah.watches.ui.backup.RestoreScreen
+import io.github.tunlezah.watches.ui.backup.okioSink
+import io.github.tunlezah.watches.ui.backup.okioSource
+import io.github.tunlezah.watches.ui.security.AppLock
+import io.github.tunlezah.watches.data.backup.AppInfo
+import io.github.tunlezah.watches.core.format.DisplayPrefs
+import io.github.vinceglb.filekit.delete
+import io.github.vinceglb.filekit.name
+import io.github.vinceglb.filekit.nameWithoutExtension
+import io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
+import io.github.vinceglb.filekit.dialogs.FileKitType
+import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
+import io.github.vinceglb.filekit.dialogs.compose.rememberFileSaverLauncher
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import io.github.tunlezah.watches.ui.settings.SettingsViewModel
 import io.github.tunlezah.watches.ui.theme.WatchIcons
 import io.github.tunlezah.watches.ui.theme.WatchTheme
@@ -152,7 +182,7 @@ fun AppShell() {
     val animations = remember { systemAnimationsEnabled() }
 
     // Tabs hide while a form is open, so switching tab can't throw unsaved work away.
-    val editing = navigator.backStack.any { it is Route.Edit || it is Route.Crop || it is Route.ServiceEdit }
+    val editing = navigator.backStack.any { it is Route.Edit || it is Route.Crop || it is Route.ServiceEdit || it is Route.RestoreBackup }
 
     // A tapped service reminder opens that watch's service history, from the collection. It waits
     // while a form is open, because jumping there clears the back stack and the form with it.
@@ -216,6 +246,8 @@ fun AppShell() {
                                 entry<Route.Documents> { r -> InEntry { DocumentsEntry(r.watchId, r.addKind, navigator) } }
                                 entry<Route.DocumentViewer> { r -> InEntry { DocumentViewerEntry(r.documentId, navigator) } }
                                 entry<Route.Settings> { InEntry { SettingsEntry(navigator) } }
+                                entry<Route.SettingsPage> { r -> InEntry { SettingsPageEntry(r.page, navigator) } }
+                                entry<Route.RestoreBackup> { InEntry { RestoreEntry(navigator) } }
                                 entry<Route.Diagnostics> { InEntry { DiagnosticsEntry(navigator) } }
                                 entry<Route.Licences> { InEntry { LicencesScreen(onBack = { navigator.pop() }) } }
                             },
@@ -523,21 +555,54 @@ private fun SettingsEntry(navigator: Navigator) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val sources = koinViewModel<SourcesViewModel>()
     val sourcesState by sources.state.collectAsStateWithLifecycle()
+    val notificationsGranted = rememberNotificationsGranted()
+    val app = koinInject<AppInfo>()
+    val today = remember { kotlin.time.Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date }
+    settings?.let { s ->
+        SettingsHome(
+            settings = s,
+            summary = SettingsSummary(
+                lastBackup = s.device.lastBackup,
+                sourcesOn = sourcesState.sources.count { it.enabled },
+                sourcesTotal = sourcesState.sources.size,
+                notificationsAllowed = notificationsGranted.value,
+                version = app.version,
+            ),
+            today = today,
+            onOpen = { navigator.push(Route.SettingsPage(it.key)) },
+        )
+    }
+}
+
+/** Whether notifications are allowed, checked again on every return to the app (it can change in the phone's settings). */
+@Composable
+private fun rememberNotificationsGranted(): androidx.compose.runtime.MutableState<Boolean?> {
     val notifications = koinInject<NotificationAccess>()
-    // Checked again on every return to the app, in case it was changed in the phone's settings.
-    var notificationsGranted by remember { mutableStateOf<Boolean?>(null) }
+    val granted = remember { mutableStateOf<Boolean?>(null) }
     val lifecycle = LocalLifecycleOwner.current
     LaunchedEffect(lifecycle) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { notificationsGranted = notifications.granted() }
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { granted.value = notifications.granted() }
     }
-    val scope = rememberCoroutineScope()
-    settings?.let { s ->
-        SettingsScreen(
-            settings = s,
-            onUpdate = { vm.update(it) },
-            onDiagnostics = { navigator.push(Route.Diagnostics) },
-            onLicences = { navigator.push(Route.Licences) },
-            lookupSection = {
+    return granted
+}
+
+@Composable
+private fun SettingsPageEntry(key: String, navigator: Navigator) {
+    val page = SettingsPage.of(key) ?: run {
+        LaunchedEffect(Unit) { navigator.pop() }
+        return
+    }
+    val vm = koinViewModel<SettingsViewModel>()
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val back: () -> Unit = { navigator.pop() }
+    val s = settings ?: return
+    when (page) {
+        SettingsPage.APPEARANCE -> AppearancePage(s, { vm.update(it) }, back)
+        SettingsPage.UNITS -> UnitsPage(s, { vm.update(it) }, back)
+        SettingsPage.SOURCES -> {
+            val sources = koinViewModel<SourcesViewModel>()
+            val sourcesState by sources.state.collectAsStateWithLifecycle()
+            SourcesPage(back) {
                 LookupSettingsSection(
                     state = sourcesState,
                     onToggle = { sources.toggle(it) },
@@ -545,14 +610,99 @@ private fun SettingsEntry(navigator: Navigator) {
                     onRequestLog = { navigator.push(Route.RequestLog) },
                     onClearRecent = { sources.clearRecent() },
                 )
-            },
-            remindersSection = {
-                notificationsGranted?.let { granted ->
-                    RemindersSettings(granted) { scope.launch { notificationsGranted = notifications.request() } }
-                }
-            },
+            }
+        }
+        SettingsPage.REMINDERS -> {
+            val notifications = koinInject<NotificationAccess>()
+            val granted = rememberNotificationsGranted()
+            val scope = rememberCoroutineScope()
+            RemindersPage(back) {
+                granted.value?.let { g -> RemindersSettings(g) { scope.launch { granted.value = notifications.request() } } }
+            }
+        }
+        SettingsPage.BACKUP -> BackupEntry(navigator)
+        SettingsPage.PRIVACY -> {
+            val lock = koinInject<AppLock>()
+            val scope = rememberCoroutineScope()
+            var message by remember { mutableStateOf<String?>(null) }
+            val availability = remember(s.device.appLock) { lock.availability() }
+            PrivacyPage(
+                PrivacyState(s.device.appLock, s.device.lockAfter, availability, message),
+                onAppLock = { on ->
+                    scope.launch {
+                        message = null
+                        if (!lock.setEnabled(on)) message = "App lock wasn't turned on: the unlock didn't go through."
+                    }
+                },
+                onLockAfter = { after -> vm.update { it.copy(device = it.device.copy(lockAfter = after)) } },
+                onBack = back,
+            )
+        }
+        SettingsPage.ABOUT -> AboutPage(
+            koinInject<AppInfo>().version,
+            onDiagnostics = { navigator.push(Route.Diagnostics) },
+            onLicences = { navigator.push(Route.Licences) },
+            onBack = back,
         )
     }
+}
+
+@Composable
+private fun BackupEntry(navigator: Navigator) {
+    val vm = koinViewModel<BackupViewModel>()
+    val state by vm.state.collectAsStateWithLifecycle()
+    val settings by koinViewModel<SettingsViewModel>().settings.collectAsStateWithLifecycle()
+    val coordinator = vm.actions
+    val today = remember { kotlin.time.Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date }
+    val saveBackup = rememberFileSaverLauncher(FileKitDialogSettings.createDefault()) { file ->
+        if (file != null) coordinator.backUp(file.nameWithoutExtension, { file.okioSink() }, { runCatching { file.delete() } })
+    }
+    val saveCsv = rememberFileSaverLauncher(FileKitDialogSettings.createDefault()) { file ->
+        if (file != null) coordinator.exportCsv(file.nameWithoutExtension, { file.okioSink() }, { runCatching { file.delete() } })
+    }
+    val pickBackup = rememberFilePickerLauncher(type = FileKitType.File(setOf("zip"))) { file ->
+        if (file != null) coordinator.inspect(file.name) { file.okioSource() }
+    }
+    // A checked backup opens the review screen.
+    LaunchedEffect(state.job) {
+        if (state.job is BackupState.Previewing && navigator.current !is Route.RestoreBackup) navigator.push(Route.RestoreBackup)
+    }
+    BackupScreen(
+        state = state,
+        prefs = settings?.display ?: DisplayPrefs(),
+        today = today,
+        actions = BackupActions(
+            onBack = { navigator.pop(); Unit },
+            onBackUp = { saveBackup.launch(coordinator.backupFileName(), "zip") },
+            onRestore = { pickBackup.launch() },
+            onExportCsv = { saveCsv.launch(coordinator.csvFileName(), "csv") },
+            onCancel = coordinator::cancel,
+            onDismiss = coordinator::dismiss,
+        ),
+    )
+}
+
+@Composable
+private fun RestoreEntry(navigator: Navigator) {
+    val coordinator = koinInject<BackupCoordinator>()
+    val job by coordinator.state.collectAsStateWithLifecycle()
+    val settings by koinViewModel<SettingsViewModel>().settings.collectAsStateWithLifecycle()
+    val leave: () -> Unit = {
+        coordinator.dismiss()
+        navigator.pop()
+    }
+    // Nothing to show (the app was restarted, or the result was dismissed elsewhere): go back.
+    LaunchedEffect(job) { if (job is BackupState.Idle) navigator.pop() }
+    RestoreScreen(
+        job = job,
+        prefs = settings?.display ?: DisplayPrefs(),
+        actions = RestoreActions(
+            onBack = leave,
+            onRestore = coordinator::restore,
+            onCancel = coordinator::cancel,
+            onDone = leave,
+        ),
+    )
 }
 
 @Composable

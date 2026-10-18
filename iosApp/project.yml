@@ -24,6 +24,7 @@ targets:
         # Lets Compose run at 120 Hz on ProMotion displays.
         CADisableMinimumFrameDurationOnPhone: true
         NSCameraUsageDescription: Take photos of your watches.
+        NSFaceIDUsageDescription: Unlock Watches when the app lock is on.
         NSPhotoLibraryUsageDescription: Add photos of your watches from your library.
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:

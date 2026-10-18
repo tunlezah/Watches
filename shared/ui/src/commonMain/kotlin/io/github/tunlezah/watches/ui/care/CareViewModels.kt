@@ -77,9 +77,13 @@ object CareText {
     fun size(bytes: Long): String = when {
         bytes < 1024 -> "$bytes B"
         bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        else -> {
+        bytes < 1024L * 1024 * 1024 -> {
             val tenths = bytes * 10 / (1024 * 1024)
             "${tenths / 10}.${tenths % 10} MB"
+        }
+        else -> {
+            val tenths = bytes * 10 / (1024L * 1024 * 1024)
+            "${tenths / 10}.${tenths % 10} GB"
         }
     }
 

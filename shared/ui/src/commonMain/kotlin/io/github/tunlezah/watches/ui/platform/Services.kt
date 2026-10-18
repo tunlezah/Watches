@@ -18,6 +18,16 @@ interface NotificationAccess {
     suspend fun request(): Boolean
 }
 
+/** The phone's own unlock: fingerprint, face, or the device PIN, pattern or password. */
+interface DeviceAuth {
+    enum class Availability { READY, NOT_SET_UP, UNSUPPORTED }
+
+    fun availability(): Availability
+
+    /** Shows the system prompt. True once the owner has unlocked; false if they cancelled or it failed. */
+    suspend fun authenticate(title: String, subtitle: String): Boolean
+}
+
 /** Hands a file to the system share sheet. */
 fun interface FileSharer {
     fun share(path: String, mimeType: String, title: String)

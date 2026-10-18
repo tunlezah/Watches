@@ -5,7 +5,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
-import io.github.tunlezah.watches.core.format.DisplayPrefs
 import io.github.tunlezah.watches.core.model.Complication
 import io.github.tunlezah.watches.core.model.Money
 import io.github.tunlezah.watches.core.model.MovementType
@@ -51,7 +50,34 @@ import io.github.tunlezah.watches.ui.detail.DetailActions
 import io.github.tunlezah.watches.ui.detail.DetailScreen
 import io.github.tunlezah.watches.ui.detail.DetailStat
 import io.github.tunlezah.watches.ui.detail.DetailUiState
-import io.github.tunlezah.watches.ui.settings.SettingsScreen
+import io.github.tunlezah.watches.ui.settings.AppearancePage
+import io.github.tunlezah.watches.ui.settings.PrivacyPage
+import io.github.tunlezah.watches.ui.settings.PrivacyState
+import io.github.tunlezah.watches.ui.settings.SettingsHome
+import io.github.tunlezah.watches.ui.settings.SettingsSummary
+import io.github.tunlezah.watches.ui.platform.DeviceAuth
+import io.github.tunlezah.watches.ui.backup.BackupActions
+import io.github.tunlezah.watches.ui.backup.BackupScreen
+import io.github.tunlezah.watches.ui.backup.BackupState
+import io.github.tunlezah.watches.ui.backup.BackupTask
+import io.github.tunlezah.watches.ui.backup.BackupUiState
+import io.github.tunlezah.watches.ui.backup.RestoreActions
+import io.github.tunlezah.watches.ui.backup.RestoreScreen
+import io.github.tunlezah.watches.core.settings.DeviceSettings
+import io.github.tunlezah.watches.core.settings.LastBackup
+import io.github.tunlezah.watches.core.settings.LockAfter
+import io.github.tunlezah.watches.core.format.DisplayPrefs
+import io.github.tunlezah.watches.data.backup.ARCHIVE_FORMAT_ID
+import io.github.tunlezah.watches.data.backup.ArchiveCounts
+import io.github.tunlezah.watches.data.backup.ArchivePreview
+import io.github.tunlezah.watches.data.backup.BackupContents
+import io.github.tunlezah.watches.data.backup.BackupProgress
+import io.github.tunlezah.watches.data.backup.CollectionData
+import io.github.tunlezah.watches.data.backup.Manifest
+import io.github.tunlezah.watches.data.backup.MergePlan
+import io.github.tunlezah.watches.data.backup.RestoreMode
+import io.github.tunlezah.watches.data.backup.RestoreReport
+import io.github.tunlezah.watches.data.backup.WatchName
 import io.github.tunlezah.watches.core.lookup.Coverage
 import io.github.tunlezah.watches.core.lookup.ExtraSpec
 import io.github.tunlezah.watches.core.lookup.LookupDiff
@@ -189,19 +215,81 @@ class ScreenshotTest {
     }
 
     @Test fun settings() {
-        themed(Direction.INSTRUMENT) {
-            SettingsScreen(AppSettings(direction = Direction.INSTRUMENT, accent = Accent.LUME), {}, {}, {}) {
-                LookupSettingsSection(
-                    SourcesUiState(
-                        sources = sourceInfos.map { SourceUi(it, enabled = it.id != "grail", state = null) },
-                        watchBase = SourceInfo("watchbase", "WatchBase", "https://watchbase.com/", Coverage.WATCH,
-                            "Personal, non-commercial use. Not searchable yet: its pages couldn't be checked from the build server.", SourceStatus.UNVERIFIED),
-                    ),
-                    {}, {}, {}, {},
-                )
-            }
+        themed(Direction.ATELIER) {
+            SettingsHome(
+                AppSettings(direction = Direction.ATELIER, accent = Accent.CHAMPAGNE, device = DeviceSettings(appLock = true, lastBackup = LastBackup(fixedNow, 2_400_000_000, 212))),
+                SettingsSummary(lastBackup = LastBackup(fixedNow, 2_400_000_000, 212), sourcesOn = 3, sourcesTotal = 4, notificationsAllowed = true, version = "0.4.0-m4"),
+                today = LocalDate(2026, 10, 20),
+                onOpen = {},
+            )
         }
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings-instrument.png")
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings-atelier.png")
+    }
+
+    @Test fun settingsAppearance() {
+        themed(Direction.INSTRUMENT) { AppearancePage(AppSettings(direction = Direction.INSTRUMENT, accent = Accent.LUME), {}, {}) }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings-appearance-instrument.png")
+    }
+
+    @Test fun settingsPrivacy() {
+        themed(Direction.GALLERY, dark = false) {
+            PrivacyPage(PrivacyState(appLock = true, lockAfter = LockAfter.ONE_MINUTE, availability = DeviceAuth.Availability.READY), {}, {}, {})
+        }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings-privacy-gallery-light.png")
+    }
+
+    private val fixedNow = Instant.parse("2026-10-18T05:30:00Z")
+    private val backupContents = BackupContents(watches = 212, photos = 640, serviceEntries = 95, documents = 41, bytes = 2_350_000_000)
+    private val backupActions = BackupActions({}, {}, {}, {}, {}, {})
+
+    @Test fun backupScreen() {
+        themed(Direction.ATELIER) {
+            BackupScreen(BackupUiState(BackupState.Idle, backupContents, LastBackup(fixedNow, 2_300_000_000, 210)), DisplayPrefs(), LocalDate(2026, 10, 20), backupActions)
+        }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/backup-atelier.png")
+    }
+
+    @Test fun backupRunning() {
+        themed(Direction.GALLERY) {
+            BackupScreen(
+                BackupUiState(BackupState.Working(BackupTask.BACKUP, BackupProgress(BackupProgress.Step.WRITING, 1_420_000_000, 2_350_000_000)), backupContents, null),
+                DisplayPrefs(), LocalDate(2026, 10, 20), backupActions,
+            )
+        }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/backup-running-gallery.png")
+    }
+
+    private fun preview(onPhone: Int): ArchivePreview {
+        val names = listOf(WatchName("a", "Omega Speedmaster Professional"), WatchName("b", "Tudor Black Bay 58"))
+        return ArchivePreview(
+            manifest = Manifest(ARCHIVE_FORMAT_ID, 1, 1, "2026-10-18T05:30:00Z", "Watches 0.4.0-m4 (Android 16)", ArchiveCounts(214, 652, 97, 43, 180), emptyList()),
+            createdAt = Instant.parse("2026-10-18T05:30:00Z"),
+            counts = ArchiveCounts(214, 652, 97, 43, 180),
+            mediaBytes = 2_380_000_000,
+            merge = MergePlan(emptyMap(), listOf(WatchName("c", "Grand Seiko SBGA211")), names.take(1), names.drop(1), 210, 3, 12, 2, 0, 1, CollectionData()),
+            watchesOnPhone = onPhone,
+            warnings = emptyList(),
+            data = CollectionData(),
+            prefix = "",
+            manifestHash = "",
+        )
+    }
+
+    @Test fun restoreReview() {
+        themed(Direction.GALLERY) {
+            RestoreScreen(BackupState.Previewing("Watches backup 2026-10-18 1530.zip", preview(onPhone = 212)), DisplayPrefs(), RestoreActions({}, {}, {}, {}))
+        }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/restore-review-gallery.png")
+    }
+
+    @Test fun restoreReport() {
+        themed(Direction.ATELIER, dark = false) {
+            RestoreScreen(
+                BackupState.Restored(RestoreReport(RestoreMode.MERGE, 1, listOf(WatchName("a", "Omega Speedmaster Professional")), listOf(WatchName("b", "Tudor Black Bay 58")), 210, 0, 12, 2, 1, emptyList())),
+                DisplayPrefs(), RestoreActions({}, {}, {}, {}),
+            )
+        }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/restore-report-atelier-light.png")
     }
 
     @Test fun settingsSources() {

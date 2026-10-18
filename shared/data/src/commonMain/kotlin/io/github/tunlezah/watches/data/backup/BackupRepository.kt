@@ -49,7 +49,7 @@ data class BackupProgress(val step: Step, val done: Long, val total: Long) {
 data class ExportResult(val counts: ArchiveCounts, val bytes: Long, val missingFiles: Int)
 
 /** A backup that has been read and checked, ready to restore. */
-class ArchivePreview internal constructor(
+class ArchivePreview(
     val manifest: Manifest,
     val createdAt: Instant?,
     val counts: ArchiveCounts,
@@ -488,6 +488,7 @@ class BackupRepository(
             serviceEntry = entries,
             document = keptDocuments,
             sourceSnapshot = keptSnapshots,
+            setting = data.setting.filterNot { it.key.startsWith(DEVICE_SETTING) },
         )
     }
 
@@ -544,6 +545,8 @@ class BackupRepository(
         /** The database schema version (AppDatabase). Bump with it. */
         const val SCHEMA_VERSION = 1
         const val JOURNAL = "restore-journal.txt"
+        /** Settings that belong to one phone (app lock, last backup) and never travel. */
+        const val DEVICE_SETTING = "device."
         const val MAX_MANIFEST = 32L * 1024 * 1024
         const val MAX_COLLECTION = 512L * 1024 * 1024
         const val SPACE_MARGIN = 64L * 1024 * 1024

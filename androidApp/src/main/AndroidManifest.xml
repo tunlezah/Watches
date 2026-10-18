@@ -12,6 +12,9 @@
     <!-- Service reminders are local notifications, asked for when you first switch one on. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- The optional app lock uses the system biometric prompt. No prompt is shown for this permission. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
     <!-- WorkManager adds this for long-running work. Reminders are short, so it isn't needed. -->
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE"

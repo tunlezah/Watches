@@ -1,6 +1,7 @@
 package io.github.tunlezah.watches.platform
 
 import android.Manifest
+import android.app.Activity
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,6 +9,9 @@ import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.biometrics.BiometricManager
+import android.hardware.biometrics.BiometricPrompt
+import android.os.CancellationSignal
 import android.os.Build
 import androidx.activity.result.ActivityResultLauncher
 import androidx.core.app.NotificationCompat
@@ -22,6 +26,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import io.github.tunlezah.watches.MainActivity
 import io.github.tunlezah.watches.R
+import io.github.tunlezah.watches.ui.platform.DeviceAuth
 import io.github.tunlezah.watches.ui.platform.FileSharer
 import io.github.tunlezah.watches.ui.platform.NotificationAccess
 import io.github.tunlezah.watches.ui.platform.ReminderScheduler
@@ -29,6 +34,8 @@ import io.github.tunlezah.watches.ui.platform.ServiceReminder
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
@@ -150,6 +157,48 @@ class AndroidNotificationAccess(private val context: Context) : NotificationAcce
     }
 }
 
+/**
+ * The system biometric prompt, which also offers the device PIN, pattern or password, so the app
+ * can always be unlocked even when a fingerprint isn't recognised. The activity registers itself
+ * while it's alive (the prompt needs one to show over).
+ */
+class AndroidDeviceAuth(private val context: Context) : DeviceAuth {
+    var activity: Activity? = null
+
+    private val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+
+    override fun availability(): DeviceAuth.Availability {
+        val manager = context.getSystemService(BiometricManager::class.java) ?: return DeviceAuth.Availability.UNSUPPORTED
+        return when (manager.canAuthenticate(authenticators)) {
+            BiometricManager.BIOMETRIC_SUCCESS -> DeviceAuth.Availability.READY
+            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> DeviceAuth.Availability.NOT_SET_UP
+            else -> DeviceAuth.Availability.UNSUPPORTED
+        }
+    }
+
+    override suspend fun authenticate(title: String, subtitle: String): Boolean {
+        val host = activity ?: return false
+        return suspendCancellableCoroutine { cont ->
+            val signal = CancellationSignal()
+            cont.invokeOnCancellation { signal.cancel() }
+            val prompt = BiometricPrompt.Builder(host)
+                .setTitle(title)
+                .setSubtitle(subtitle)
+                .setAllowedAuthenticators(authenticators)
+                .build()
+            prompt.authenticate(signal, host.mainExecutor, object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    if (cont.isActive) cont.resume(true)
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    if (cont.isActive) cont.resume(false)
+                }
+            })
+        }
+    }
+}
+
 /** Shares through a FileProvider limited to the documents folder (see res/xml/file_paths.xml). */
 class AndroidFileSharer(private val context: Context) : FileSharer {
     override fun share(path: String, mimeType: String, title: String) {
@@ -170,4 +219,6 @@ fun androidPlatformModule(context: Context): Module = module {
     single { AndroidNotificationAccess(context) }
     single<NotificationAccess> { get<AndroidNotificationAccess>() }
     single<FileSharer> { AndroidFileSharer(context) }
+    single { AndroidDeviceAuth(context) }
+    single<DeviceAuth> { get<AndroidDeviceAuth>() }
 }

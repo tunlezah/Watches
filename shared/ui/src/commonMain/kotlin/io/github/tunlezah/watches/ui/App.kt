@@ -5,6 +5,17 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import io.github.tunlezah.watches.data.backup.BackupRepository
+import io.github.tunlezah.watches.ui.backup.BackupCoordinator
+import io.github.tunlezah.watches.ui.backup.BackupViewModel
+import io.github.tunlezah.watches.ui.security.AppLock
+import io.github.tunlezah.watches.ui.security.LockScreen
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -79,6 +90,9 @@ val uiModule = module {
     viewModel { params -> BoxPapersViewModel(params.get(), get(), get(), get(), get(), get()) }
     viewModel { params -> DocumentsViewModel(params.get(), get(), get(), get(), get(), get()) }
     viewModel { params -> DocumentViewerViewModel(params.get(), get(), get()) }
+    single { BackupCoordinator(get(), get(), get(), get()) }
+    viewModel { BackupViewModel(get(), get(), get()) }
+    single { AppLock(get(), get(), get()) }
 }
 
 /** Root of the shared UI. Koin must already be started by the platform shell. */
@@ -92,7 +106,12 @@ fun WatchesApp() {
     val watches = koinInject<WatchRepository>()
     val settings by settingsRepo.settings.collectAsStateWithLifecycle(initialValue = null)
     val reminders = koinInject<ReminderSync>()
-    LaunchedEffect(Unit) { watches.ensureSearchIndex() }
+    val backup = koinInject<BackupRepository>()
+    LaunchedEffect(Unit) {
+        // A restore stopped halfway (the app was killed) leaves files nothing uses; tidy them first.
+        runCatching { backup.recoverInterruptedRestore() }
+        watches.ensureSearchIndex()
+    }
     // Keeps scheduled service reminders in step with the collection while the app runs.
     LaunchedEffect(Unit) { reminders.start(this) }
 
@@ -102,5 +121,18 @@ fun WatchesApp() {
         Box(Modifier.fillMaxSize().background(if (isSystemInDarkTheme()) Color(0xFF0E0E0E) else Color(0xFFF4F4F4)))
         return
     }
-    WatchTheme(loaded) { AppShell() }
+    val lock = koinInject<AppLock>()
+    // Primed before the first frame, so a locked app never flashes the collection.
+    remember { lock.prime(loaded.device) }
+    val locked by lock.locked.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { scope.launch { lock.onForeground() } }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { scope.launch { lock.onBackground() } }
+    WatchTheme(loaded) {
+        Box(Modifier.fillMaxSize()) {
+            // While locked the app stays composed underneath (it keeps its place), hidden from screen readers.
+            Box(Modifier.fillMaxSize().then(if (locked) Modifier.clearAndSetSemantics { } else Modifier)) { AppShell() }
+            if (locked) LockScreen(onUnlock = { scope.launch { lock.unlock() } })
+        }
+    }
 }

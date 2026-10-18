@@ -19,6 +19,8 @@ import platform.Foundation.NSData
 import platform.Foundation.NSDateComponents
 import platform.Foundation.NSURL
 import platform.darwin.NSObject
+import platform.LocalAuthentication.LAContext
+import platform.LocalAuthentication.LAPolicyDeviceOwnerAuthentication
 import platform.PDFKit.PDFDocument
 import platform.PDFKit.kPDFDisplayBoxMediaBox
 import platform.UIKit.UIActivityViewController
@@ -159,6 +161,24 @@ class IosNotificationAccess : NotificationAccess {
     }
 }
 
+/** Face ID or Touch ID, falling back to the device passcode. */
+@OptIn(ExperimentalForeignApi::class)
+class IosDeviceAuth : DeviceAuth {
+    override fun availability(): DeviceAuth.Availability {
+        val context = LAContext()
+        return when {
+            context.canEvaluatePolicy(LAPolicyDeviceOwnerAuthentication, null) -> DeviceAuth.Availability.READY
+            else -> DeviceAuth.Availability.NOT_SET_UP
+        }
+    }
+
+    override suspend fun authenticate(title: String, subtitle: String): Boolean = suspendCoroutine { cont ->
+        LAContext().evaluatePolicy(LAPolicyDeviceOwnerAuthentication, localizedReason = subtitle) { success, _ ->
+            cont.resume(success)
+        }
+    }
+}
+
 class IosFileSharer : FileSharer {
     override fun share(path: String, mimeType: String, title: String) {
         val root = UIApplication.sharedApplication.keyWindow?.rootViewController ?: return
@@ -174,4 +194,5 @@ fun iosPlatformModule(): Module = module {
     single<ReminderScheduler> { IosReminders() }
     single<NotificationAccess> { IosNotificationAccess() }
     single<FileSharer> { IosFileSharer() }
+    single<DeviceAuth> { IosDeviceAuth() }
 }

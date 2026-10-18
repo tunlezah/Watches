@@ -9,7 +9,10 @@ import io.github.tunlezah.watches.core.query.SortSpec
 import io.github.tunlezah.watches.core.settings.Accent
 import io.github.tunlezah.watches.core.settings.AppSettings
 import io.github.tunlezah.watches.core.settings.CollectionLayout
+import io.github.tunlezah.watches.core.settings.DeviceSettings
 import io.github.tunlezah.watches.core.settings.Direction
+import io.github.tunlezah.watches.core.settings.LastBackup
+import io.github.tunlezah.watches.core.settings.LockAfter
 import io.github.tunlezah.watches.core.settings.ThemeMode
 import io.github.tunlezah.watches.data.db.SettingDao
 import io.github.tunlezah.watches.data.db.SettingEntity
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlin.time.Instant
 
 /** Settings live in the database so they travel with backups. */
 class SettingsRepository(private val dao: SettingDao) {
@@ -45,6 +49,9 @@ class SettingsRepository(private val dao: SettingDao) {
         WR_UNIT to s.display.waterResistanceUnit.key,
         CURRENCY to s.display.defaultCurrency,
         DISABLED_SOURCES to s.disabledSources.sorted().joinToString(","),
+        APP_LOCK to s.device.appLock.toString(),
+        LOCK_AFTER to s.device.lockAfter.key,
+        LAST_BACKUP to s.device.lastBackup?.let { "${it.at.toEpochMilliseconds()},${it.bytes},${it.watches}" }.orEmpty(),
     )
 
     private fun decode(m: Map<String, String>): AppSettings {
@@ -62,6 +69,14 @@ class SettingsRepository(private val dao: SettingDao) {
                 defaultCurrency = m[CURRENCY] ?: d.display.defaultCurrency,
             ),
             disabledSources = m[DISABLED_SOURCES].orEmpty().split(',').filter { it.isNotBlank() }.toSet(),
+            device = DeviceSettings(
+                appLock = m[APP_LOCK] == "true",
+                lockAfter = keyedOf<LockAfter>(m[LOCK_AFTER]) ?: LockAfter.ONE_MINUTE,
+                lastBackup = m[LAST_BACKUP]?.split(',')?.takeIf { it.size == 3 }?.let { (at, bytes, watches) ->
+                    val ms = at.toLongOrNull() ?: return@let null
+                    LastBackup(Instant.fromEpochMilliseconds(ms), bytes.toLongOrNull() ?: 0, watches.toIntOrNull() ?: 0)
+                },
+            ),
         )
     }
 
@@ -76,5 +91,10 @@ class SettingsRepository(private val dao: SettingDao) {
         const val WR_UNIT = "display.water_resistance_unit"
         const val CURRENCY = "display.currency"
         const val DISABLED_SOURCES = "lookup.disabled_sources"
+
+        // "device." keys stay on this phone: backups leave them out and restores keep them (BackupDao).
+        const val APP_LOCK = "device.app_lock"
+        const val LOCK_AFTER = "device.lock_after"
+        const val LAST_BACKUP = "device.last_backup"
     }
 }

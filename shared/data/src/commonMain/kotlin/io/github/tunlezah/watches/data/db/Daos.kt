@@ -266,7 +266,8 @@ interface BackupDao {
     @Query("SELECT * FROM box_papers_item ORDER BY watch_id, item") suspend fun boxPapers(): List<BoxPapersItemEntity>
     @Query("SELECT * FROM document ORDER BY watch_id, added_at") suspend fun documents(): List<DocumentEntity>
     @Query("SELECT * FROM source_snapshot ORDER BY watch_id, fetched_at") suspend fun snapshots(): List<SourceSnapshotEntity>
-    @Query("SELECT * FROM setting ORDER BY `key`") suspend fun settings(): List<SettingEntity>
+    /** Settings that travel with the collection; "device." keys belong to this phone and are left out. */
+    @Query("SELECT * FROM setting WHERE `key` NOT LIKE 'device.%' ORDER BY `key`") suspend fun settings(): List<SettingEntity>
 
     @Upsert suspend fun upsertWatches(rows: List<WatchEntity>)
     @Upsert suspend fun upsertComplications(rows: List<WatchComplicationEntity>)
@@ -281,7 +282,7 @@ interface BackupDao {
 
     /** Removes every watch; foreign keys cascade to everything that hangs off one. */
     @Query("DELETE FROM watch") suspend fun deleteAllWatches()
-    @Query("DELETE FROM setting") suspend fun deleteAllSettings()
+    @Query("DELETE FROM setting WHERE `key` NOT LIKE 'device.%'") suspend fun deleteAllSettings()
 
     // A watch's own lists, replaced as a whole when a merge takes the backup's version of it.
     @Query("DELETE FROM watch_complication WHERE watch_id = :watchId") suspend fun deleteComplications(watchId: String)

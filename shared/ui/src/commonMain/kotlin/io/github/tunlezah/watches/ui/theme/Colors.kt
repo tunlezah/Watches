@@ -27,6 +27,11 @@ data class WatchColors(
     /** Backdrop behind watch photos and illustrations. */
     val stageInner: Color,
     val stageOuter: Color,
+    /** Edges of controls (field underlines, outlined buttons, switches): about 3:1 on `bg`, unlike `line`, which is for dividers. */
+    val lineStrong: Color = line,
+    /** Needs attention but isn't an error: an old backup, a warranty ending. 4.5:1 on `bg`. */
+    val warning: Color = danger,
+    val success: Color = accent,
 )
 
 object Palettes {
@@ -43,6 +48,20 @@ object Palettes {
     }
 
     fun colors(direction: Direction, accent: Accent, dark: Boolean): WatchColors {
+        val base = baseColors(direction, accent, dark)
+        val strong = when (direction) {
+            Direction.ATELIER -> if (dark) Color(0xFF6A6357) else Color(0xFF8F8472)
+            Direction.INSTRUMENT -> if (dark) Color(0xFF5B6168) else Color(0xFF7F878F)
+            Direction.GALLERY -> if (dark) Color(0xFF58646F) else Color(0xFF838E9C)
+        }
+        return base.copy(
+            lineStrong = strong,
+            warning = if (dark) Color(0xFFE8B04B) else Color(0xFF8A5A00),
+            success = if (dark) Color(0xFF6CC48A) else Color(0xFF1E6B3E),
+        )
+    }
+
+    private fun baseColors(direction: Direction, accent: Accent, dark: Boolean): WatchColors {
         val a = accent(accent, dark)
         return when (direction) {
             Direction.ATELIER -> if (dark) {

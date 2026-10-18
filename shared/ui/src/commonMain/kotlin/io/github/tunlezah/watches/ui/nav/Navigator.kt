@@ -29,6 +29,10 @@ sealed interface Route {
     data class DocumentViewer(val documentId: String) : Route
     data object Service : Route
     data object Settings : Route
+    /** A page under Settings, by [io.github.tunlezah.watches.ui.settings.SettingsPage] key. */
+    data class SettingsPage(val page: String) : Route
+    /** Reviewing a backup, restoring it, and the report. */
+    data object RestoreBackup : Route
     data object Diagnostics : Route
     data object Licences : Route
 
@@ -56,6 +60,8 @@ sealed interface Route {
             is DocumentViewer -> "document|${r.documentId}"
             Service -> "service"
             Settings -> "settings"
+            is SettingsPage -> "settings-page|${r.page}"
+            RestoreBackup -> "restore"
             Diagnostics -> "diagnostics"
             Licences -> "licences"
         }
@@ -82,6 +88,9 @@ sealed interface Route {
                 "document" -> DocumentViewer(p[1])
                 "service" -> Service
                 "settings" -> Settings
+                "settings-page" -> SettingsPage(p[1])
+                // A restore can't resume after the app was killed; land on Backup & restore instead.
+                "restore" -> SettingsPage("backup")
                 "diagnostics" -> Diagnostics
                 "licences" -> Licences
                 else -> null
