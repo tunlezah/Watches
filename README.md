@@ -5,6 +5,7 @@ A private, offline-first watch collection app for one collector. Kotlin Multipla
 - Everything lives on the phone. No accounts, servers, analytics, ads or crash reporting.
 - The network is used by Lookup only, and only when you press Search, open a result or save a picture. Every request is listed in Settings › Request log.
 - Service history, reminders, box & papers, warranties, and documents such as manuals, quick start guides, receipts and invoices.
+- Backup to one .zip you save wherever you like, restore by merging or replacing, CSV export for spreadsheets, and an optional app lock.
 - Designed for 500+ watches with photos.
 
 Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md). Data sources: [`docs/SOURCES.md`](docs/SOURCES.md). Changes: [`CHANGELOG.md`](CHANGELOG.md).
@@ -33,6 +34,7 @@ WATCHES_LIVE_TESTS=1 ./gradlew :shared:search:jvmTest --tests '*LiveSourcesTest*
 ./gradlew :androidApp:recordRoborazziDebug   # screenshots of every design direction -> androidApp/build/outputs/roborazzi
 ./gradlew checkNetworkIsolation              # fails if core, data or ui can compile against a network library
 ./gradlew :shared:ui:compileKotlinIosSimulatorArm64   # checks shared code compiles for iOS (works on Linux)
+./gradlew :shared:data:iosSimulatorArm64Test        # shared tests on an iOS simulator (macOS only; CI runs it)
 ```
 
 ### Release APK and signing
@@ -62,7 +64,13 @@ For CI, add these repository secrets: `WATCHES_KEYSTORE_BASE64` (the keystore, b
 
 The app needs Android 11 or newer.
 
-Permissions: internet and network state (Lookup only), and notifications (service reminders, asked for only when you switch one on). WorkManager adds wake lock and "run at start-up" so reminders survive a restart. None of these is a location, contacts, storage or camera permission. Photos are taken with the phone's camera app.
+Permissions:
+- internet and network state, for Lookup only;
+- notifications, for service reminders, asked for only when you switch one on;
+- the biometric prompt, for the optional app lock (Android shows no permission prompt for this one);
+- wake lock and "run at start-up", which WorkManager adds so reminders survive a restart.
+
+None of these is a location, contacts, storage or camera permission. Photos are taken with the phone's camera app, and backups are saved through the system file picker.
 
 ## iOS
 
@@ -107,6 +115,23 @@ Settings › Diagnostics shows cold-start, search and detail-open timings measur
 4. Save trimmed fixtures under `shared/search/src/jvmTest/resources/fixtures/<source>/` (see the README there) and add a parser test.
 5. Add the source to `searchModule`. Its switch appears in Settings automatically.
 
-## Backup archive format
+## Backup, restore and export
 
-Specified in `docs/ARCHIVE_FORMAT.md` (milestone 4). Outline: a versioned `.zip` with `manifest.json`, `collection.json`, and original photos and documents. See the plan, §10.
+Settings › Backup & restore.
+- **Back up now** writes one ZIP through the system save dialog. The manifest comes first, then `collection.json` (every table, keys = column names), then every photo, document and saved source page. The full format is in [`docs/ARCHIVE_FORMAT.md`](docs/ARCHIVE_FORMAT.md). The code is in `shared/data/.../backup`: a streaming ZIP64 writer and reader written for this app, with no extra library.
+- **Restoring** checks every file's SHA-256 before the database changes, and commits in one transaction.
+  - Incoming files are written beside existing ones. Unused files are removed only after the commit.
+  - A journal undoes an interrupted restore at the next launch.
+  - **Replace** swaps the collection and settings. **Merge** matches on IDs, never deletes, lets the more recently edited side win each watch, and reports every watch that differed.
+- **CSV export** gives one row per watch with every registry field. It's UTF-8 with a BOM, quoted per RFC 4180, with formula-like text neutralised.
+- **Device-only settings** (`device.*`: the app lock and the last-backup date) never travel in a backup.
+- **Long jobs** run in an app-wide coordinator (`ui/backup/BackupCoordinator.kt`), so leaving the screen doesn't stop them.
+
+## App lock
+
+Settings › Privacy & security. It's optional and uses the phone's own unlock: Android's `BiometricPrompt` (strong biometrics or the device PIN), or LocalAuthentication on iOS.
+- The app locks at launch, and again after a chosen delay in the background. Time spent in the unlock prompt doesn't count.
+- Turning it on requires one successful unlock.
+- On Android 13+ the app switcher shows a blank card while the lock is on.
+
+The rules are in `ui/security/AppLock.kt`, and `AppLockTest` covers them.

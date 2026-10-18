@@ -1,6 +1,6 @@
 # Watch Collection App: questions and plan (milestone 0)
 
-Status: **milestone 3 built** (17 Oct 2026). Researched 12 October 2026. Versions were checked against Maven Central, Google Maven and services.gradle.org on that date.
+Status: **milestone 4 built** (18 Oct 2026). Every v1 feature is in; what's left is checking the performance targets on the phone and the iOS polish listed as not in v1. Researched 12 October 2026. Versions were checked against Maven Central, Google Maven and services.gradle.org on that date.
 
 ## Decisions so far
 
@@ -12,7 +12,7 @@ On 14 Oct you reported that Ranfft DB granted permission for lookups and asked m
 | Q2 Repo visibility | Going private (18 Oct): no secrets were ever committed, but fixtures copy third-party pages and CI uploads signed APKs. iOS CI now runs only for iOS changes, tags or on demand, and artifacts are kept 14 days, to fit a private repo's free minutes and storage. Until then it was public. Wikimedia fixtures (CC0 / CC BY-SA) are committed as fetched. Grail and Ranfft fixtures are committed only in reduced form: markup and facts, no descriptions or pictures. |
 | Q3 Signing key | (a): I generated the key. It's kept outside the repo and sent to you privately. |
 | Q4 Direction | All three ship, switchable in Settings, so you can choose on the phone. The other two are removed afterwards. |
-| Q5 My Watch Memoir | Deferred to M4. |
+| Q5 My Watch Memoir | Still open: an importer needs a sample export (a couple of rows, anonymised). Until then, add watches by hand or restore from a Watches backup. |
 | Q7 Ranfft | **Permission reported by you.** The adapter is in M2; see `docs/SOURCES.md`. |
 | Q6 WatchBase | Connection test in Settings; no parser until you send saved pages. |
 | Q8 User-Agent | `WatchCollection/1.0 (+https://github.com/tunlezah)`. It linked to the repo until M4. It now links to the owner's GitHub profile, which stays reachable when the repo is private. |

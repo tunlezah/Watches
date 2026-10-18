@@ -1,5 +1,85 @@
 # Changelog
 
+## 0.4.0-m4: Milestone 4, backup and polish (18 Oct 2026)
+
+**Backup & restore** (Settings › Backup & restore)
+- **Back up now** saves one .zip file wherever you choose: on the phone, a USB drive or a cloud folder. It holds every watch, photo (with its crop), document, service record and saved source page, plus your settings.
+- The screen shows when you last backed up and what a backup would hold. Settings warns when there's no backup, or the last one is over a month old.
+- **Restore from a backup** first shows what the backup holds and when it was made, then offers:
+  - **Merge** (recommended). Adds what's new, and lists every watch that differs and which version wins, before you commit. Nothing on the phone is deleted. For each watch, the more recently edited side wins, and service histories are combined.
+  - **Replace**. Swaps this phone's collection and settings for the backup's, after a confirmation.
+- A report afterwards lists what was added, updated and kept.
+- Safe by design:
+  - Every file is checked against its SHA-256 before the collection is touched, and the changes are saved in one step.
+  - A damaged backup changes nothing.
+  - A restore stopped halfway is undone at the next launch.
+  - Restoring onto the same phone reuses the files already there.
+- Long backups keep running if you leave the screen, show progress, can be cancelled, and keep the screen awake.
+- A backup re-zipped on a computer, for example with macOS Archive Utility, still restores.
+- The format is documented in `docs/ARCHIVE_FORMAT.md`. It's an ordinary ZIP with a JSON manifest, whose keys are the database's column names.
+
+**Export as spreadsheet**
+- A CSV file with one row per watch:
+  - every spec, with units in the column names;
+  - status, complications, last and next service, warranty end, box & papers, and counts of photos and documents.
+- It opens correctly in Excel, Numbers and Google Sheets (UTF-8 with a byte-order mark, RFC 4180 quoting). Text that a spreadsheet would run as a formula is neutralised.
+
+**App lock** (Settings › Privacy & security)
+- Optional. Unlocks with your fingerprint, face or phone PIN. It locks again after a delay you choose (immediately, or after 1, 5 or 15 minutes), so a trip to the camera or file picker doesn't ask again.
+- Turning it on needs one successful unlock, so nobody locks themselves out.
+- On Android 13+ the app switcher shows a blank card while the lock is on.
+- App lock and the last-backup date belong to the phone. They're never written to a backup or replaced by a restore.
+
+**Settings, reorganised**
+- Settings is now a single list of grouped rows, each showing its current value: Backup & restore, Appearance, Units & formats, Lookup sources, Service reminders, App lock, About.
+- Each row opens its own page. The "coming later" notes are gone.
+
+**Polish**
+- **First run.** A welcome screen with Add a watch, Look up a reference and Restore from a backup. Search, tabs and filters appear with the first watch.
+- **Collection:**
+  - Tiles have a legible status pill, the reference and the size/movement on fixed lines, and respond to a press.
+  - Placeholder tiles show while loading.
+  - "Add watch" is the same in every design and shrinks to its icon as you scroll.
+  - The search field has an icon, and the tabs fade at the edges where there's more.
+  - "No matches" offers Clear search or Clear filters.
+- **Watch detail:**
+  - Edit is in the header, with one "Look up specs" action.
+  - Photos open from a camera button on the picture, or "Add photo" when there are none.
+  - The header turns solid with the watch's name as you scroll.
+- **Undo.** Archive and delete show an Undo snackbar. A deleted watch is only removed for good once Undo expires.
+- **Controls:**
+  - Fields, outlined buttons, chips and switches have clearer edges (about 3:1 contrast).
+  - Box & papers and the sort order use segmented controls.
+  - Main actions sit in a pinned bar at the bottom instead of floating over lists.
+  - New icons for Settings, filters, box & papers and documents.
+- **Type.** A header style for each design, lining figures in Atelier titles, tabular figures in Instrument specs, and nothing smaller than 11 sp.
+- **Accessibility:**
+  - Switches and checkboxes are single controls for TalkBack.
+  - Chips report what they are (tab, choice, filter or button), and touch targets are at least 48 dp.
+  - Spec rows only offer an action when there is one, and headings are marked.
+  - At large text sizes, figures go two to a row and spec labels sit above their values. A test checks the detail screen at 200% text size.
+- **Forms.** Keyboard capitalisation suits each field, with no autocorrect on references, serials or calibres. A Save with mistakes scrolls to the first one.
+- **Feel.** Subtle haptics on tab changes, switches and finished backups. List changes animate. Reduced motion is respected and re-checked when you return to the app.
+
+**Repository and privacy**
+- No secrets were ever committed. Signing material is ignored by Git, and CI only decodes the key into a temporary folder.
+- Ready to go private:
+  - iOS CI runs for iOS changes, version tags and on demand.
+  - CI artifacts are kept for 14 days.
+  - The Lookup User-Agent links to the owner's GitHub profile instead of the repo.
+- New Android permission: biometric prompt. It's used only for the optional app lock, and Android shows no permission prompt for it.
+
+**Tests**
+- 150+ automated tests:
+  - a byte-exact export, wipe and restore;
+  - merge rules;
+  - damaged, foreign and re-zipped archives;
+  - interrupted restores and ZIP64;
+  - JSON keys checked against the database schema;
+  - a strict CSV parse;
+  - app-lock timing.
+- The ZIP tests also run on the iOS simulator in CI, so the iOS decompression is checked on iOS itself.
+
 ## 0.3.0-m3: Milestone 3, service, box & papers and documents (17 Oct 2026)
 
 **Service**

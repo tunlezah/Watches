@@ -18,8 +18,8 @@ targets:
       path: iosApp/Info.plist
       properties:
         CFBundleDisplayName: Watches
-        CFBundleShortVersionString: "0.3.0"
-        CFBundleVersion: "3"
+        CFBundleShortVersionString: "0.4.0"
+        CFBundleVersion: "4"
         UILaunchScreen: {}
         # Lets Compose run at 120 Hz on ProMotion displays.
         CADisableMinimumFrameDurationOnPhone: true
