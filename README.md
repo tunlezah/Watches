@@ -66,7 +66,7 @@ Permissions: internet and network state (Lookup only), and notifications (servic
 
 ## iOS
 
-iOS needs a Mac with Xcode. The `iOS` GitHub Actions workflow builds the app for the simulator on every push, launches it and saves a screenshot. Locally:
+iOS needs a Mac with Xcode. The `iOS` GitHub Actions workflow builds the app for the simulator, launches it and saves a screenshot. It runs when iOS-specific code or the build changes, on `v*` tags, and on demand (Actions › iOS › Run workflow), because macOS minutes are costly on a private repo. The Android workflow still compiles the shared Kotlin for iOS on every push. Locally:
 
 ```sh
 brew install xcodegen
@@ -83,7 +83,7 @@ Settings › Diagnostics shows cold-start, search and detail-open timings measur
 
 - **Sources:** Wikidata and Wikipedia (identity and history), Ranfft DB (calibres, with the owner's permission) and Grail Watch Reference (movements). WatchBase has a connection test only until its pages can be checked. Details and terms are in [`docs/SOURCES.md`](docs/SOURCES.md).
 - **Politeness:** every request goes through `PoliteHttpClient` in `shared/search`.
-  - Honest User-Agent (`WatchCollection/1.0 (+https://github.com/tunlezah/Watches)`), and no cookies.
+  - Honest User-Agent (`WatchCollection/1.0 (+https://github.com/tunlezah)`), and no cookies. The contact link is the owner's GitHub profile, which stays public even though the repository may not.
   - At least 1 second between requests to the same host, and a 10 s timeout.
   - `robots.txt` is checked first and cached for a day. Wikimedia's API endpoints follow its API policy instead, and are marked "(API)" in the log.
   - `Retry-After` is honoured. A bot-protection page is reported, never bypassed.

@@ -1,8 +1,30 @@
 name: iOS
 
+# macOS minutes count ten times against a private repo's free allowance, so this runs when
+# iOS-specific code or the build changes, on version tags, and on demand. Shared Kotlin is still
+# compiled for iOS on every push by the Android workflow (compileKotlinIosSimulatorArm64).
 on:
   push:
+    branches: ["**"]
+    # Tags skip the path filter, so a version tag always gets an iOS build.
+    tags: ["v*"]
+    paths:
+      - "iosApp/**"
+      - "shared/*/src/iosMain/**"
+      - "shared/*/build.gradle.kts"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle/**"
+      - ".github/workflows/ios.yml"
   pull_request:
+    paths:
+      - "iosApp/**"
+      - "shared/*/src/iosMain/**"
+      - "shared/*/build.gradle.kts"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle/**"
+      - ".github/workflows/ios.yml"
   workflow_dispatch:
 
 concurrency:
@@ -79,3 +101,4 @@ jobs:
         with:
           name: ios-launch-screenshot
           path: ios-launch.png
+          retention-days: 14

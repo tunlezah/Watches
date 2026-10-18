@@ -54,6 +54,7 @@ jobs:
         with:
           name: watches-release-apk
           path: androidApp/build/outputs/apk/release/*.apk
+          retention-days: 14
 
       - name: Upload screenshots
         if: always()
@@ -61,6 +62,7 @@ jobs:
         with:
           name: screenshots
           path: androidApp/build/outputs/roborazzi/*.png
+          retention-days: 14
 
       - name: Upload test reports
         if: failure()
@@ -68,3 +70,4 @@ jobs:
         with:
           name: test-reports
           path: "**/build/reports/tests/"
+          retention-days: 14

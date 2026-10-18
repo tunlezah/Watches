@@ -256,7 +256,8 @@ class PoliteHttpClient(
 
     companion object {
         const val PRODUCT_TOKEN = "WatchCollection"
-        const val USER_AGENT = "$PRODUCT_TOKEN/1.0 (+https://github.com/tunlezah/Watches)"
+        // The owner's public GitHub profile is the contact link: it stays reachable when the repo is private.
+        const val USER_AGENT = "$PRODUCT_TOKEN/1.0 (+https://github.com/tunlezah)"
         const val TIMEOUT_MS = 10_000L
         const val MAX_BYTES = 4 * 1024 * 1024
         private const val MAX_REDIRECTS = 3
