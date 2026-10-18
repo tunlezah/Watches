@@ -70,7 +70,7 @@ fun SpecGroupView(
     }
     if (style.groupCards) {
         Column(
-            modifier.fillMaxWidth().clip(style.cardShape).background(c.surface).padding(horizontal = 16.dp, vertical = 6.dp),
+            modifier.fillMaxWidth().surface(style.cardShape).padding(horizontal = 16.dp, vertical = 6.dp),
         ) {
             Text(title, style = t.type.groupTitle, color = c.fg, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp).semantics { heading() })
             rows()
@@ -90,6 +90,10 @@ fun SpecGroupView(
         }
     } else {
         Column(modifier.fillMaxWidth()) {
+            if (style.accentDash) {
+                AccentDash()
+                Spacer(Modifier.height(10.dp))
+            }
             Text(title, style = t.type.groupTitle, color = c.fg, modifier = Modifier.padding(bottom = 8.dp).semantics { heading() })
             rows()
         }

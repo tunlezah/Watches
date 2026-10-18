@@ -65,7 +65,6 @@ import androidx.compose.ui.unit.dp
 import io.github.tunlezah.watches.core.model.WatchStatus
 import io.github.tunlezah.watches.core.query.StatusTab
 import io.github.tunlezah.watches.core.settings.CollectionLayout
-import io.github.tunlezah.watches.core.settings.Direction
 import io.github.tunlezah.watches.ui.components.ButtonKind
 import io.github.tunlezah.watches.ui.components.EmptyState
 import io.github.tunlezah.watches.ui.components.IconAction
@@ -74,6 +73,10 @@ import io.github.tunlezah.watches.ui.components.WatchButton
 import io.github.tunlezah.watches.ui.components.WatchPhoto
 import io.github.tunlezah.watches.ui.components.WatchTextField
 import io.github.tunlezah.watches.ui.components.sharedWatchPhoto
+import io.github.tunlezah.watches.ui.components.Masthead
+import io.github.tunlezah.watches.ui.components.StatusMarker
+import io.github.tunlezah.watches.ui.components.surface
+import io.github.tunlezah.watches.ui.theme.TileNumbers
 import io.github.tunlezah.watches.ui.theme.WatchIcons
 import io.github.tunlezah.watches.ui.theme.WatchTheme
 
@@ -101,8 +104,8 @@ fun CollectionScreen(
             state = gridState,
             columns = if (grid) GridCells.Adaptive(156.dp) else GridCells.Fixed(1),
             contentPadding = PaddingValues(start = style.screenPadding, end = style.screenPadding, bottom = 132.dp),
-            horizontalArrangement = Arrangement.spacedBy(if (style.direction == Direction.ATELIER) 14.dp else 12.dp),
-            verticalArrangement = Arrangement.spacedBy(if (grid && style.direction == Direction.ATELIER) 24.dp else if (grid) 12.dp else 0.dp),
+            horizontalArrangement = Arrangement.spacedBy(style.gridGutter),
+            verticalArrangement = Arrangement.spacedBy(if (grid) style.gridRowGap else 0.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
             header(state, onQuery, onTab, onOpenFilters, onClearFilters, onToggleLayout)
@@ -177,7 +180,7 @@ private fun FirstRun(onAdd: () -> Unit, onLookUp: () -> Unit, onRestore: () -> U
 private fun TileSkeleton() {
     val style = WatchTheme.style
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(if (style.direction == Direction.INSTRUMENT) 1f else 0.86f).skeleton(style.photoShape))
+        Box(Modifier.fillMaxWidth().aspectRatio(style.tileAspect).skeleton(style.photoShape))
         Box(Modifier.fillMaxWidth(0.4f).height(10.dp).skeleton(RoundedCornerShape(2.dp)))
         Box(Modifier.fillMaxWidth(0.75f).height(16.dp).skeleton(RoundedCornerShape(2.dp)))
     }
@@ -215,20 +218,12 @@ private fun LazyGridScope.header(
         // A first-run collection shows just the title; search, tabs and filters arrive with the first watch.
         val tools = state.loaded && !state.isEmptyCollection
         Column {
-            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-            Spacer(Modifier.height(20.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(t.title("Collection"), style = t.type.screenTitle, color = c.fg, modifier = Modifier.weight(1f).semantics { heading() })
-                if (tools) HeaderTools(state, onOpenFilters, onToggleLayout)
-            }
+            Masthead(
+                "Collection",
+                subtitle = if (tools) countLine(state.totalActive, state.ownedCount, style.numberedGroups) else null,
+                tools = { if (tools) HeaderTools(state, onOpenFilters, onToggleLayout) },
+            )
             if (tools) {
-                Spacer(Modifier.height(4.dp))
-                val count = if (style.direction == Direction.INSTRUMENT) {
-                    "${state.totalActive.toString().padStart(3, '0')} WATCHES / ${state.ownedCount.toString().padStart(3, '0')} OWNED"
-                } else {
-                    "${state.totalActive} ${if (state.totalActive == 1) "watch" else "watches"} · ${state.ownedCount} owned"
-                }
-                Text(count, style = if (style.direction == Direction.INSTRUMENT) t.type.label else t.type.bodySmall, color = c.fg3)
                 Spacer(Modifier.height(16.dp))
                 WatchTextField(
                     label = "Search",
@@ -243,7 +238,7 @@ private fun LazyGridScope.header(
                 val tabScroll = rememberScrollState()
                 Row(
                     Modifier.fillMaxWidth().fadedEdges(c.bg, tabScroll).horizontalScroll(tabScroll),
-                    horizontalArrangement = Arrangement.spacedBy(if (style.direction == Direction.ATELIER) 18.dp else 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(style.tabGap),
                 ) {
                     for (tab in StatusTab.entries) {
                         SelectChip(tab.label, state.filter.tab == tab, { onTab(tab) })
@@ -266,22 +261,27 @@ private fun LazyGridScope.header(
 private fun HeaderTools(state: CollectionUiState, onOpenFilters: () -> Unit, onToggleLayout: () -> Unit) {
     val c = WatchTheme.colors
     val style = WatchTheme.style
+    val framed = style.framedIcons
     Row(verticalAlignment = Alignment.CenterVertically) {
-                val framed = style.direction == Direction.INSTRUMENT
-                IconAction(
-                    if (state.layout == CollectionLayout.GRID) WatchIcons.List else WatchIcons.Grid,
-                    if (state.layout == CollectionLayout.GRID) "Show as list" else "Show as grid",
-                    onToggleLayout, framed = framed,
-                )
-                if (framed) Spacer(Modifier.width(6.dp))
-                Box {
-                    IconAction(WatchIcons.Filter, "Sort and filter", onOpenFilters, framed = style.direction == Direction.INSTRUMENT)
-                    if (state.filter.activeCount > 0) {
-                        Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(8.dp).clip(RoundedCornerShape(4.dp)).background(c.accent))
-                    }
-                }
+        IconAction(
+            if (state.layout == CollectionLayout.GRID) WatchIcons.List else WatchIcons.Grid,
+            if (state.layout == CollectionLayout.GRID) "Show as list" else "Show as grid",
+            onToggleLayout, framed = framed,
+        )
+        if (framed) Spacer(Modifier.width(6.dp))
+        Box {
+            IconAction(WatchIcons.Filter, "Sort and filter", onOpenFilters, framed = framed)
+            if (state.filter.activeCount > 0) {
+                Box(Modifier.align(Alignment.TopEnd).padding(10.dp)) { StatusMarker(size = 8.dp) }
+            }
+        }
     }
 }
+
+/** "8 watches · 7 owned", or Instrument's zero-padded "008 WATCHES / 007 OWNED". */
+private fun countLine(total: Int, owned: Int, numbered: Boolean): String =
+    if (numbered) "${total.toString().padStart(3, '0')} WATCHES / ${owned.toString().padStart(3, '0')} OWNED"
+    else "$total ${if (total == 1) "watch" else "watches"} · $owned owned"
 
 /** Fades a horizontally scrolling row into the background on whichever side has more to scroll to. */
 private fun Modifier.fadedEdges(background: Color, scroll: ScrollState): Modifier = drawWithContent {
@@ -316,8 +316,7 @@ fun WatchTile(item: CollectionItem, number: Int, onClick: () -> Unit, modifier: 
     val container = modifier
         .fillMaxWidth()
         .pressScale(interaction)
-        .clip(style.tileShape)
-        .then(if (style.tileCard) Modifier.background(c.surface) else Modifier)
+        .then(if (style.tileCard) Modifier.surface(style.tileShape) else Modifier.clip(style.tileShape))
         .then(if (style.tileFrame) Modifier.border(1.dp, c.line, style.tileShape) else Modifier)
         .clickable(interactionSource = interaction, indication = LocalIndication.current, role = Role.Button, onClickLabel = "Open", onClick = onClick)
         .semantics(mergeDescendants = true) { contentDescription = description }
@@ -329,37 +328,38 @@ fun WatchTile(item: CollectionItem, number: Int, onClick: () -> Unit, modifier: 
                 path = item.thumb,
                 look = item.look,
                 contentDescription = "",
-                modifier = Modifier.fillMaxWidth().aspectRatio(if (style.direction == Direction.INSTRUMENT) 1f else 0.86f)
-                    .clip(style.photoShape).sharedWatchPhoto(item.id),
+                modifier = Modifier.fillMaxWidth().aspectRatio(style.tileAspect).clip(style.photoShape).sharedWatchPhoto(item.id),
             )
-            if (style.direction == Direction.INSTRUMENT) {
-                Text(number.toString().padStart(2, '0'), style = t.type.label, color = c.fg3, modifier = Modifier.padding(8.dp))
+            if (style.tileNumbers == TileNumbers.INDEX) {
+                Text(number.toString().padStart(2, '0'), style = t.type.tileNumber, color = c.fg3, modifier = Modifier.padding(8.dp))
             }
             if (status != null) {
-                StatusPill(status, Modifier.align(if (style.direction == Direction.INSTRUMENT) Alignment.TopEnd else Alignment.TopStart).padding(8.dp))
+                StatusPill(status, Modifier.align(if (style.tileNumbers == TileNumbers.INDEX) Alignment.TopEnd else Alignment.TopStart).padding(8.dp))
             }
         }
-        val textPad = when (style.direction) {
-            Direction.ATELIER -> Modifier.padding(top = 10.dp)
-            Direction.INSTRUMENT -> Modifier.padding(horizontal = 10.dp, vertical = 9.dp)
-            Direction.GALLERY -> Modifier.padding(start = 6.dp, end = 6.dp, top = 10.dp, bottom = 2.dp)
+        if (style.tileFrame) Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
+        val textPad = when {
+            style.tileFrame -> Modifier.padding(horizontal = 10.dp, vertical = 9.dp)
+            style.tileCard -> Modifier.padding(start = 6.dp, end = 6.dp, top = 10.dp, bottom = 2.dp)
+            else -> Modifier.padding(top = 12.dp)
         }
-        if (style.direction == Direction.INSTRUMENT) Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
         Column(textPad, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            when (style.direction) {
-                Direction.GALLERY -> {
-                    Text(item.title, style = t.type.tileTitle, color = c.fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(listOfNotNull(item.brand, item.reference).joinToString(" · "), style = t.type.tileBrand, color = c.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (item.meta.isNotEmpty()) Text(item.meta, style = t.type.tileMeta, color = c.fg3, maxLines = 1)
+            if (!style.uppercaseLabels) {
+                // A wall-card caption: the name, then maker and reference, then size and movement.
+                Text(item.title, style = t.type.tileTitle, color = c.fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(listOfNotNull(item.brand, item.reference).joinToString(" · "), style = t.type.tileBrand, color = c.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (item.meta.isNotEmpty()) Text(item.meta, style = t.type.tileMeta, color = c.fg3, maxLines = 1)
+            } else {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(item.brand?.uppercase().orEmpty(), style = t.type.tileBrand, color = c.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    // Atelier's catalogue number, opposite the maker.
+                    if (style.tileNumbers == TileNumbers.CATALOGUE) Text("No. $number", style = t.type.tileNumber, color = c.fg3, maxLines = 1)
                 }
-                else -> {
-                    item.brand?.let { Text(it.uppercase(), style = t.type.tileBrand, color = c.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                    Text(item.title, style = t.type.tileTitle, color = c.fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    // Reference on one line, size and movement on the next: every tile reads the same way.
-                    item.reference?.let { Text(it, style = t.type.tileMeta, color = c.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                    if (item.meta.isNotEmpty()) {
-                        Text(if (style.direction == Direction.INSTRUMENT) item.meta.uppercase() else item.meta, style = t.type.tileMeta, color = c.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+                Text(item.title, style = t.type.tileTitle, color = c.fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                // Reference on one line, size and movement on the next: every tile reads the same way.
+                item.reference?.let { Text(it, style = t.type.tileMeta, color = c.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                if (item.meta.isNotEmpty()) {
+                    Text(t.title(item.meta), style = t.type.tileMeta, color = c.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -386,7 +386,7 @@ fun WatchListRow(item: CollectionItem, onClick: () -> Unit) {
             look = item.look,
             contentDescription = "",
             illustrationPadding = 4.dp,
-            modifier = Modifier.size(60.dp).clip(if (style.direction == Direction.GALLERY) RoundedCornerShape(14.dp) else style.photoShape).sharedWatchPhoto(item.id),
+            modifier = Modifier.size(60.dp).clip(if (style.tileCard) RoundedCornerShape(14.dp) else style.photoShape).sharedWatchPhoto(item.id),
         )
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
@@ -407,25 +407,22 @@ fun WatchListRow(item: CollectionItem, onClick: () -> Unit) {
 private fun StatusPill(status: String, modifier: Modifier = Modifier) {
     val c = WatchTheme.colors
     val t = WatchTheme.values
-    val style = WatchTheme.style
-    val shape = if (style.direction == Direction.INSTRUMENT) RoundedCornerShape(2.dp) else RoundedCornerShape(50)
     Row(
-        modifier.clip(shape).background(c.surface.copy(alpha = 0.88f)).padding(horizontal = 8.dp, vertical = 4.dp),
+        modifier.clip(WatchTheme.style.statusShape).background(c.surface.copy(alpha = 0.88f)).padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(6.dp).clip(CircleShape).background(c.accent))
+        StatusMarker()
         Spacer(Modifier.width(6.dp))
         Text(t.label(status), style = t.type.label, color = c.fg, maxLines = 1)
     }
 }
 
-/** The add button, the same in every direction: "Add watch" with its icon, shrinking to the icon alone on scroll. */
+/** The add button: "Add watch" with its icon, shrinking to the icon alone on scroll, in the design's own shape and case. */
 @Composable
 private fun AddButton(onAdd: () -> Unit, expanded: Boolean, modifier: Modifier = Modifier) {
     val c = WatchTheme.colors
     val t = WatchTheme.values
-    val style = WatchTheme.style
-    val shape = if (style.direction == Direction.INSTRUMENT) RoundedCornerShape(2.dp) else RoundedCornerShape(28.dp)
+    val shape = WatchTheme.style.fabShape
     val interaction = remember { MutableInteractionSource() }
     Row(
         modifier
@@ -442,7 +439,7 @@ private fun AddButton(onAdd: () -> Unit, expanded: Boolean, modifier: Modifier =
         Icon(WatchIcons.Plus, null, tint = c.onAccent, modifier = Modifier.size(24.dp))
         if (expanded) {
             Spacer(Modifier.width(10.dp))
-            Text(if (style.direction == Direction.INSTRUMENT) "ADD WATCH" else "Add watch", style = t.type.button, color = c.onAccent, maxLines = 1)
+            Text(t.control("Add watch"), style = t.type.button, color = c.onAccent, maxLines = 1)
         }
     }
 }

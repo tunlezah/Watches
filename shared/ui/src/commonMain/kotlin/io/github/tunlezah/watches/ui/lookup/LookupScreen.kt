@@ -1,5 +1,6 @@
 package io.github.tunlezah.watches.ui.lookup
 
+import io.github.tunlezah.watches.ui.components.Masthead
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -85,12 +86,19 @@ fun LookupScreen(state: LookupUiState, images: ImageSource, watchChoices: List<W
     val pad = style.screenPadding
 
     Column(Modifier.fillMaxSize().background(c.bg)) {
-        Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 8.dp)) {
-            Row(Modifier.padding(horizontal = if (actions.onBack != null) 4.dp else pad), verticalAlignment = Alignment.CenterVertically) {
-                actions.onBack?.let { IconAction(WatchIcons.Back, "Back", it) }
-                Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                    Text(t.title(if (state.target == LookupTarget.None) "Lookup" else "Look up specs"), style = t.type.screenTitle, color = c.fg, modifier = Modifier.semantics { heading() })
-                    state.targetTitle?.let { Text("For $it", style = t.type.bodySmall, color = c.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        Column(Modifier.fillMaxWidth()) {
+            val title = if (state.target == LookupTarget.None) "Lookup" else "Look up specs"
+            val onBack = actions.onBack
+            if (onBack == null) {
+                // The Lookup tab: a masthead like the other tabs.
+                Box(Modifier.padding(horizontal = pad).padding(bottom = 4.dp)) { Masthead(title, subtitle = state.targetTitle?.let { "For $it" }) }
+            } else {
+                Row(Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(top = 8.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconAction(WatchIcons.Back, "Back", onBack)
+                    Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                        Text(t.title(title), style = t.type.screenTitle, color = c.fg, modifier = Modifier.semantics { heading() })
+                        state.targetTitle?.let { Text("For $it", style = t.type.bodySmall, color = c.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    }
                 }
             }
             SearchField(state.query, actions.onQuery, { actions.onSearch(null) }, Modifier.padding(horizontal = pad, vertical = 8.dp))
@@ -164,7 +172,7 @@ private fun SearchField(value: String, onChange: (String) -> Unit, onSearch: () 
     val c = WatchTheme.colors
     val t = WatchTheme.values
     val style = WatchTheme.style
-    val gallery = style.direction == io.github.tunlezah.watches.core.settings.Direction.GALLERY
+    val boxed = style.boxedFields
     BasicTextField(
         value = value,
         onValueChange = onChange,
@@ -178,8 +186,8 @@ private fun SearchField(value: String, onChange: (String) -> Unit, onSearch: () 
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 52.dp)
                     .then(
-                        if (gallery) Modifier.clip(RoundedCornerShape(16.dp)).background(c.surface).padding(start = 14.dp)
-                        else Modifier.underline(c.line),
+                        if (boxed) Modifier.clip(RoundedCornerShape(16.dp)).background(c.surface).padding(start = 14.dp)
+                        else Modifier.underline(c.lineStrong),
                     ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

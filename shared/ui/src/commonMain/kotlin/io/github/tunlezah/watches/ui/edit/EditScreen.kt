@@ -51,7 +51,6 @@ import io.github.tunlezah.watches.core.spec.SpecFields
 import io.github.tunlezah.watches.core.spec.SpecGroup
 import io.github.tunlezah.watches.core.spec.SpecKind
 import io.github.tunlezah.watches.core.spec.SpecValue
-import io.github.tunlezah.watches.core.settings.Direction
 import io.github.tunlezah.watches.ui.components.ButtonKind
 import io.github.tunlezah.watches.ui.components.ChipGroup
 import io.github.tunlezah.watches.ui.components.ConfirmDialog
@@ -298,14 +297,14 @@ private fun TextFieldEditor(field: SpecField, state: EditUiState, vm: EditViewMo
             val matches = state.brands.filter { it.startsWith(text.trim(), ignoreCase = true) && !it.equals(text.trim(), ignoreCase = true) }.take(6)
             if (matches.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    matches.forEach { b -> SelectChip(b, false, { vm.setText(field, b) }, underline = false, role = Role.Button) }
+                    matches.forEach { b -> SelectChip(b, false, { vm.setText(field, b) }, underline = false, role = Role.Button, verbatim = true) }
                 }
             }
         }
         val quick = suggestions[field.key]
         if (quick != null && text.isBlank()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                quick.forEach { s -> SelectChip(s, false, { vm.setText(field, s) }, underline = false, role = Role.Button) }
+                quick.forEach { s -> SelectChip(s, false, { vm.setText(field, s) }, underline = false, role = Role.Button, verbatim = true) }
             }
         }
     }
@@ -372,7 +371,6 @@ private fun DateField(field: SpecField, value: LocalDate?, state: EditUiState, o
 @Composable
 private fun ComplicationsEditor(selected: Set<String>, vm: EditViewModel) {
     var custom by remember { mutableStateOf("") }
-    val style = WatchTheme.style
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         FieldLabel(SpecFields.Complications.label)
         val options = Complication.entries.map { it.key to it.label } +
@@ -381,7 +379,7 @@ private fun ComplicationsEditor(selected: Set<String>, vm: EditViewModel) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             WatchTextField("Add another", custom, { custom = it }, Modifier.weight(1f), placeholder = "e.g. Regatta timer")
             WatchButton("Add", { vm.addCustomComplication(custom); custom = "" }, enabled = custom.isNotBlank(),
-                kind = if (style.direction == Direction.GALLERY) ButtonKind.Tonal else ButtonKind.Secondary)
+                kind = ButtonKind.Tonal)
         }
         Spacer(Modifier.width(1.dp))
     }

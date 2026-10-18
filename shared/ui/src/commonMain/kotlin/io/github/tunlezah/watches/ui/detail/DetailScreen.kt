@@ -70,7 +70,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
-import io.github.tunlezah.watches.core.settings.Direction
 import io.github.tunlezah.watches.core.spec.SpecRow
 import io.github.tunlezah.watches.ui.components.ButtonKind
 import io.github.tunlezah.watches.ui.components.ConfirmDialog
@@ -80,7 +79,9 @@ import io.github.tunlezah.watches.ui.components.SpecGroupView
 import io.github.tunlezah.watches.ui.components.WatchButton
 import io.github.tunlezah.watches.ui.components.WatchLook
 import io.github.tunlezah.watches.ui.components.WatchPhoto
+import io.github.tunlezah.watches.ui.components.registrationMarks
 import io.github.tunlezah.watches.ui.components.sharedWatchPhoto
+import io.github.tunlezah.watches.ui.components.surface
 import io.github.tunlezah.watches.ui.theme.WatchIcons
 import io.github.tunlezah.watches.ui.theme.WatchTheme
 import kotlinx.coroutines.launch
@@ -187,7 +188,7 @@ fun DetailScreen(state: DetailUiState, watchId: String, actions: DetailActions, 
         Column(Modifier.fillMaxWidth().background(c.bg.copy(alpha = barAlpha))) {
             Row(
                 Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(horizontal = if (style.direction == Direction.GALLERY) style.heroInset + 4.dp else 8.dp, vertical = 4.dp),
+                    .padding(horizontal = if (style.heroInset > 0.dp) style.heroInset + 4.dp else 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (showBack) OverlayButton(WatchIcons.Back, "Back", actions.onBack, solid = collapsed)
@@ -239,8 +240,8 @@ private fun OverlayButton(icon: androidx.compose.ui.graphics.vector.ImageVector,
     val style = WatchTheme.style
     IconAction(
         icon, label, onClick, tint = c.fg,
-        filled = if (!solid && style.direction != Direction.INSTRUMENT) c.surface.copy(alpha = 0.72f) else null,
-        framed = style.direction == Direction.INSTRUMENT && !solid,
+        filled = if (!solid && !style.framedIcons) c.surface.copy(alpha = 0.72f) else null,
+        framed = style.framedIcons && !solid,
     )
 }
 
@@ -253,7 +254,10 @@ private fun Hero(state: DetailUiState, watchId: String, onView: (Int) -> Unit, o
         val height = (maxWidth * 1.05f).coerceAtMost(520.dp)
         val pages = state.photos.size.coerceAtLeast(1)
         val pager = rememberPagerState { pages }
-        Box(Modifier.fillMaxWidth().height(height).clip(style.heroShape)) {
+        Box(
+            Modifier.fillMaxWidth().height(height).clip(style.heroShape)
+                .then(if (style.heroMarks) Modifier.registrationMarks(c.fg3) else Modifier),
+        ) {
             HorizontalPager(pager, Modifier.fillMaxSize(), key = { state.photos.getOrNull(it)?.id ?: "none" }) { page ->
                 val photo = state.photos.getOrNull(page)
                 val look = state.look ?: WatchLook.guess(null, null, emptySet())
@@ -294,17 +298,19 @@ private fun Hero(state: DetailUiState, watchId: String, onView: (Int) -> Unit, o
                     Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    when (style.direction) {
-                        Direction.INSTRUMENT -> Text(
+                    if (style.numberedGroups) {
+                        Text(
                             "${(pager.currentPage + 1).toString().padStart(2, '0')} / ${state.photos.size.toString().padStart(2, '0')}",
                             style = t.type.label, color = c.fg2,
                         )
-                        else -> repeat(state.photos.size) { i ->
+                    } else {
+                        // Atelier's hairline dashes, Gallery's soft pills.
+                        repeat(state.photos.size) { i ->
                             val active = i == pager.currentPage
                             val width by animateDpAsState(if (active) 18.dp else 6.dp, label = "dot")
                             Box(
                                 Modifier
-                                    .size(width = width, height = if (style.direction == Direction.GALLERY) 6.dp else 2.dp)
+                                    .size(width = width, height = if (style.accentDash) 2.dp else 6.dp)
                                     .clip(RoundedCornerShape(3.dp))
                                     .background(if (active) c.accent else c.fg3.copy(alpha = 0.6f)),
                             )
@@ -322,27 +328,23 @@ private fun TitleBlock(state: DetailUiState) {
     val t = WatchTheme.values
     val style = WatchTheme.style
     Column(Modifier.padding(horizontal = style.screenPadding).padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        state.brand?.let {
-            Text(
-                if (style.direction == Direction.GALLERY) it else it.uppercase(),
-                style = if (style.direction == Direction.GALLERY) t.type.button else t.type.label,
-                color = c.accent,
-            )
-        }
+        state.brand?.let { Text(t.label(it), style = if (style.uppercaseLabels) t.type.label else t.type.button, color = c.accent) }
         Text(t.title(state.title), style = t.type.heroTitle, color = c.fg, modifier = Modifier.semantics { heading() })
         state.subtitle?.let { Text(it, style = t.type.heroSubtitle, color = c.fg2) }
         val status = if (state.archived) "Archived" else state.statusLabel
-        if (style.direction == Direction.INSTRUMENT) {
+        if (style.numberedGroups) {
+            // Instrument: the reference in a frame, the status as a lit tag.
             Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 state.reference?.let { ref ->
                     Text("REF $ref", style = t.type.reference, color = c.fg2, modifier = Modifier.border(1.dp, c.line).padding(horizontal = 7.dp, vertical = 4.dp))
                 }
                 Text(status.uppercase(), style = t.type.reference, color = c.accent, modifier = Modifier.background(c.surface2).padding(horizontal = 7.dp, vertical = 5.dp))
             }
-        } else if (style.direction == Direction.ATELIER) {
-            Text(listOfNotNull(state.reference?.let { "Ref. $it" }, status).joinToString(" · "), style = t.type.reference, color = c.fg2, modifier = Modifier.padding(top = 2.dp))
-        } else {
+        } else if (style.groupCards) {
+            // Gallery shows the status as a card in the stats row.
             state.reference?.let { Text("Ref. $it", style = t.type.reference, color = c.fg2, modifier = Modifier.padding(top = 2.dp)) }
+        } else {
+            Text(listOfNotNull(state.reference?.let { "Ref. $it" }, status).joinToString(" · "), style = t.type.reference, color = c.fg2, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
@@ -353,12 +355,12 @@ private fun StatsStrip(state: DetailUiState) {
     val t = WatchTheme.values
     val style = WatchTheme.style
     // Gallery shows status as a card; the strip directions carry it in the title block and keep three figures.
-    val items = if (style.direction == Direction.GALLERY) state.stats else state.stats.filterNot { it.label == "Status" }.take(3)
+    val items = if (style.groupCards) state.stats else state.stats.filterNot { it.label == "Status" }.take(3)
     if (items.isEmpty()) return
     // With large text, figures go two to a row instead of squeezing four (or three) across.
     val perRow = if (LocalDensity.current.fontScale > 1.3f) 2 else items.size
-    when (style.direction) {
-        Direction.GALLERY -> Column(
+    if (style.groupCards) {
+        Column(
             Modifier.padding(horizontal = style.screenPadding).padding(top = 16.dp).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -366,7 +368,7 @@ private fun StatsStrip(state: DetailUiState) {
                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (s in row) {
                         Column(
-                            Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(18.dp)).background(if (s.emphasis) c.accentTint else c.surface).padding(12.dp)
+                            Modifier.weight(1f).fillMaxHeight().surface(RoundedCornerShape(18.dp), if (s.emphasis) c.accentTint else c.surface).padding(12.dp)
                                 .semantics(mergeDescendants = true) { contentDescription = "${s.label}: ${s.value}" },
                         ) {
                             Text(s.value, style = t.type.button, color = if (s.emphasis) c.accent else c.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -377,10 +379,11 @@ private fun StatsStrip(state: DetailUiState) {
                 }
             }
         }
-        else -> Column(
+    } else {
+        Column(
             Modifier
                 .padding(horizontal = style.screenPadding).padding(top = 20.dp).fillMaxWidth()
-                .then(if (style.direction == Direction.INSTRUMENT) Modifier.border(1.dp, c.line) else Modifier.topBottomRules(c.line)),
+                .then(if (style.tileFrame) Modifier.border(1.dp, c.line) else Modifier.topBottomRules(c.line)),
         ) {
             items.chunked(perRow).forEachIndexed { r, row ->
                 if (r > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
@@ -388,7 +391,7 @@ private fun StatsStrip(state: DetailUiState) {
                     row.forEachIndexed { i, s ->
                         if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().padding(vertical = 8.dp).background(c.line))
                         Column(
-                            Modifier.weight(1f).padding(horizontal = if (style.direction == Direction.INSTRUMENT || i > 0) 10.dp else 0.dp, vertical = 12.dp)
+                            Modifier.weight(1f).padding(horizontal = if (style.tileFrame || i > 0) 10.dp else 0.dp, vertical = 12.dp)
                                 .semantics(mergeDescendants = true) { contentDescription = "${s.label}: ${s.value}" },
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
@@ -415,7 +418,7 @@ private fun CareSection(care: DetailCare, actions: DetailActions, modifier: Modi
     val t = WatchTheme.values
     val style = WatchTheme.style
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Column(Modifier.fillMaxWidth().clip(style.cardShape).background(c.surface).padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Column(Modifier.fillMaxWidth().surface(style.cardShape).padding(horizontal = 14.dp, vertical = 10.dp)) {
             Text(t.label("Manual & quick start"), style = t.type.label, color = c.fg3, modifier = Modifier.padding(vertical = 4.dp))
             for (g in care.guides) {
                 Row(

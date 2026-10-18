@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.5.0: Three designs, refined (18 Oct 2026)
+
+All three designs are now permanent. Each has been refined as a complete visual system, with its own type, colour, shape, ornament and motion. You choose between them in **Settings › Appearance**. The brief for each is in `docs/DESIGN.md`.
+
+**Choosing a design**
+- Appearance shows each design as a live specimen, drawn in its own style: its ground, its type, its rule, a watch in miniature, and how it sets a spec line. Tap one to switch.
+- Each design suggests four accents, with its house colour first. The other three are under "More colours".
+- Theme (System, Light or Dark) is a segmented control.
+
+**Atelier: the catalogue**
+- Mastheads have an italic count line ("8 watches · 7 owned") and a thick–thin double rule, as in a printed auction catalogue.
+- Tiles are tall catalogue plates numbered "No. 1", "No. 2"… in italic.
+- A champagne accent dash marks the active tab, the active navigation item and every spec section.
+- Buttons, tabs and navigation labels are set in tracked capitals. Square corners throughout, including the add button and the floating header buttons.
+- Secondary actions such as "Look up specs" are hairline frames rather than tinted blocks.
+
+**Instrument: the data sheet**
+- Mastheads end in a minute-track scale with a lume pip at twelve.
+- The hero photo carries focus brackets.
+- Status lights are square LEDs.
+- Secondary actions are 1 dp frames in the accent, so only the main action is a solid block.
+- Tiles, spec sections and counts stay zero-padded and numbered.
+
+**Gallery: the white room**
+- Cards, tiles, stats and panels float on a wide, soft shadow in daylight.
+- Captions read like a gallery wall card.
+- Pills, soft tints and the floating navigation are kept, with no capitals anywhere.
+
+**Across the app**
+- Every top-level tab (Collection, Lookup, Service, Settings) uses the same masthead.
+- Presses move in each design's own way: Atelier slow and slight, Instrument short and linear, Gallery on a soft spring.
+- Text you typed (document titles, brand and watchmaker suggestions) keeps its own case on chips, even in the designs that set controls in capitals.
+- Muted text in Atelier's light mode is slightly darker, to pass 4.5:1 on raised panels.
+- A new test checks every design, mode and accent: text and accents at 4.5:1, and control edges at 3:1.
+
+**Under the hood**
+- Each design is now one style specification: case, tile shape and numbering, tab, field and button language, rules, markers, depth, motion and shapes. Components read these tokens instead of checking which design is active, so all three stay consistent as screens are added.
+- Screenshot tests cover all three designs in light and dark, including the full spec sheet and the design picker.
+
 ## 0.4.0-m4: Milestone 4, backup and polish (18 Oct 2026)
 
 **Backup & restore** (Settings › Backup & restore)

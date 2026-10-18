@@ -1,5 +1,6 @@
 package io.github.tunlezah.watches.ui.nav
 
+import io.github.tunlezah.watches.ui.components.AccentDash
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -76,7 +77,6 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
-import io.github.tunlezah.watches.core.settings.Direction
 import io.github.tunlezah.watches.ui.collection.CollectionScreen
 import io.github.tunlezah.watches.ui.collection.CollectionViewModel
 import io.github.tunlezah.watches.ui.collection.FilterSheet
@@ -806,12 +806,18 @@ private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onClick: ()
     val c = WatchTheme.colors
     val t = WatchTheme.values
     val style = WatchTheme.style
-    val color = if (selected) c.accent else c.fg3
+    // Atelier marks the active tab with its accent dash and keeps it in ink; the others light it in the accent.
+    val color = when {
+        !selected -> c.fg3
+        style.accentDash -> c.fg
+        else -> c.accent
+    }
     Column(
         modifier
             .then(if (style.floatingNav) Modifier.clip(RoundedCornerShape(26.dp)).background(if (selected) c.accentTint else c.surface.copy(alpha = 0f)) else Modifier)
             .then(
-                if (style.direction == Direction.INSTRUMENT && selected) {
+                // Instrument: a lit bar across the top of the active tab.
+                if (style.tileFrame && selected) {
                     Modifier.drawBehind { drawLine(c.accent, Offset(0f, 0f), Offset(size.width, 0f), 2.dp.toPx()) }
                 } else {
                     Modifier
@@ -822,9 +828,13 @@ private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onClick: ()
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        if (style.accentDash) {
+            Box(Modifier.height(1.5.dp)) { if (selected) AccentDash() }
+            Spacer(Modifier.height(6.dp))
+        }
         Icon(tab.icon, null, tint = color, modifier = Modifier.size(22.dp))
         Spacer(Modifier.height(3.dp))
-        Text(if (style.direction == Direction.INSTRUMENT) tab.label.uppercase() else tab.label, style = t.type.nav, color = color, maxLines = 1)
+        Text(t.control(tab.label), style = t.type.nav, color = color, maxLines = 1)
     }
 }
 

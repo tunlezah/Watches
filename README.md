@@ -17,7 +17,7 @@ Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md). Data sources: [`docs/SOURCES
 | `shared/core` | Domain model, the spec-field registry, units and formatting, collection queries. Pure Kotlin. |
 | `shared/data` | Room database (schema exported to `shared/data/schemas`), repositories, file storage, photo pipeline, sample catalogue. |
 | `shared/search` | Spec-source adapters and HTTP. The only module allowed to use the network. |
-| `shared/ui` | Design system (three directions), screens, view models, navigation. Produces the iOS framework `WatchApp`. |
+| `shared/ui` | Design system (three designs: Atelier, Instrument, Gallery; see [`docs/DESIGN.md`](docs/DESIGN.md)), screens, view models, navigation. Produces the iOS framework `WatchApp`. |
 | `androidApp` | Android shell: activity, manifest, signing, screenshot tests. |
 | `iosApp` | SwiftUI shell, generated with XcodeGen. |
 
@@ -31,7 +31,7 @@ Requirements: JDK 21 and the Android SDK (compile SDK 37). Gradle is provided by
 ./gradlew :androidApp:assembleDebug          # debug APK
 ./gradlew :shared:core:jvmTest :shared:data:jvmTest :shared:search:jvmTest   # unit and parser tests
 WATCHES_LIVE_TESTS=1 ./gradlew :shared:search:jvmTest --tests '*LiveSourcesTest*'   # one real lookup per source
-./gradlew :androidApp:recordRoborazziDebug   # screenshots of every design direction -> androidApp/build/outputs/roborazzi
+./gradlew :androidApp:recordRoborazziDebug   # screenshots of every design -> androidApp/build/outputs/roborazzi
 ./gradlew checkNetworkIsolation              # fails if core, data or ui can compile against a network library
 ./gradlew :shared:ui:compileKotlinIosSimulatorArm64   # checks shared code compiles for iOS (works on Linux)
 ./gradlew :shared:data:iosSimulatorArm64Test        # shared tests on an iOS simulator (macOS only; CI runs it)
@@ -86,6 +86,17 @@ The Xcode build phase compiles the shared Kotlin framework (`:shared:ui:embedAnd
 ## Performance checks on the phone
 
 Settings › Diagnostics shows cold-start, search and detail-open timings measured on the device against the brief's targets. It can also add 500 realistic sample watches, each with a generated photo, and remove them again afterwards.
+
+## Designs
+
+There are three complete designs, chosen in Settings › Appearance, where each is shown as a live specimen in its own style:
+- **Atelier**, the catalogue: serif titles, warm graphite or ivory, a thick–thin masthead rule, catalogue numbers and accent dashes.
+- **Instrument**, the data sheet: expanded capitals, mono figures, a minute-track rule with a lume pip, dotted leaders and focus brackets.
+- **Gallery**, the white room: light type, soft lifted cards and pills, and a floating navigation bar.
+
+Each design suggests four of the seven accents, with its house colour first. The full brief is in [`docs/DESIGN.md`](docs/DESIGN.md).
+
+In code, each design is one `DirectionStyle` plus a type scale and palette (`shared/ui/.../theme`), and components only read those tokens. `DesignContrastTest` checks every design, mode and accent against the contrast rules.
 
 ## How Lookup behaves
 

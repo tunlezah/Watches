@@ -56,6 +56,10 @@ data class WatchTypography(
     val stat: TextStyle,
     /** The title of a pushed screen, in its header. */
     val headerTitle: TextStyle,
+    /** The line under a top-level title ("8 watches · 7 owned"): Atelier's italic voice, Instrument's mono count. */
+    val screenSubtitle: TextStyle,
+    /** A tile's number: Atelier's italic "No. 7", Instrument's "07". */
+    val tileNumber: TextStyle,
 )
 
 private const val TNUM = "tnum"
@@ -126,10 +130,13 @@ fun typographyFor(direction: Direction): WatchTypography = when (direction) {
             label = TextStyle(fontFamily = sans, fontSize = 11.sp, letterSpacing = 0.16.em, lineHeight = 14.sp),
             body = TextStyle(fontFamily = sans, fontSize = 15.sp, lineHeight = 22.sp),
             bodySmall = TextStyle(fontFamily = sans, fontSize = 13.sp, lineHeight = 18.sp, fontFeatureSettings = TNUM),
-            button = TextStyle(fontFamily = sans, fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 18.sp),
-            nav = TextStyle(fontFamily = sans, fontSize = 11.sp, letterSpacing = 0.04.em, lineHeight = 14.sp),
+            // Controls are set in tracked capitals, like the lot details in a catalogue.
+            button = TextStyle(fontFamily = sans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp, letterSpacing = 0.12.em, lineHeight = 16.sp),
+            nav = TextStyle(fontFamily = sans, fontWeight = FontWeight.Medium, fontSize = 11.sp, letterSpacing = 0.1.em, lineHeight = 14.sp),
             stat = TextStyle(fontFamily = sans, fontSize = 15.sp, lineHeight = 20.sp, fontFeatureSettings = TNUM),
             headerTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontSize = 24.sp, lineHeight = 28.sp, fontFeatureSettings = LNUM),
+            screenSubtitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontStyle = FontStyle.Italic, fontSize = 18.sp, lineHeight = 22.sp, fontFeatureSettings = LNUM),
+            tileNumber = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontStyle = FontStyle.Italic, fontSize = 15.sp, lineHeight = 16.sp, fontFeatureSettings = LNUM),
         )
     }
     Direction.INSTRUMENT -> {
@@ -156,6 +163,8 @@ fun typographyFor(direction: Direction): WatchTypography = when (direction) {
             nav = TextStyle(fontFamily = mono, fontSize = 11.sp, lineHeight = 14.sp),
             stat = TextStyle(fontFamily = display, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 24.sp, fontFeatureSettings = TNUM),
             headerTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 16.sp, letterSpacing = 0.04.em, lineHeight = 20.sp),
+            screenSubtitle = TextStyle(fontFamily = mono, fontSize = 11.sp, letterSpacing = 0.04.em, lineHeight = 14.sp),
+            tileNumber = TextStyle(fontFamily = mono, fontSize = 11.sp, lineHeight = 14.sp),
         )
     }
     Direction.GALLERY -> {
@@ -180,6 +189,8 @@ fun typographyFor(direction: Direction): WatchTypography = when (direction) {
             nav = TextStyle(fontFamily = m, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, lineHeight = 14.sp),
             stat = TextStyle(fontFamily = m, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, letterSpacing = (-0.01).em, lineHeight = 26.sp, fontFeatureSettings = TNUM),
             headerTitle = TextStyle(fontFamily = m, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 26.sp),
+            screenSubtitle = TextStyle(fontFamily = m, fontSize = 14.sp, lineHeight = 20.sp, fontFeatureSettings = TNUM),
+            tileNumber = TextStyle(fontFamily = m, fontSize = 12.sp, lineHeight = 16.sp, fontFeatureSettings = TNUM),
         )
     }
 }

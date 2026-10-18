@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -62,7 +61,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.tunlezah.watches.core.settings.Direction
+import io.github.tunlezah.watches.ui.theme.TabLook
 import io.github.tunlezah.watches.ui.theme.WatchTheme
 
 /** 48dp square icon button. Every icon-only control carries a spoken label. */
@@ -78,11 +77,8 @@ fun IconAction(
     enabled: Boolean = true,
 ) {
     val style = WatchTheme.style
-    val shape = when {
-        filled != null && style.direction != Direction.INSTRUMENT -> CircleShape
-        style.direction == Direction.GALLERY -> CircleShape
-        else -> style.buttonShape
-    }
+    // The design's own button corners: square in Atelier, 2 dp in Instrument, round in Gallery.
+    val shape = style.buttonShape
     Box(
         modifier
             .size(48.dp)
@@ -114,7 +110,8 @@ fun WatchButton(
     val (bg, fg, border) = when (kind) {
         ButtonKind.Primary -> Triple(c.accent, c.onAccent, null)
         ButtonKind.Secondary -> Triple(Color.Transparent, c.fg, c.lineStrong)
-        ButtonKind.Tonal -> Triple(c.accentTint, c.accent, null)
+        // Gallery tints the button; Atelier and Instrument draw a frame in the accent instead of a block.
+        ButtonKind.Tonal -> if (style.tonalFill) Triple(c.accentTint, c.accent, null) else Triple(Color.Transparent, c.accent, c.accent.copy(alpha = 0.6f))
         ButtonKind.Text -> Triple(Color.Transparent, c.accent, null)
         ButtonKind.Danger -> Triple(Color.Transparent, c.danger, c.danger.copy(alpha = 0.5f))
     }
@@ -134,7 +131,7 @@ fun WatchButton(
             Spacer(Modifier.width(8.dp))
         }
         Text(
-            if (style.direction == Direction.INSTRUMENT) text.uppercase() else text,
+            theme.control(text),
             style = theme.type.button,
             color = if (enabled) fg else fg.copy(alpha = 0.5f),
             maxLines = 1,
@@ -144,8 +141,11 @@ fun WatchButton(
 }
 
 /**
- * A selectable chip. Atelier draws it as an underlined tab, Instrument as a segment, Gallery as a pill.
+ * A selectable chip. Atelier draws a tab with an accent dash and its choices as hairline frames,
+ * Instrument a framed segment, Gallery a pill.
  * [role] tells screen readers what it is: a tab, one choice of several (radio), or an on/off filter (checkbox).
+ * [verbatim] keeps the text's own case: for the user's words (a document title, a watchmaker), which
+ * designs that set controls in capitals mustn't change.
  */
 @Composable
 fun SelectChip(
@@ -153,8 +153,9 @@ fun SelectChip(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    underline: Boolean = WatchTheme.style.direction == Direction.ATELIER,
+    underline: Boolean = WatchTheme.style.tabs == TabLook.UNDERLINE,
     role: Role = Role.Tab,
+    verbatim: Boolean = false,
 ) {
     val c = WatchTheme.colors
     val t = WatchTheme.values
@@ -162,15 +163,18 @@ fun SelectChip(
     val shape = style.chipShape
     val haptics = LocalHapticFeedback.current
     val tap = { if (role == Role.Tab && !selected) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); onClick() }
+    val pill = style.tabs == TabLook.PILL
     val fg by animateColorAsState(
         when {
-            selected && (underline || style.direction == Direction.ATELIER) -> c.fg
+            selected && underline -> c.fg
             selected -> c.accent
-            style.direction == Direction.GALLERY -> c.fg2
-            else -> c.fg3
+            pill -> c.fg2
+            underline -> c.fg3
+            else -> c.fg2
         },
         tween(150), label = "chip",
     )
+    val label = if (verbatim) text else t.control(text)
     val mod = modifier
         .heightIn(min = 48.dp)
         .clip(shape)
@@ -180,25 +184,23 @@ fun SelectChip(
         )
     when {
         underline -> Box(mod.padding(horizontal = 2.dp), contentAlignment = Alignment.Center) {
-            Text(text, style = t.type.bodySmall, color = fg, modifier = Modifier.padding(vertical = 12.dp))
+            Text(label, style = t.type.button, color = fg, modifier = Modifier.padding(vertical = 12.dp))
             // matchParentSize: inside a horizontally scrolling row, fillMaxWidth alone would measure to zero.
-            if (selected) Box(Modifier.matchParentSize(), contentAlignment = Alignment.BottomCenter) {
-                Box(Modifier.fillMaxWidth().height(1.5.dp).background(c.accent))
-            }
+            if (selected) Box(Modifier.matchParentSize().padding(bottom = 6.dp), contentAlignment = Alignment.BottomCenter) { AccentDash() }
         }
-        style.direction == Direction.INSTRUMENT -> Box(
+        pill -> Box(
+            mod.background(if (selected) c.accentTint else c.surface2).padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(label, style = t.type.button, color = fg)
+        }
+        else -> Box(
             mod.border(1.dp, if (selected) c.accent else c.lineStrong, shape)
                 .background(if (selected) c.surface2 else Color.Transparent)
                 .padding(horizontal = 12.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text.uppercase(), style = t.type.label, color = fg)
-        }
-        else -> Box(
-            mod.background(if (selected) c.accentTint else c.surface2).padding(horizontal = 16.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text, style = t.type.button, color = fg)
+            Text(label, style = t.type.button, color = fg)
         }
     }
 }
@@ -250,8 +252,8 @@ fun <T> SegmentedControl(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    if (style.direction == Direction.INSTRUMENT) label.uppercase() else label,
-                    style = if (style.direction == Direction.INSTRUMENT) t.type.label else t.type.button,
+                    t.control(label),
+                    style = t.type.button,
                     color = if (on) color else c.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 8.dp),
                 )
@@ -297,7 +299,7 @@ fun WatchTextField(
     val style = WatchTheme.style
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val gallery = style.direction == Direction.GALLERY
+    val boxed = style.boxedFields
     val lineColor = when {
         error != null -> c.danger
         focused -> c.accent
@@ -330,7 +332,7 @@ fun WatchTextField(
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
                         .then(
-                            if (gallery) {
+                            if (boxed) {
                                 Modifier.clip(RoundedCornerShape(14.dp)).background(c.surface)
                                     .border(BorderStroke(1.dp, if (focused || error != null) lineColor else c.lineStrong.copy(alpha = 0.7f)), RoundedCornerShape(14.dp))
                                     .padding(horizontal = 14.dp, vertical = 12.dp)
@@ -383,13 +385,14 @@ fun ConfirmDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = c.surface,
-        title = { Text(title, style = t.type.groupTitle, color = c.fg) },
+        shape = WatchTheme.style.cardShape,
+        title = { Text(t.title(title), style = t.type.groupTitle, color = c.fg) },
         text = { Text(message, style = t.type.body, color = c.fg2) },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text(confirm, style = t.type.button, color = if (destructive) c.danger else c.accent) }
+            TextButton(onClick = onConfirm) { Text(t.control(confirm), style = t.type.button, color = if (destructive) c.danger else c.accent) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", style = t.type.button, color = c.fg2) }
+            TextButton(onClick = onDismiss) { Text(t.control("Cancel"), style = t.type.button, color = c.fg2) }
         },
     )
 }

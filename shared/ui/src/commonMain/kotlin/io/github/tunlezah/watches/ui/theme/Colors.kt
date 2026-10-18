@@ -70,7 +70,7 @@ object Palettes {
                     Color(0xFFE5807A), Color(0x80000000), Color(0xFF26231F), Color(0xFF1A1917))
             } else {
                 WatchColors(false, Color(0xFFF5F1E8), Color(0xFFECE6DA), Color(0xFFE6DFD1), Color(0xFFD6CDBD),
-                    Color(0xFF1B1915), Color(0xFF4A443A), Color(0xFF6B6355), a, Color(0xFFFFFFFF), a.copy(alpha = 0.12f),
+                    Color(0xFF1B1915), Color(0xFF4A443A), Color(0xFF675F52), a, Color(0xFFFFFFFF), a.copy(alpha = 0.12f),
                     Color(0xFFA8332C), Color(0x473C2D14), Color(0xFFF7F3EC), Color(0xFFE6DFD1))
             }
             Direction.INSTRUMENT -> if (dark) {

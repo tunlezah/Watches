@@ -2,6 +2,8 @@ package io.github.tunlezah.watches.ui.components
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -21,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import io.github.tunlezah.watches.ui.theme.MotionFeel
 import io.github.tunlezah.watches.ui.theme.WatchTheme
 
 /** Set by the app shell; null in previews, tests, two-pane layouts and when animations are off. */
@@ -45,12 +48,20 @@ fun Modifier.sharedWatchPhoto(watchId: String): Modifier {
     }
 }
 
-/** A pressed card or tile sinks very slightly, springing back on release. Still when motion is reduced. */
+/**
+ * A pressed card or tile sinks slightly, in each design's own way: Atelier barely and slowly,
+ * Instrument in a short linear step, Gallery on a soft spring. Still when motion is reduced.
+ */
 @Composable
 fun Modifier.pressScale(interaction: InteractionSource): Modifier {
     if (!LocalAnimationsEnabled.current) return this
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow), label = "press")
+    val (depth, spec) = when (WatchTheme.style.motion) {
+        MotionFeel.QUIET -> 0.985f to tween<Float>(220, easing = FastOutSlowInEasing)
+        MotionFeel.PRECISE -> 0.98f to tween<Float>(90, easing = LinearEasing)
+        MotionFeel.SOFT -> 0.965f to spring<Float>(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow)
+    }
+    val scale by animateFloatAsState(if (pressed) depth else 1f, spec, label = "press")
     return graphicsLayer { scaleX = scale; scaleY = scale }
 }
 

@@ -1,5 +1,6 @@
 package io.github.tunlezah.watches.ui.care
 
+import io.github.tunlezah.watches.ui.components.Masthead
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,7 +10,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,9 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.HorizontalDivider
@@ -34,7 +32,6 @@ import io.github.tunlezah.watches.ui.components.BottomActionBar
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,17 +59,13 @@ fun ServiceDueScreen(state: ServiceDueUiState, onOpen: (DueItem) -> Unit) {
         Modifier.fillMaxSize().background(c.bg),
         contentPadding = PaddingValues(start = style.screenPadding, end = style.screenPadding, bottom = 140.dp),
     ) {
-        item { Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars)) }
         item {
-            Text(t.title("Service"), style = t.type.screenTitle, color = c.fg, modifier = Modifier.padding(top = 20.dp).semantics { heading() })
-            if (state.loaded) {
-                val parts = listOfNotNull(
-                    state.overdue.size.takeIf { it > 0 }?.let { "$it overdue" },
-                    state.soon.size.takeIf { it > 0 }?.let { "$it due within 3 months" },
-                    state.inService.size.takeIf { it > 0 }?.let { "$it at the watchmaker" },
-                )
-                Text(parts.joinToString(" · ").ifEmpty { "Nothing due in the next 3 months." }, style = t.type.bodySmall, color = c.fg2, modifier = Modifier.padding(top = 4.dp))
-            }
+            val parts = listOfNotNull(
+                state.overdue.size.takeIf { it > 0 }?.let { "$it overdue" },
+                state.soon.size.takeIf { it > 0 }?.let { "$it due within 3 months" },
+                state.inService.size.takeIf { it > 0 }?.let { "$it at the watchmaker" },
+            )
+            Masthead("Service", subtitle = if (state.loaded) t.title(parts.joinToString(" · ").ifEmpty { "Nothing due in the next 3 months" }) else null)
         }
         if (state.loaded && state.onHand == 0) {
             item { EmptyState("No watches on hand", "Owned watches and ones at the watchmaker appear here once they have a service interval.", Modifier.padding(top = 40.dp)) }
@@ -197,7 +190,7 @@ private fun EntryRow(e: EntryUi, onClick: () -> Unit, onOpenDocument: (WatchDocu
         if (e.documents.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (d in e.documents) SelectChip("${d.title} · ${CareText.docType(d)}", false, { onOpenDocument(d) }, underline = false, role = Role.Button)
+                for (d in e.documents) SelectChip("${d.title} · ${CareText.docType(d)}", false, { onOpenDocument(d) }, underline = false, role = Role.Button, verbatim = true)
             }
         }
     }

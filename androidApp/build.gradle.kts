@@ -23,8 +23,8 @@ android {
         applicationId = "io.github.tunlezah.watches"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 4
-        versionName = "0.4.0-m4"
+        versionCode = 5
+        versionName = "0.5.0"
     }
 
     signingConfigs {

@@ -11,13 +11,13 @@ enum class ThemeMode(override val key: String, override val label: String) : Key
 }
 
 /**
- * The three candidate visual directions. All three ship until one is chosen,
- * so the choice can be made on the phone with real content.
+ * The three designs. Each is a complete visual system (type, colour, shape, ornament, motion),
+ * chosen in Settings › Appearance; see docs/DESIGN.md.
  */
-enum class Direction(override val key: String, override val label: String, val description: String) : Keyed {
-    ATELIER("atelier", "Atelier", "Auction-catalogue: serif display, warm graphite"),
-    INSTRUMENT("instrument", "Instrument", "Tool-watch data sheet: expanded grotesk, OLED black"),
-    GALLERY("gallery", "Gallery", "Scandinavian minimal: light grotesk, soft cards"),
+enum class Direction(override val key: String, override val label: String, val tagline: String, val description: String) : Keyed {
+    ATELIER("atelier", "Atelier", "The catalogue", "Serif titles on warm graphite or ivory, quiet hairlines, like a fine-watch auction catalogue."),
+    INSTRUMENT("instrument", "Instrument", "The data sheet", "Expanded capitals, mono figures and dotted leaders, like a tool watch's spec sheet. True black at night."),
+    GALLERY("gallery", "Gallery", "The white room", "Light type, soft cards and plenty of air, like a calm Scandinavian gallery."),
 }
 
 enum class Accent(override val key: String, override val label: String) : Keyed {
@@ -30,10 +30,13 @@ enum class Accent(override val key: String, override val label: String) : Keyed 
     TROPICAL_AMBER("tropical_amber", "Tropical amber");
 
     companion object {
-        fun defaultFor(direction: Direction) = when (direction) {
-            Direction.ATELIER -> CHAMPAGNE
-            Direction.INSTRUMENT -> LUME
-            Direction.GALLERY -> SUNBURST_BLUE
+        fun defaultFor(direction: Direction) = suggestedFor(direction).first()
+
+        /** The accents that suit each design, its house colour first. The others stay available. */
+        fun suggestedFor(direction: Direction): List<Accent> = when (direction) {
+            Direction.ATELIER -> listOf(CHAMPAGNE, BORDEAUX, RACING_GREEN, SUNBURST_BLUE)
+            Direction.INSTRUMENT -> listOf(LUME, TROPICAL_AMBER, ICE_BLUE, BORDEAUX)
+            Direction.GALLERY -> listOf(SUNBURST_BLUE, ICE_BLUE, RACING_GREEN, BORDEAUX)
         }
     }
 }

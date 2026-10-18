@@ -204,10 +204,24 @@ class ScreenshotTest {
     @Test fun collectionInstrument() = collection(Direction.INSTRUMENT)
     @Test fun collectionGallery() = collection(Direction.GALLERY)
     @Test fun collectionAtelierLight() = collection(Direction.ATELIER, dark = false)
+    @Test fun collectionInstrumentLight() = collection(Direction.INSTRUMENT, dark = false)
+    @Test fun collectionGalleryLight() = collection(Direction.GALLERY, dark = false)
     @Test fun detailAtelier() = detail(Direction.ATELIER)
     @Test fun detailInstrument() = detail(Direction.INSTRUMENT)
     @Test fun detailGallery() = detail(Direction.GALLERY)
     @Test fun detailGalleryLight() = detail(Direction.GALLERY, dark = false)
+    @Test fun detailAtelierLight() = detail(Direction.ATELIER, dark = false)
+    @Test fun detailInstrumentLight() = detail(Direction.INSTRUMENT, dark = false)
+
+    /** The whole spec sheet on a tall screen, to check each design's section headings and rows. */
+    private fun specSheet(direction: Direction, dark: Boolean) {
+        themed(direction, dark) { DetailScreen(detailState(), "w1", DetailActions({}, {}, {}, {}, {}, {}, {})) }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/specs-${direction.key}-${if (dark) "dark" else "light"}.png")
+    }
+
+    @Config(qualifiers = "+h2600dp") @Test fun specsAtelier() = specSheet(Direction.ATELIER, dark = true)
+    @Config(qualifiers = "+h2600dp") @Test fun specsInstrument() = specSheet(Direction.INSTRUMENT, dark = false)
+    @Config(qualifiers = "+h2600dp") @Test fun specsGallery() = specSheet(Direction.GALLERY, dark = true)
 
     /** Text at 200%, the largest size the brief asks for: nothing may clip. */
     @Test fun detailLargeText() {
@@ -227,22 +241,34 @@ class ScreenshotTest {
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/collection-empty.png")
     }
 
-    @Test fun settings() {
-        themed(Direction.ATELIER) {
+    private fun settingsHome(direction: Direction, dark: Boolean = true) {
+        themed(direction, dark) {
             SettingsHome(
-                AppSettings(direction = Direction.ATELIER, accent = Accent.CHAMPAGNE, device = DeviceSettings(appLock = true, lastBackup = LastBackup(fixedNow, 2_400_000_000, 212))),
-                SettingsSummary(lastBackup = LastBackup(fixedNow, 2_400_000_000, 212), sourcesOn = 3, sourcesTotal = 4, notificationsAllowed = true, version = "0.4.0-m4"),
+                AppSettings(direction = direction, accent = Accent.defaultFor(direction), device = DeviceSettings(appLock = true, lastBackup = LastBackup(fixedNow, 2_400_000_000, 212))),
+                SettingsSummary(lastBackup = LastBackup(fixedNow, 2_400_000_000, 212), sourcesOn = 3, sourcesTotal = 4, notificationsAllowed = true, version = "0.5.0"),
                 today = LocalDate(2026, 10, 20),
                 onOpen = {},
             )
         }
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings-atelier.png")
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings-${direction.key}-${if (dark) "dark" else "light"}.png")
     }
 
-    @Test fun settingsAppearance() {
-        themed(Direction.INSTRUMENT) { AppearancePage(AppSettings(direction = Direction.INSTRUMENT, accent = Accent.LUME), {}, {}) }
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings-appearance-instrument.png")
+    @Test fun settingsAtelier() = settingsHome(Direction.ATELIER)
+    @Test fun settingsInstrument() = settingsHome(Direction.INSTRUMENT)
+    @Test fun settingsGalleryLight() = settingsHome(Direction.GALLERY, dark = false)
+
+    /** The design picker: each design drawn as a specimen in its own style. */
+    private fun appearance(direction: Direction, dark: Boolean = true) {
+        themed(direction, dark) {
+            AppearancePage(AppSettings(direction = direction, accent = Accent.defaultFor(direction), themeMode = if (dark) ThemeMode.DARK else ThemeMode.LIGHT), {}, {})
+        }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/appearance-${direction.key}-${if (dark) "dark" else "light"}.png")
     }
+
+    @Test fun appearanceAtelier() = appearance(Direction.ATELIER)
+    @Test fun appearanceInstrument() = appearance(Direction.INSTRUMENT)
+    @Test fun appearanceGalleryLight() = appearance(Direction.GALLERY, dark = false)
+    @Test fun appearanceAtelierLight() = appearance(Direction.ATELIER, dark = false)
 
     @Test fun settingsPrivacy() {
         themed(Direction.GALLERY, dark = false) {

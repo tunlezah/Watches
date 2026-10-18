@@ -1,5 +1,6 @@
 package io.github.tunlezah.watches.ui.settings
 
+import io.github.tunlezah.watches.ui.components.Masthead
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -87,8 +87,7 @@ fun ComingSoonScreen(title: String, message: String) {
     val t = WatchTheme.values
     val style = WatchTheme.style
     Column(Modifier.fillMaxSize().background(c.bg).padding(horizontal = style.screenPadding)) {
-        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-        Text(t.title(title), style = t.type.screenTitle, color = c.fg, modifier = Modifier.padding(top = 20.dp).semantics { heading() })
+        Masthead(title)
         EmptyState(title = "Coming soon", message = message, modifier = Modifier.fillMaxWidth().padding(top = 40.dp))
     }
 }

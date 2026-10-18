@@ -66,7 +66,7 @@ fun RowGroup(title: String?, modifier: Modifier = Modifier, footer: String? = nu
             Text(t.label(title), style = t.type.label, color = c.fg3,
                 modifier = Modifier.padding(start = 16.dp, bottom = 8.dp).semantics { heading() })
         }
-        Column(Modifier.fillMaxWidth().clip(style.cardShape).background(c.surface)) { content() }
+        Column(Modifier.fillMaxWidth().surface(style.cardShape)) { content() }
         if (footer != null) {
             Text(footer, style = t.type.bodySmall, color = c.fg3, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
         }
@@ -287,7 +287,8 @@ fun IconBadge(icon: ImageVector, tone: Tone = Tone.Normal, size: Int = 44) {
         Tone.Success -> c.success
         Tone.Normal -> c.accent
     }
-    Box(Modifier.size(size.dp).clip(CircleShape).background(tint.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+    val shape = if (WatchTheme.style.squareMarkers) WatchTheme.style.buttonShape else CircleShape
+    Box(Modifier.size(size.dp).clip(shape).background(tint.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
         Icon(icon, null, tint = tint, modifier = Modifier.size((size * 0.5f).dp))
     }
 }

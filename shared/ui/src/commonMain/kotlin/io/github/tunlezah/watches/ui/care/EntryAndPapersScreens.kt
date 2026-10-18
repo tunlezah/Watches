@@ -110,7 +110,7 @@ fun ServiceEditScreen(
                 val suggestions = state.servicers.filter { it.contains(state.by.trim(), ignoreCase = true) && !it.equals(state.by.trim(), ignoreCase = true) }.take(4)
                 if (suggestions.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (s in suggestions) SelectChip(s, false, { vm.edit { it.copy(by = s) } }, underline = false, role = Role.Button)
+                        for (s in suggestions) SelectChip(s, false, { vm.edit { it.copy(by = s) } }, underline = false, role = Role.Button, verbatim = true)
                     }
                 }
             }

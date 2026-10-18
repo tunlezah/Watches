@@ -69,14 +69,20 @@ fun ScreenHeader(title: String, subtitle: String?, onBack: () -> Unit, backLabel
     }
 }
 
-/** A section heading inside a scrolling screen. */
+/** A section heading inside a scrolling screen. Atelier sets an accent dash above it. */
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier, trailing: @Composable (() -> Unit)? = null) {
     val c = WatchTheme.colors
     val t = WatchTheme.values
-    Row(modifier.fillMaxWidth().padding(top = 22.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(t.title(text), style = t.type.groupTitle, color = c.fg, modifier = Modifier.weight(1f).semantics { heading() })
-        trailing?.invoke()
+    Column(modifier.fillMaxWidth().padding(top = 22.dp, bottom = 6.dp)) {
+        if (WatchTheme.style.accentDash) {
+            AccentDash()
+            Spacer(Modifier.height(10.dp))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(t.title(text), style = t.type.groupTitle, color = c.fg, modifier = Modifier.weight(1f).semantics { heading() })
+            trailing?.invoke()
+        }
     }
 }
 
@@ -87,7 +93,7 @@ fun NavCard(icon: ImageVector, title: String, detail: String?, onClick: () -> Un
     val t = WatchTheme.values
     val style = WatchTheme.style
     Row(
-        modifier.fillMaxWidth().heightIn(min = 64.dp).clip(style.cardShape).background(c.surface)
+        modifier.fillMaxWidth().heightIn(min = 64.dp).surface(style.cardShape)
             .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -112,7 +118,7 @@ fun NavCard(icon: ImageVector, title: String, detail: String?, onClick: () -> Un
 fun Badge(text: String, color: Color = WatchTheme.colors.accent, background: Color = WatchTheme.colors.accentTint) {
     val t = WatchTheme.values
     Text(t.label(text), style = t.type.specSource, color = color, maxLines = 1,
-        modifier = Modifier.clip(RoundedCornerShape(50)).background(background).padding(horizontal = 8.dp, vertical = 2.dp))
+        modifier = Modifier.clip(WatchTheme.style.statusShape).background(background).padding(horizontal = 8.dp, vertical = 2.dp))
 }
 
 /** A date chosen with the system date picker. [onPick] gets null when cleared. */
