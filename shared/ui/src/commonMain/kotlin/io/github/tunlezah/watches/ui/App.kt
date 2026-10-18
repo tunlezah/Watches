@@ -12,6 +12,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import io.github.tunlezah.watches.data.backup.BackupRepository
 import io.github.tunlezah.watches.ui.backup.BackupCoordinator
+import io.github.tunlezah.watches.ui.components.AppMessages
+import io.github.tunlezah.watches.ui.components.UndoableActions
 import io.github.tunlezah.watches.ui.backup.BackupViewModel
 import io.github.tunlezah.watches.ui.security.AppLock
 import io.github.tunlezah.watches.ui.security.LockScreen
@@ -66,7 +68,9 @@ val uiModule = module {
     single { RemoteImages(get()) }
     single { RefreshSpecs(get(), get(), get()) }
     single<RobotsStore> { FileRobotsStore(get()) }
-    viewModel { CollectionViewModel(get(), get(), get()) }
+    single { AppMessages() }
+    single { UndoableActions(get(), get()) }
+    viewModel { CollectionViewModel(get(), get(), get(), get()) }
     viewModel { params -> DetailViewModel(params.get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { params ->
         // Two optional strings: the watch being edited, and a lookup draft for a new watch.

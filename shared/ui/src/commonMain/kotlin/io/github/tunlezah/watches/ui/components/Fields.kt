@@ -62,7 +62,7 @@ fun ScreenHeader(title: String, subtitle: String?, onBack: () -> Unit, backLabel
     ) {
         IconAction(WatchIcons.Back, backLabel, onBack)
         Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
-            Text(t.title(title), style = t.type.groupTitle, color = c.fg, modifier = Modifier.semantics { heading() }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(t.title(title), style = t.type.headerTitle, color = c.fg, modifier = Modifier.semantics { heading() }, maxLines = 1, overflow = TextOverflow.Ellipsis)
             subtitle?.let { Text(it, style = t.type.bodySmall, color = c.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
         actions()
@@ -124,7 +124,7 @@ fun DatePickerField(label: String, value: LocalDate?, format: (LocalDate) -> Str
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         FieldLabel(label)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SelectChip(value?.let(format) ?: "Choose date", value != null, { open = true }, underline = false)
+            SelectChip(value?.let(format) ?: "Choose date", value != null, { open = true }, underline = false, role = Role.Button)
             if (value != null && clearable) IconAction(WatchIcons.Close, "Clear ${label.lowercase()}", { onPick(null) })
         }
     }
@@ -154,7 +154,7 @@ fun MoneyField(label: String, text: String, currency: String, onText: (String) -
             Column {
                 FieldLabel("Currency")
                 Spacer(Modifier.height(6.dp))
-                SelectChip(currency, true, { menu = true }, underline = false)
+                SelectChip(currency, true, { menu = true }, underline = false, role = Role.Button)
             }
             DropdownMenu(menu, { menu = false }, containerColor = c.surface) {
                 Currencies.common.forEach { code ->

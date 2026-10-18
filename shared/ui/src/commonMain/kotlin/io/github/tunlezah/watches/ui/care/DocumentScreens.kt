@@ -162,7 +162,7 @@ fun DocumentsScreen(state: DocumentsUiState, startAdding: DocumentKind?, actions
                     WatchTextField("Title", title, { title = it })
                     FieldLabel("Kind")
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (k in DocumentKind.entries) SelectChip(k.label, kind == k, { kind = k }, underline = false)
+                        for (k in DocumentKind.entries) SelectChip(k.label, kind == k, { kind = k }, underline = false, role = Role.RadioButton)
                     }
                 }
             },
@@ -243,7 +243,7 @@ private fun AddDocumentDialog(
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 FieldLabel("Kind")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (k in DocumentKind.entries) SelectChip(k.label, kind == k, { kind = k }, underline = false)
+                    for (k in DocumentKind.entries) SelectChip(k.label, kind == k, { kind = k }, underline = false, role = Role.RadioButton)
                 }
                 WatchButton("Choose a PDF or photo", { picker.launch() }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
                 WatchButton("Photograph a paper copy", { camera.launch() }, Modifier.fillMaxWidth(), icon = WatchIcons.Camera)

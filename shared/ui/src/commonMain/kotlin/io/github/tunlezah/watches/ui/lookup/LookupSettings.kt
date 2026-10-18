@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.tunlezah.watches.ui.components.ButtonKind
@@ -38,7 +39,7 @@ fun LookupSettingsSection(
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         for (s in state.sources) {
             Row(
-                Modifier.fillMaxWidth().clickable(role = Role.Switch) { onToggle(s.info.id) },
+                Modifier.fillMaxWidth().toggleable(value = s.enabled, role = Role.Switch, onValueChange = { onToggle(s.info.id) }),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
@@ -49,8 +50,8 @@ fun LookupSettingsSection(
                 Spacer(Modifier.width(12.dp))
                 Switch(
                     checked = s.enabled,
-                    onCheckedChange = { onToggle(s.info.id) },
-                    colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent, uncheckedTrackColor = c.surface2, uncheckedBorderColor = c.line),
+                    onCheckedChange = null,
+                    colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent, uncheckedTrackColor = c.surface2, uncheckedThumbColor = c.fg3, uncheckedBorderColor = c.lineStrong),
                 )
             }
         }

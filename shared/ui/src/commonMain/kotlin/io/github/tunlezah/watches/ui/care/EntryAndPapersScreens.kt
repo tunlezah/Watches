@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -45,6 +46,7 @@ import io.github.tunlezah.watches.ui.components.FieldLabel
 import io.github.tunlezah.watches.ui.components.IconAction
 import io.github.tunlezah.watches.ui.components.MoneyField
 import io.github.tunlezah.watches.ui.components.ScreenHeader
+import io.github.tunlezah.watches.ui.components.SegmentedControl
 import io.github.tunlezah.watches.ui.components.SectionTitle
 import io.github.tunlezah.watches.ui.components.SelectChip
 import io.github.tunlezah.watches.ui.components.WatchButton
@@ -99,7 +101,7 @@ fun ServiceEditScreen(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 FieldLabel("Work done")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (w in ServiceWork.entries) SelectChip(w.label, w in state.work, { vm.toggleWork(w) }, underline = false)
+                    for (w in ServiceWork.entries) SelectChip(w.label, w in state.work, { vm.toggleWork(w) }, underline = false, role = Role.Checkbox)
                 }
                 Text("A full service restarts the interval; other work is logged without moving the due date.", style = t.type.bodySmall, color = c.fg3)
             }
@@ -108,7 +110,7 @@ fun ServiceEditScreen(
                 val suggestions = state.servicers.filter { it.contains(state.by.trim(), ignoreCase = true) && !it.equals(state.by.trim(), ignoreCase = true) }.take(4)
                 if (suggestions.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (s in suggestions) SelectChip(s, false, { vm.edit { it.copy(by = s) } }, underline = false)
+                        for (s in suggestions) SelectChip(s, false, { vm.edit { it.copy(by = s) } }, underline = false, role = Role.Button)
                     }
                 }
             }
@@ -199,16 +201,18 @@ fun BoxPapersScreen(state: BoxPapersUiState, vm: BoxPapersActions, onBack: () ->
                         Text(item.label, style = t.type.body, color = c.fg, modifier = Modifier.weight(1f))
                         if (current != null) IconAction(WatchIcons.Edit, "Note for ${item.label}", { editingNote = item }, tint = c.fg3)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (st in BoxItemState.entries) {
-                            SelectChip(if (st == BoxItemState.NOT_APPLICABLE) "N/A" else st.label, current == st, { vm.set(item, st) }, underline = false)
-                        }
-                    }
+                    SegmentedControl(
+                        BoxItemState.entries.map { it to if (it == BoxItemState.NOT_APPLICABLE) "N/A" else it.label },
+                        current,
+                        { st -> vm.set(item, st) },
+                        spoken = { st, label -> "${item.label}: ${if (st == BoxItemState.NOT_APPLICABLE) "not applicable" else label}" },
+                        tint = { st -> if (st == BoxItemState.MISSING) WatchTheme.colors.danger else WatchTheme.colors.accent },
+                    )
                     state.notes[item]?.let { Text(it, style = t.type.bodySmall, color = c.fg2) }
                     if (item == BoxItem.MANUAL) {
                         Text(
                             if (state.hasElectronicManual) "An electronic manual is stored with this watch." else "Keep an electronic copy too: add the PDF in Documents.",
-                            style = t.type.specSource, color = c.accent, modifier = Modifier.clickable(role = Role.Button, onClick = onManual).padding(vertical = 4.dp),
+                            style = t.type.bodySmall, color = c.accent, modifier = Modifier.heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onManual).padding(vertical = 14.dp),
                         )
                     }
                 }
@@ -221,9 +225,9 @@ fun BoxPapersScreen(state: BoxPapersUiState, vm: BoxPapersActions, onBack: () ->
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     FieldLabel("Length")
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SelectChip("None", state.warrantyMonths == null, { vm.setWarranty(state.warrantyStart, null) }, underline = false)
+                        SelectChip("None", state.warrantyMonths == null, { vm.setWarranty(state.warrantyStart, null) }, underline = false, role = Role.RadioButton)
                         for (m in (listOf(12, 24, 36, 60, 96) + listOfNotNull(state.warrantyMonths)).distinct().sorted()) {
-                            SelectChip(monthsLabel(m), state.warrantyMonths == m, { vm.setWarranty(state.warrantyStart, m) }, underline = false)
+                            SelectChip(monthsLabel(m), state.warrantyMonths == m, { vm.setWarranty(state.warrantyStart, m) }, underline = false, role = Role.RadioButton)
                         }
                     }
                 }

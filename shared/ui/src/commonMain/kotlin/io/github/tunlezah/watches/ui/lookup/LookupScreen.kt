@@ -96,7 +96,7 @@ fun LookupScreen(state: LookupUiState, images: ImageSource, watchChoices: List<W
             SearchField(state.query, actions.onQuery, { actions.onSearch(null) }, Modifier.padding(horizontal = pad, vertical = 8.dp))
             FlowRow(Modifier.padding(horizontal = pad), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (s in state.sources) {
-                    SelectChip(Sources.shortName(s.info.id), s.enabled, { actions.onToggleSource(s.info.id) }, underline = false)
+                    SelectChip(Sources.shortName(s.info.id), s.enabled, { actions.onToggleSource(s.info.id) }, underline = false, role = Role.Checkbox)
                 }
             }
             if (state.offline) {

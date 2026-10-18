@@ -20,6 +20,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -67,7 +71,7 @@ fun SpecGroupView(
         Column(
             modifier.fillMaxWidth().clip(style.cardShape).background(c.surface).padding(horizontal = 16.dp, vertical = 6.dp),
         ) {
-            Text(title, style = t.type.groupTitle, color = c.fg, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
+            Text(title, style = t.type.groupTitle, color = c.fg, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp).semantics { heading() })
             rows()
         }
     } else if (style.numberedGroups) {
@@ -75,7 +79,7 @@ fun SpecGroupView(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
                 Text(number.toString().padStart(2, '0'), style = t.type.label, color = c.accent)
                 Spacer(Modifier.width(10.dp))
-                Text(title.uppercase(), style = t.type.groupTitle, color = c.fg)
+                Text(title.uppercase(), style = t.type.groupTitle, color = c.fg, modifier = Modifier.semantics { heading() })
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.weight(1f).height(1.dp).background(c.line))
                 Spacer(Modifier.width(10.dp))
@@ -85,7 +89,7 @@ fun SpecGroupView(
         }
     } else {
         Column(modifier.fillMaxWidth()) {
-            Text(title, style = t.type.groupTitle, color = c.fg, modifier = Modifier.padding(bottom = 8.dp))
+            Text(title, style = t.type.groupTitle, color = c.fg, modifier = Modifier.padding(bottom = 8.dp).semantics { heading() })
             rows()
         }
     }
@@ -118,14 +122,16 @@ fun SpecRowView(row: SpecRow, revealed: Boolean, onReveal: () -> Unit, onCopy: (
         append(valueText)
         if (unit != null) withStyle(SpanStyle(color = c.fg3, fontFamily = t.type.specUnit.fontFamily, fontSize = t.type.specUnit.fontSize)) { append(" $unit") }
     }
+    // Only a hidden serial number does anything on a tap; every value copies on a long press.
+    val press = if (row.secret) {
+        Modifier.combinedClickable(onClick = onReveal, onLongClick = { if (!hidden) onCopy() }, onLongClickLabel = "Copy")
+    } else {
+        Modifier.pointerInput(row.value) { detectTapGestures(onLongPress = { onCopy() }) }
+    }
     val rowModifier = Modifier
         .fillMaxWidth()
-        .heightIn(min = 44.dp)
-        .combinedClickable(
-            onClick = { if (row.secret) onReveal() },
-            onLongClick = { if (!hidden) onCopy() },
-            onLongClickLabel = "Copy",
-        )
+        .heightIn(min = 48.dp)
+        .then(press)
         .clearAndSetSemantics {
             contentDescription = spoken
             onLongClick("Copy value") { if (!hidden) onCopy(); true }

@@ -2,10 +2,26 @@ package io.github.tunlezah.watches.ui.components
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import io.github.tunlezah.watches.ui.theme.WatchTheme
 
 /** Set by the app shell; null in previews, tests, two-pane layouts and when animations are off. */
 val LocalSharedTransitionScope = staticCompositionLocalOf<SharedTransitionScope?> { null }
@@ -27,4 +43,25 @@ fun Modifier.sharedWatchPhoto(watchId: String): Modifier {
             animatedVisibilityScope = animated,
         )
     }
+}
+
+/** A pressed card or tile sinks very slightly, springing back on release. Still when motion is reduced. */
+@Composable
+fun Modifier.pressScale(interaction: InteractionSource): Modifier {
+    if (!LocalAnimationsEnabled.current) return this
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow), label = "press")
+    return graphicsLayer { scaleX = scale; scaleY = scale }
+}
+
+/** A placeholder block while content loads: a soft pulse, or a still block when motion is reduced. */
+@Composable
+fun Modifier.skeleton(shape: Shape): Modifier {
+    val base = clip(shape).background(WatchTheme.colors.surface2)
+    if (!LocalAnimationsEnabled.current) return base
+    val alpha by rememberInfiniteTransition(label = "skeleton").animateFloat(
+        initialValue = 0.5f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "pulse",
+    )
+    return graphicsLayer { this.alpha = alpha }.then(base)
 }

@@ -152,7 +152,7 @@ fun CropScreen(state: CropUiState, onBack: () -> Unit, onSave: (NormalizedRect) 
                 SelectChip(a.label, aspect == a, {
                     aspect = a
                     a.ratio?.let { ratio -> rect = fitAspect(ratio, state.width, state.height, rect) }
-                }, underline = false)
+                }, underline = false, role = androidx.compose.ui.semantics.Role.RadioButton)
             }
             WatchButton("Reset", { rect = NormalizedRect.Full; aspect = Aspect.FREE }, kind = ButtonKind.Text)
         }

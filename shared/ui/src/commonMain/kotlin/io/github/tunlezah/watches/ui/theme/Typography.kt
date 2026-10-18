@@ -54,9 +54,14 @@ data class WatchTypography(
     val button: TextStyle,
     val nav: TextStyle,
     val stat: TextStyle,
+    /** The title of a pushed screen, in its header. */
+    val headerTitle: TextStyle,
 )
 
 private const val TNUM = "tnum"
+
+/** Cormorant's default figures are old-style ("556" dips below the line); titles want lining ones. */
+private const val LNUM = "lnum"
 
 @Composable
 private fun cormorant() = FontFamily(
@@ -107,12 +112,12 @@ fun typographyFor(direction: Direction): WatchTypography = when (direction) {
         val sans = instrumentSans()
         WatchTypography(
             screenTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontSize = 38.sp, lineHeight = 40.sp),
-            heroTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontSize = 38.sp, lineHeight = 40.sp),
-            heroSubtitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontStyle = FontStyle.Italic, fontSize = 19.sp, lineHeight = 24.sp),
-            tileTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontSize = 20.sp, lineHeight = 22.sp),
-            tileBrand = TextStyle(fontFamily = sans, fontSize = 10.5.sp, letterSpacing = 0.16.em, lineHeight = 14.sp),
+            heroTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontSize = 38.sp, lineHeight = 40.sp, fontFeatureSettings = LNUM),
+            heroSubtitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontStyle = FontStyle.Italic, fontSize = 19.sp, lineHeight = 24.sp, fontFeatureSettings = LNUM),
+            tileTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontSize = 20.sp, lineHeight = 22.sp, fontFeatureSettings = LNUM),
+            tileBrand = TextStyle(fontFamily = sans, fontSize = 11.sp, letterSpacing = 0.16.em, lineHeight = 14.sp),
             tileMeta = TextStyle(fontFamily = sans, fontSize = 12.sp, lineHeight = 16.sp, fontFeatureSettings = TNUM),
-            groupTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontSize = 25.sp, lineHeight = 28.sp),
+            groupTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontSize = 25.sp, lineHeight = 28.sp, fontFeatureSettings = LNUM),
             specLabel = TextStyle(fontFamily = sans, fontSize = 13.5.sp, lineHeight = 18.sp),
             specValue = TextStyle(fontFamily = sans, fontSize = 15.sp, lineHeight = 20.sp, fontFeatureSettings = TNUM),
             specUnit = TextStyle(fontFamily = sans, fontSize = 12.5.sp, lineHeight = 18.sp, fontFeatureSettings = TNUM),
@@ -124,6 +129,7 @@ fun typographyFor(direction: Direction): WatchTypography = when (direction) {
             button = TextStyle(fontFamily = sans, fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 18.sp),
             nav = TextStyle(fontFamily = sans, fontSize = 11.sp, letterSpacing = 0.04.em, lineHeight = 14.sp),
             stat = TextStyle(fontFamily = sans, fontSize = 15.sp, lineHeight = 20.sp, fontFeatureSettings = TNUM),
+            headerTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Medium, fontSize = 24.sp, lineHeight = 28.sp, fontFeatureSettings = LNUM),
         )
     }
     Direction.INSTRUMENT -> {
@@ -135,20 +141,21 @@ fun typographyFor(direction: Direction): WatchTypography = when (direction) {
             heroTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 25.sp, lineHeight = 28.sp),
             heroSubtitle = TextStyle(fontFamily = mono, fontSize = 12.sp, lineHeight = 16.sp),
             tileTitle = TextStyle(fontFamily = sans, fontWeight = FontWeight.Medium, fontSize = 14.5.sp, lineHeight = 18.sp),
-            tileBrand = TextStyle(fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, letterSpacing = 0.06.em, lineHeight = 14.sp),
+            tileBrand = TextStyle(fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.06.em, lineHeight = 14.sp),
             tileMeta = TextStyle(fontFamily = mono, fontSize = 11.sp, lineHeight = 15.sp),
             groupTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 0.08.em, lineHeight = 16.sp),
             specLabel = TextStyle(fontFamily = sans, fontSize = 13.sp, lineHeight = 18.sp),
-            specValue = TextStyle(fontFamily = sans, fontSize = 14.sp, lineHeight = 19.sp),
+            specValue = TextStyle(fontFamily = sans, fontSize = 14.sp, lineHeight = 19.sp, fontFeatureSettings = TNUM),
             specUnit = TextStyle(fontFamily = mono, fontSize = 11.sp, lineHeight = 16.sp),
-            specSource = TextStyle(fontFamily = mono, fontSize = 9.5.sp, lineHeight = 12.sp),
+            specSource = TextStyle(fontFamily = mono, fontSize = 11.sp, lineHeight = 14.sp),
             reference = TextStyle(fontFamily = mono, fontSize = 12.5.sp, lineHeight = 16.sp),
-            label = TextStyle(fontFamily = mono, fontSize = 10.5.sp, lineHeight = 14.sp),
+            label = TextStyle(fontFamily = mono, fontSize = 11.sp, lineHeight = 14.sp),
             body = TextStyle(fontFamily = sans, fontSize = 15.sp, lineHeight = 22.sp),
-            bodySmall = TextStyle(fontFamily = sans, fontSize = 13.sp, lineHeight = 18.sp),
+            bodySmall = TextStyle(fontFamily = sans, fontSize = 13.sp, lineHeight = 18.sp, fontFeatureSettings = TNUM),
             button = TextStyle(fontFamily = mono, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp),
-            nav = TextStyle(fontFamily = mono, fontSize = 10.sp, lineHeight = 13.sp),
+            nav = TextStyle(fontFamily = mono, fontSize = 11.sp, lineHeight = 14.sp),
             stat = TextStyle(fontFamily = display, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 24.sp, fontFeatureSettings = TNUM),
+            headerTitle = TextStyle(fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 16.sp, letterSpacing = 0.04.em, lineHeight = 20.sp),
         )
     }
     Direction.GALLERY -> {
@@ -172,6 +179,7 @@ fun typographyFor(direction: Direction): WatchTypography = when (direction) {
             button = TextStyle(fontFamily = m, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 18.sp),
             nav = TextStyle(fontFamily = m, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, lineHeight = 14.sp),
             stat = TextStyle(fontFamily = m, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, letterSpacing = (-0.01).em, lineHeight = 26.sp, fontFeatureSettings = TNUM),
+            headerTitle = TextStyle(fontFamily = m, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 26.sp),
         )
     }
 }

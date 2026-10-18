@@ -22,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.tunlezah.watches.core.format.Numbers
 import io.github.tunlezah.watches.core.model.Complication
@@ -32,7 +34,7 @@ import io.github.tunlezah.watches.core.query.SortSpec
 import io.github.tunlezah.watches.ui.components.ButtonKind
 import io.github.tunlezah.watches.ui.components.ChipGroup
 import io.github.tunlezah.watches.ui.components.FieldLabel
-import io.github.tunlezah.watches.ui.components.SelectChip
+import io.github.tunlezah.watches.ui.components.SegmentedControl
 import io.github.tunlezah.watches.ui.components.WatchButton
 import io.github.tunlezah.watches.ui.theme.WatchIcons
 import io.github.tunlezah.watches.ui.theme.WatchTheme
@@ -55,7 +57,7 @@ fun FilterSheet(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Text(t.title("Sort and filter"), style = t.type.groupTitle, color = c.fg)
+            Text(t.title("Sort and filter"), style = t.type.groupTitle, color = c.fg, modifier = Modifier.semantics { heading() })
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 FieldLabel("Sort by")
@@ -64,20 +66,17 @@ fun FilterSheet(
                     setOf(state.sort.order.key),
                     { key -> onSort(state.sort.copy(order = SortOrder.entries.first { it.key == key })) },
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SelectChip(
-                        if (state.sort.reversed) "Reversed order" else "Normal order",
-                        state.sort.reversed,
-                        { onSort(state.sort.copy(reversed = !state.sort.reversed)) },
-                        underline = false,
-                    )
-                }
+                SegmentedControl(
+                    listOf(false to "Normal order", true to "Reversed"),
+                    state.sort.reversed,
+                    { r -> onSort(state.sort.copy(reversed = r)) },
+                )
             }
 
             if (state.brands.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     FieldLabel("Brand")
-                    ChipGroup(state.brands.map { it to it }, draft.brands, { b -> draft = draft.copy(brands = draft.brands.toggle(b)) })
+                    ChipGroup(state.brands.map { it to it }, draft.brands, { b -> draft = draft.copy(brands = draft.brands.toggle(b)) }, multi = true)
                 }
             }
 
@@ -87,6 +86,7 @@ fun FilterSheet(
                     MovementType.entries.map { it.key to it.label },
                     draft.movementTypes.mapTo(mutableSetOf()) { it.key },
                     { k -> draft = draft.copy(movementTypes = draft.movementTypes.toggle(MovementType.entries.first { it.key == k })) },
+                    multi = true,
                 )
             }
 
@@ -97,6 +97,7 @@ fun FilterSheet(
                         state.complications.map { it to Complication.labelFor(it) },
                         draft.complications,
                         { k -> draft = draft.copy(complications = draft.complications.toggle(k)) },
+                        multi = true,
                     )
                 }
             }

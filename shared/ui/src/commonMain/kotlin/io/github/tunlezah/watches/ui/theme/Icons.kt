@@ -80,5 +80,11 @@ object WatchIcons {
     val Palette = stroke("palette", "M12,3.5a8.5,8.5 0 1 0 0,17c1.2,0 1.8,-0.8 1.8,-1.7c0,-1.3 -1,-1.5 -1,-2.6c0,-1 0.8,-1.7 1.8,-1.7h2.1a3.8,3.8 0 0 0 3.8,-3.8c0,-4.2 -3.8,-7.2 -8.5,-7.2z", circle(7.8f, 11f, 1.1f), circle(10f, 7.4f, 1.1f), circle(14.3f, 7.4f, 1.1f))
     val Ruler = stroke("ruler", "M3.5,15.5l12,-12l5,5l-12,12z", "M7,12l2,2", "M10,9l2,2", "M13,6l2,2")
     val Warning = stroke("warning", "M12,4l9,16h-18z", "M12,10v4.5", "M12,17.3v0.2")
+    val Gear = stroke("gear", circle(12f, 12f, 3f),
+        "M12,2.8l1.6,2.3l2.7,-0.6l0.8,2.7l2.6,1l-0.5,2.8l1.9,2l-1.9,2l0.5,2.8l-2.6,1l-0.8,2.7l-2.7,-0.6l-1.6,2.3l-1.6,-2.3l-2.7,0.6l-0.8,-2.7l-2.6,-1l0.5,-2.8l-1.9,-2l1.9,-2l-0.5,-2.8l2.6,-1l0.8,-2.7l2.7,0.6z")
+    val Filter = stroke("filter", "M4,6h16", "M7,12h10", "M10,18h4")
+    val Box = stroke("box", "M3.5,8l8.5,-4l8.5,4v8l-8.5,4l-8.5,-4z", "M3.5,8l8.5,4l8.5,-4", "M12,12v8")
+    val Document = stroke("document", "M6.5,3.5h7.5l4.5,4.5v12a0.5,0.5 0 0 1 -0.5,0.5h-11.5a0.5,0.5 0 0 1 -0.5,-0.5v-16a0.5,0.5 0 0 1 0.5,-0.5z", "M13.5,3.5v5h5", "M9,13h6", "M9,16.5h6")
+    val Undo = stroke("undo", "M9,14l-5,-5l5,-5", "M4,9h10a6,6 0 0 1 0,12h-3")
     val CheckCircle = stroke("check-circle", circle(12f, 12f, 9f), "M8,12.5l2.8,2.8l5.2,-5.6")
 }

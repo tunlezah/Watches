@@ -45,6 +45,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.invisibleToUser
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -89,6 +98,7 @@ data class DetailActions(
     val onDocuments: () -> Unit = {},
     val onOpenDocument: (WatchDocument) -> Unit = {},
     val onAddGuide: (DocumentKind) -> Unit = {},
+    val onCopied: (label: String) -> Unit = {},
 )
 
 @Composable
@@ -98,10 +108,15 @@ fun DetailScreen(state: DetailUiState, watchId: String, actions: DetailActions, 
     val style = WatchTheme.style
     val haptics = LocalHapticFeedback.current
     @Suppress("DEPRECATION") val clipboard = LocalClipboardManager.current
-    val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     var revealed by remember { mutableStateOf(emptySet<String>()) }
-    var confirmDelete by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    var heroHeight by remember { mutableIntStateOf(0) }
+    // The header gains a background and the watch's name once the hero has scrolled away under it.
+    val collapsed by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > heroHeight - with(density) { 72.dp.roundToPx() } }
+    }
+    val barAlpha by animateFloatAsState(if (collapsed) 1f else 0f, label = "bar")
 
     if (state.missing) {
         Box(modifier.fillMaxSize().background(c.bg), contentAlignment = Alignment.Center) {
@@ -113,25 +128,24 @@ fun DetailScreen(state: DetailUiState, watchId: String, actions: DetailActions, 
     val copy: (SpecRow) -> Unit = { row ->
         clipboard.setText(AnnotatedString(row.value.plain))
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        scope.launch { snackbar.showSnackbar("Copied ${row.label.lowercase()}") }
+        actions.onCopied(row.label)
     }
 
     Box(modifier.fillMaxSize().background(c.bg)) {
-        LazyColumn(Modifier.fillMaxSize()) {
-            item("hero") { Hero(state, watchId, actions.onViewPhoto) }
+        LazyColumn(Modifier.fillMaxSize(), state = listState) {
+            item("hero") { Box(Modifier.onSizeChanged { heroHeight = it.height }) { Hero(state, watchId, actions.onViewPhoto, actions.onPhotos) } }
             item("title") { TitleBlock(state) }
             if (state.stats.isNotEmpty()) item("stats") { StatsStrip(state) }
             item("actions") {
-                Row(Modifier.padding(horizontal = style.screenPadding).padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    WatchButton("Edit", actions.onEdit, Modifier.weight(1f), icon = WatchIcons.Edit)
-                    WatchButton("Photos", actions.onPhotos, Modifier.weight(1f), icon = WatchIcons.Camera,
-                        kind = if (style.direction == Direction.INSTRUMENT) ButtonKind.Primary else ButtonKind.Secondary)
-                    WatchButton("Look up", actions.onLookUp, Modifier.weight(1f), icon = WatchIcons.Lookup)
-                }
+                WatchButton(
+                    "Look up specs", actions.onLookUp,
+                    Modifier.padding(horizontal = style.screenPadding).padding(top = 18.dp).fillMaxWidth(),
+                    kind = ButtonKind.Tonal, icon = WatchIcons.Lookup,
+                )
             }
             state.notice?.let { notice ->
                 item("notice") {
-                    Box(Modifier.padding(horizontal = style.screenPadding).padding(top = 14.dp).clickable(enabled = !state.refreshing, onClick = actions.onDismissNotice)) {
+                    Box(Modifier.padding(horizontal = style.screenPadding).padding(top = 14.dp).clickable(enabled = !state.refreshing, onClickLabel = "Dismiss", onClick = actions.onDismissNotice)) {
                         io.github.tunlezah.watches.ui.lookup.Notice(notice)
                     }
                 }
@@ -166,43 +180,41 @@ fun DetailScreen(state: DetailUiState, watchId: String, actions: DetailActions, 
             }
         }
 
-        // Top bar over the hero.
-        Row(
-            Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (showBack) OverlayButton(WatchIcons.Back, "Back", actions.onBack)
-            Spacer(Modifier.weight(1f))
-            var menu by remember { mutableStateOf(false) }
-            Box {
-                OverlayButton(WatchIcons.More, "More actions") { menu = true }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = c.surface) {
-                    MenuRow("Edit", WatchIcons.Edit) { menu = false; actions.onEdit() }
-                    MenuRow("Manage photos", WatchIcons.Camera) { menu = false; actions.onPhotos() }
-                    MenuRow("Look up specs", WatchIcons.Lookup) { menu = false; actions.onLookUp() }
-                    if (state.hasSources) MenuRow("Refresh from sources", WatchIcons.Refresh) { menu = false; actions.onRefresh() }
-                    MenuRow("Duplicate", WatchIcons.Copy) { menu = false; actions.onDuplicate() }
-                    MenuRow(if (state.archived) "Unarchive" else "Archive", if (state.archived) WatchIcons.Restore else WatchIcons.Archive) {
-                        menu = false
-                        actions.onArchive(!state.archived)
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        // Top bar: over the hero at first, then a solid header with the watch's name once scrolled.
+        Column(Modifier.fillMaxWidth().background(c.bg.copy(alpha = barAlpha))) {
+            Row(
+                Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = if (style.direction == Direction.GALLERY) style.heroInset + 4.dp else 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (showBack) OverlayButton(WatchIcons.Back, "Back", actions.onBack, solid = collapsed)
+                Text(
+                    t.title(state.title), style = t.type.headerTitle, color = c.fg.copy(alpha = barAlpha), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { if (!collapsed) invisibleToUser() },
+                )
+                OverlayButton(WatchIcons.Edit, "Edit", actions.onEdit, solid = collapsed)
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    OverlayButton(WatchIcons.More, "More actions", { menu = true }, solid = collapsed)
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = c.surface) {
+                        MenuRow("Manage photos", WatchIcons.Camera) { menu = false; actions.onPhotos() }
+                        if (state.hasSources) MenuRow("Refresh from sources", WatchIcons.Refresh) { menu = false; actions.onRefresh() }
+                        MenuRow("Duplicate", WatchIcons.Copy) { menu = false; actions.onDuplicate() }
+                        MenuRow(if (state.archived) "Unarchive" else "Archive", if (state.archived) WatchIcons.Restore else WatchIcons.Archive) {
+                            menu = false
+                            actions.onArchive(!state.archived)
+                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                        }
+                        MenuRow("Delete", WatchIcons.Trash, danger = true) {
+                            menu = false
+                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                            actions.onDelete()
+                        }
                     }
-                    MenuRow("Delete", WatchIcons.Trash, danger = true) { menu = false; confirmDelete = true }
                 }
             }
+            if (barAlpha > 0f) Box(Modifier.fillMaxWidth().height(1.dp).background(c.line.copy(alpha = barAlpha)))
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
-    }
-
-    if (confirmDelete) {
-        ConfirmDialog(
-            title = "Delete this watch?",
-            message = "${state.brand?.let { "$it " } ?: ""}${state.title} and all its photos and notes will be removed from this phone. This can't be undone. Archive it instead to keep its history.",
-            confirm = "Delete",
-            destructive = true,
-            onConfirm = { confirmDelete = false; actions.onDelete() },
-            onDismiss = { confirmDelete = false },
-        )
     }
 }
 
@@ -217,19 +229,20 @@ private fun MenuRow(text: String, icon: androidx.compose.ui.graphics.vector.Imag
     )
 }
 
+/** A header button that floats over the photo (with a soft backing so it reads on any picture), then sits flat in the solid header. */
 @Composable
-private fun OverlayButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+private fun OverlayButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, solid: Boolean = false) {
     val c = WatchTheme.colors
     val style = WatchTheme.style
     IconAction(
         icon, label, onClick, tint = c.fg,
-        filled = if (style.direction == Direction.GALLERY) c.surface.copy(alpha = 0.7f) else null,
-        framed = style.direction == Direction.INSTRUMENT,
+        filled = if (!solid && style.direction != Direction.INSTRUMENT) c.surface.copy(alpha = 0.72f) else null,
+        framed = style.direction == Direction.INSTRUMENT && !solid,
     )
 }
 
 @Composable
-private fun Hero(state: DetailUiState, watchId: String, onView: (Int) -> Unit) {
+private fun Hero(state: DetailUiState, watchId: String, onView: (Int) -> Unit, onPhotos: () -> Unit) {
     val c = WatchTheme.colors
     val t = WatchTheme.values
     val style = WatchTheme.style
@@ -252,6 +265,20 @@ private fun Hero(state: DetailUiState, watchId: String, onView: (Int) -> Unit) {
                         .clickable(enabled = photo != null, role = Role.Image, onClickLabel = "View full screen") { onView(page) },
                 )
             }
+            // A soft shade at the top keeps the header buttons readable over bright photos.
+            if (state.photos.isNotEmpty()) {
+                Box(Modifier.fillMaxWidth().height(96.dp).background(Brush.verticalGradient(listOf(c.bg.copy(alpha = 0.45f), Color.Transparent))))
+            }
+            // Photos: one tap to add the first, or to manage them.
+            if (state.photos.isEmpty()) {
+                WatchButton("Add photo", onPhotos, Modifier.align(Alignment.BottomEnd).padding(12.dp), kind = ButtonKind.Tonal, icon = WatchIcons.Camera)
+            } else {
+                IconAction(
+                    WatchIcons.Camera, "Manage photos", onPhotos, tint = c.fg,
+                    filled = c.surface.copy(alpha = 0.72f),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
+                )
+            }
             state.photos.getOrNull(pager.currentPage)?.credit?.let { credit ->
                 Text(
                     credit, style = t.type.specSource, color = c.fg2, maxLines = 2,
@@ -271,9 +298,10 @@ private fun Hero(state: DetailUiState, watchId: String, onView: (Int) -> Unit) {
                         )
                         else -> repeat(state.photos.size) { i ->
                             val active = i == pager.currentPage
+                            val width by animateDpAsState(if (active) 18.dp else 6.dp, label = "dot")
                             Box(
                                 Modifier
-                                    .size(width = if (active) 18.dp else 6.dp, height = if (style.direction == Direction.GALLERY) 6.dp else 2.dp)
+                                    .size(width = width, height = if (style.direction == Direction.GALLERY) 6.dp else 2.dp)
                                     .clip(RoundedCornerShape(3.dp))
                                     .background(if (active) c.accent else c.fg3.copy(alpha = 0.6f)),
                             )
@@ -378,7 +406,7 @@ private fun CareSection(care: DetailCare, actions: DetailActions, modifier: Modi
                     Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClickLabel = "Open") { actions.onOpenDocument(g) },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(WatchIcons.Info, null, tint = c.accent, modifier = Modifier.size(20.dp))
+                    Icon(WatchIcons.Document, null, tint = c.accent, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(g.title, style = t.type.body, color = c.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -396,10 +424,10 @@ private fun CareSection(care: DetailCare, actions: DetailActions, modifier: Modi
         }
         NavCard(WatchIcons.Service, "Service", care.service, actions.onService, emphasis = care.serviceUrgent, badge = care.serviceBadge)
         NavCard(
-            WatchIcons.Archive, "Box & papers",
+            WatchIcons.Box, "Box & papers",
             listOfNotNull(care.papers, care.warranty).joinToString(" · "),
             actions.onBoxPapers, emphasis = care.warrantyEnded && !care.fullSet, badge = if (care.fullSet) "Full set" else null,
         )
-        NavCard(WatchIcons.Copy, "Documents", care.documents, actions.onDocuments)
+        NavCard(WatchIcons.Document, "Documents", care.documents, actions.onDocuments)
     }
 }

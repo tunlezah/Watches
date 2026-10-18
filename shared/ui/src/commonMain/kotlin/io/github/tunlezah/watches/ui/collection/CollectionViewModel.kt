@@ -14,6 +14,7 @@ import io.github.tunlezah.watches.core.query.StatusTab
 import io.github.tunlezah.watches.core.settings.CollectionLayout
 import io.github.tunlezah.watches.data.SettingsRepository
 import io.github.tunlezah.watches.data.WatchRepository
+import io.github.tunlezah.watches.ui.components.UndoableActions
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.ui.components.WatchLook
 import io.github.tunlezah.watches.ui.diagnostics.PerfLog
@@ -66,6 +67,7 @@ class CollectionViewModel(
     private val watches: WatchRepository,
     private val settings: SettingsRepository,
     private val files: FileStore,
+    undoable: UndoableActions,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -74,7 +76,10 @@ class CollectionViewModel(
     // Items are cached by summary so unchanged tiles keep their identity and skip recomposition.
     private val itemCache = HashMap<String, Pair<WatchSummary, CollectionItem>>()
 
-    private val summaries = watches.observeSummaries()
+    // A watch deleted a moment ago is hidden while its Undo is on offer.
+    private val summaries = combine(watches.observeSummaries(), undoable.hidden) { all, hidden ->
+        if (hidden.isEmpty()) all else all.filterNot { it.id in hidden }
+    }
 
     /** Search re-runs when the text or the data changes. Null means no search is active. */
     private val matches = combine(query, summaries) { q, _ -> q }

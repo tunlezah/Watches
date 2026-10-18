@@ -52,6 +52,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import io.github.tunlezah.watches.ui.components.UndoableActions
+import io.github.tunlezah.watches.ui.components.AppMessages
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarData
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -61,6 +67,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
@@ -171,7 +178,7 @@ private val tabs = listOf(
     Tab(Route.Collection, "Collection", WatchIcons.Grid),
     Tab(Route.Lookup, "Lookup", WatchIcons.Lookup),
     Tab(Route.Service, "Service", WatchIcons.Service),
-    Tab(Route.Settings, "Settings", WatchIcons.Sliders),
+    Tab(Route.Settings, "Settings", WatchIcons.Gear),
 )
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
@@ -179,7 +186,12 @@ private val tabs = listOf(
 fun AppShell() {
     val c = WatchTheme.colors
     val navigator = rememberNavigator()
-    val animations = remember { systemAnimationsEnabled() }
+    // Read again whenever the app comes back, in case reduced motion was switched in the phone's settings.
+    var animations by remember { mutableStateOf(systemAnimationsEnabled()) }
+    LifecycleResumeEffect(Unit) {
+        animations = systemAnimationsEnabled()
+        onPauseOrDispose { }
+    }
 
     // Tabs hide while a form is open, so switching tab can't throw unsaved work away.
     val editing = navigator.backStack.any { it is Route.Edit || it is Route.Crop || it is Route.ServiceEdit || it is Route.RestoreBackup }
@@ -254,9 +266,34 @@ fun AppShell() {
                         )
                     }
                 }
-                if (!wide && navigator.backStack.size == 1) {
+                val tabBar = !wide && navigator.backStack.size == 1
+                if (tabBar) {
                     BottomBar(navigator, Modifier.align(Alignment.BottomCenter))
                 }
+                // Above the tab bar when it shows, otherwise just above the navigation bar.
+                SnackbarHost(
+                    koinInject<AppMessages>().host,
+                    Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = if (tabBar) 88.dp else 8.dp),
+                ) { data -> AppSnackbar(data) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppSnackbar(data: SnackbarData) {
+    val c = WatchTheme.colors
+    val t = WatchTheme.values
+    val style = WatchTheme.style
+    Row(
+        Modifier.padding(horizontal = style.screenPadding).fillMaxWidth().clip(style.cardShape).background(c.fg)
+            .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp).heightIn(min = 48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(data.visuals.message, style = t.type.body, color = c.bg, modifier = Modifier.weight(1f).padding(vertical = 8.dp), maxLines = 2)
+        data.visuals.actionLabel?.let { label ->
+            TextButton(onClick = { data.performAction() }) {
+                Text(if (style.uppercaseLabels) label.uppercase() else label, style = t.type.button.copy(fontWeight = FontWeight.Bold), color = c.bg)
             }
         }
     }
@@ -307,6 +344,11 @@ private fun CollectionEntry(navigator: Navigator) {
             navigator.openDetail(id)
         },
         onAdd = { navigator.push(Route.Edit(null)) },
+        onLookUp = { navigator.selectTab(Route.Lookup) },
+        onRestore = {
+            navigator.selectTab(Route.Settings)
+            navigator.push(Route.SettingsPage(SettingsPage.BACKUP.key))
+        },
     )
     if (showFilters) FilterSheet(state, { vm.setSort(it) }, vm::setFilter, { showFilters = false })
 }
@@ -314,6 +356,8 @@ private fun CollectionEntry(navigator: Navigator) {
 @Composable
 private fun DetailEntry(watchId: String, navigator: Navigator, showBack: Boolean) {
     val vm = koinViewModel<DetailViewModel>(key = "detail-$watchId") { parametersOf(watchId) }
+    val undoable = koinInject<UndoableActions>()
+    val messages = koinInject<AppMessages>()
     val state by vm.state.collectAsStateWithLifecycle()
     LaunchedEffect(state.loading) {
         if (!state.loading) {
@@ -332,8 +376,12 @@ private fun DetailEntry(watchId: String, navigator: Navigator, showBack: Boolean
             onPhotos = { navigator.push(Route.Photos(watchId)) },
             onViewPhoto = { i -> navigator.push(Route.Viewer(watchId, i)) },
             onDuplicate = { vm.duplicate { id -> navigator.openDetail(id); navigator.push(Route.Edit(id)) } },
-            onArchive = vm::setArchived,
-            onDelete = { vm.delete { navigator.popTo { it !is Route.Detail && it !is Route.Edit } } },
+            onArchive = { archived -> undoable.setArchived(watchId, archived) },
+            onDelete = {
+                undoable.delete(watchId, state.watch?.title ?: "watch")
+                navigator.popTo { it !is Route.Detail && it !is Route.Edit }
+            },
+            onCopied = { label -> messages.show("Copied ${label.lowercase()}") },
             onLookUp = {
                 val w = state.watch
                 val query = listOfNotNull(w?.brand, w?.reference ?: w?.modelName ?: w?.collection).joinToString(" ")

@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -106,7 +107,7 @@ private fun DueRow(item: DueItem, onClick: () -> Unit) {
         Modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(role = Role.Button, onClick = onClick).padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        WatchPhoto(item.thumb, WatchLook.guess(null, null, emptySet()), contentDescription = item.title,
+        WatchPhoto(item.thumb, WatchLook.guess(null, null, emptySet()), contentDescription = "",
             modifier = Modifier.size(52.dp).clip(WatchTheme.style.tileShape), illustrationPadding = 6.dp)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
@@ -145,18 +146,22 @@ fun ServiceHistoryScreen(
                         state.lastService?.let { Text("Last serviced $it", style = t.type.bodySmall, color = c.fg2) }
                         FieldLabel("Service interval")
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SelectChip("None", state.intervalMonths == null, { onInterval(null) }, underline = false)
+                            SelectChip("None", state.intervalMonths == null, { onInterval(null) }, underline = false, role = Role.RadioButton)
                             val choices = (intervalChoices + listOfNotNull(state.intervalMonths)).distinct().sorted()
-                            for (m in choices) SelectChip(monthsLabel(m), state.intervalMonths == m, { onInterval(m) }, underline = false)
+                            for (m in choices) SelectChip(monthsLabel(m), state.intervalMonths == m, { onInterval(m) }, underline = false, role = Role.RadioButton)
                         }
-                        Row(Modifier.fillMaxWidth().clickable(role = Role.Switch, enabled = state.intervalMonths != null) { onReminder(!state.reminder) }, verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                                .toggleable(value = state.reminder, enabled = state.intervalMonths != null, role = Role.Switch, onValueChange = onReminder),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Column(Modifier.weight(1f)) {
                                 Text("Remind me when it's due", style = t.type.body, color = if (state.intervalMonths != null) c.fg else c.fg3)
                                 Text("A notification on this phone at 9 am on the due date.", style = t.type.bodySmall, color = c.fg3)
                             }
                             Switch(
-                                checked = state.reminder, onCheckedChange = onReminder, enabled = state.intervalMonths != null,
-                                colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent, uncheckedTrackColor = c.surface2, uncheckedBorderColor = c.line),
+                                checked = state.reminder, onCheckedChange = null, enabled = state.intervalMonths != null,
+                                colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent, uncheckedTrackColor = c.surface2, uncheckedThumbColor = c.fg3, uncheckedBorderColor = c.lineStrong),
                             )
                         }
                         if (state.notificationsBlocked) {
@@ -191,7 +196,7 @@ private fun EntryRow(e: EntryUi, onClick: () -> Unit, onOpenDocument: (WatchDocu
         if (e.documents.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (d in e.documents) SelectChip("${d.title} · ${CareText.docType(d)}", false, { onOpenDocument(d) }, underline = false)
+                for (d in e.documents) SelectChip("${d.title} · ${CareText.docType(d)}", false, { onOpenDocument(d) }, underline = false, role = Role.Button)
             }
         }
     }

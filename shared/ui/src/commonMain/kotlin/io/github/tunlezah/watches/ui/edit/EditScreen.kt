@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -215,8 +216,8 @@ private fun FieldEditor(field: SpecField, state: EditUiState, vm: EditViewModel)
             FieldLabel(field.label)
             val current = (field.get(draft) as? SpecValue.Flag)?.value
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SelectChip("Yes", current == true, { vm.setValue(field, if (current == true) null else SpecValue.Flag(true)) }, underline = false)
-                SelectChip("No", current == false, { vm.setValue(field, if (current == false) null else SpecValue.Flag(false)) }, underline = false)
+                SelectChip("Yes", current == true, { vm.setValue(field, if (current == true) null else SpecValue.Flag(true)) }, underline = false, role = Role.RadioButton)
+                SelectChip("No", current == false, { vm.setValue(field, if (current == false) null else SpecValue.Flag(false)) }, underline = false, role = Role.RadioButton)
             }
         }
         SpecKind.Date -> DateField(field, (field.get(draft) as? SpecValue.Date)?.value, state) { vm.setValue(field, it?.let { d -> SpecValue.Date(d) }) }
@@ -261,14 +262,14 @@ private fun TextFieldEditor(field: SpecField, state: EditUiState, vm: EditViewMo
             val matches = state.brands.filter { it.startsWith(text.trim(), ignoreCase = true) && !it.equals(text.trim(), ignoreCase = true) }.take(6)
             if (matches.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    matches.forEach { b -> SelectChip(b, false, { vm.setText(field, b) }, underline = false) }
+                    matches.forEach { b -> SelectChip(b, false, { vm.setText(field, b) }, underline = false, role = Role.Button) }
                 }
             }
         }
         val quick = suggestions[field.key]
         if (quick != null && text.isBlank()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                quick.forEach { s -> SelectChip(s, false, { vm.setText(field, s) }, underline = false) }
+                quick.forEach { s -> SelectChip(s, false, { vm.setText(field, s) }, underline = false, role = Role.Button) }
             }
         }
     }
@@ -284,7 +285,7 @@ private fun PriceField(field: SpecField, state: EditUiState, vm: EditViewModel) 
             Column {
                 FieldLabel("Currency")
                 Spacer(Modifier.height(6.dp))
-                SelectChip(state.currency, true, { menu = true }, underline = false)
+                SelectChip(state.currency, true, { menu = true }, underline = false, role = Role.Button)
             }
             DropdownMenu(menu, { menu = false }, containerColor = c.surface) {
                 Currencies.common.forEach { code ->
@@ -313,7 +314,7 @@ private fun DateField(field: SpecField, value: LocalDate?, state: EditUiState, o
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         FieldLabel(field.label)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SelectChip(value?.let { state.prefs.dateFormat.format(it) } ?: "Choose date", value != null, { open = true }, underline = false)
+            SelectChip(value?.let { state.prefs.dateFormat.format(it) } ?: "Choose date", value != null, { open = true }, underline = false, role = Role.Button)
             if (value != null) IconAction(WatchIcons.Close, "Clear ${field.label.lowercase()}", { onPick(null) })
         }
     }
@@ -340,7 +341,7 @@ private fun ComplicationsEditor(selected: Set<String>, vm: EditViewModel) {
         FieldLabel(SpecFields.Complications.label)
         val options = Complication.entries.map { it.key to it.label } +
             selected.filter { it.startsWith(Complication.CUSTOM_PREFIX) }.map { it to Complication.labelFor(it) }
-        ChipGroup(options, selected, vm::toggleComplication)
+        ChipGroup(options, selected, vm::toggleComplication, multi = true)
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             WatchTextField("Add another", custom, { custom = it }, Modifier.weight(1f), placeholder = "e.g. Regatta timer")
             WatchButton("Add", { vm.addCustomComplication(custom); custom = "" }, enabled = custom.isNotBlank(),

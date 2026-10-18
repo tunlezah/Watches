@@ -28,6 +28,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -161,8 +163,10 @@ private fun CheckRow(checked: Boolean, title: String, detail: String?, onClick: 
     val t = WatchTheme.values
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp))
-            .clickable(role = if (radio) Role.RadioButton else Role.Checkbox, onClick = onClick)
-            .semantics { stateDescription = if (checked) "Ticked" else "Not ticked" }
+            .then(
+                if (radio) Modifier.selectable(selected = checked, role = Role.RadioButton, onClick = onClick)
+                else Modifier.toggleable(value = checked, role = Role.Checkbox, onValueChange = { onClick() }),
+            )
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
