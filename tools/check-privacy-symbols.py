@@ -7,6 +7,8 @@ App Store Connect refuses uploads that use one of these APIs without declaring i
 framework is linked statically, so the app's own binary also carries whatever Kotlin, Compose,
 SQLite and Skia call. Runs on macOS (it needs Xcode's nm and strings). Fails when an API is used
 but its category isn't declared; warns when a category is declared but nothing seems to use it.
+Test frameworks and test bundles that Xcode copies into an app built for testing, and the Debug
+previews stub, don't ship, so they're left out.
 """
 import plistlib
 import subprocess
@@ -62,6 +64,15 @@ def binaries(app: Path):
                     yield p
 
 
+def test_only(rel: Path) -> bool:
+    """Xcode's test frameworks (XCTest, XCUIAutomation, Swift Testing...), hosted test bundles and
+    the Debug previews stub: inside the .app CI tests, never in what ships."""
+    for part in rel.parts:
+        if part.endswith(".xctest") or part == "Testing.framework" or (part.startswith("XC") and part.endswith(".framework")):
+            return True
+    return rel.name.startswith("libXCTest") or rel.name == "__preview.dylib"
+
+
 def imported_symbols(binary: Path) -> set:
     """Imported symbol names without the leading underscore. An Objective-C class the binary uses is
     imported as OBJC_CLASS_$_Name, so its bare name is added too (NSUserDefaults, for one)."""
@@ -86,28 +97,39 @@ def main() -> int:
     for entry in manifest.get("NSPrivacyAccessedAPITypes", []):
         declared[entry["NSPrivacyAccessedAPIType"]] = entry.get("NSPrivacyAccessedAPITypeReasons", [])
 
-    symbols, strings, files = set(), set(), []
+    found, skipped = {}, []
     for b in binaries(app):
-        files.append(b.relative_to(app.parent))
-        symbols |= imported_symbols(b)
-        strings |= strings_in(b)
-    if not files:
+        rel = b.relative_to(app.parent)
+        if test_only(b.relative_to(app)):
+            skipped.append(rel)
+            continue
+        found[rel] = (imported_symbols(b), strings_in(b))
+    if not found:
         sys.exit(f"No binaries found in {app}")
-    print("Scanned: " + ", ".join(str(f) for f in files))
+    print("Scanned: " + ", ".join(str(f) for f in found))
+    if skipped:
+        print("Left out (test or preview only): " + ", ".join(str(f) for f in skipped))
 
     failed = False
     for category, apis in CATEGORIES.items():
-        used = [f for f in apis["functions"] if f in symbols]
-        used += [n for n in apis["names"] if n in symbols or n in strings]
+        uses = {}  # API -> the binaries that use it
+        for rel, (symbols, strings) in found.items():
+            for api in apis["functions"]:
+                if api in symbols:
+                    uses.setdefault(api, []).append(rel.name)
+            for api in apis["names"]:
+                if api in symbols or api in strings:
+                    uses.setdefault(api, []).append(rel.name)
+        used = ", ".join(f"{api} ({', '.join(files)})" for api, files in uses.items())
         name = category.removeprefix("NSPrivacyAccessedAPICategory")
-        if used and category not in declared:
-            print(f"FAIL  {name}: uses {', '.join(used)} but the manifest doesn't declare it")
+        if uses and category not in declared:
+            print(f"FAIL  {name}: uses {used} but the manifest doesn't declare it")
             failed = True
-        elif used and not declared[category]:
+        elif uses and not declared[category]:
             print(f"FAIL  {name}: declared without a reason")
             failed = True
-        elif used:
-            print(f"ok    {name}: uses {', '.join(used)}; declared with {', '.join(declared[category])}")
+        elif uses:
+            print(f"ok    {name}: uses {used}; declared with {', '.join(declared[category])}")
         elif category in declared:
             print(f"warn  {name}: declared, but nothing in the binary seems to use it")
         else:
