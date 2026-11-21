@@ -63,8 +63,11 @@ def binaries(app: Path):
 
 
 def imported_symbols(binary: Path) -> set:
+    """Imported symbol names without the leading underscore. An Objective-C class the binary uses is
+    imported as OBJC_CLASS_$_Name, so its bare name is added too (NSUserDefaults, for one)."""
     out = subprocess.run(["xcrun", "nm", "-u", "-j", str(binary)], capture_output=True, text=True, check=True).stdout
-    return {line.strip().lstrip("_") for line in out.splitlines() if line.strip()}
+    names = {line.strip().lstrip("_") for line in out.splitlines() if line.strip()}
+    return names | {n.removeprefix("OBJC_CLASS_$_") for n in names if n.startswith("OBJC_CLASS_$_")}
 
 
 def strings_in(binary: Path) -> set:

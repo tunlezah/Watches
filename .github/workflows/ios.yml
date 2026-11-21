@@ -51,8 +51,12 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Cache Kotlin/Native toolchain
-        uses: actions/cache@v4
+      # Kotlin/Native's toolchain and the simulator builds of every library (Compose, Skia, Room...).
+      # Without them the first link takes 15 minutes or more, so they're saved as soon as linking
+      # has worked, even if a later step fails.
+      - name: Restore the Kotlin/Native cache
+        id: konan
+        uses: actions/cache/restore@v4
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
@@ -84,17 +88,51 @@ jobs:
           echo "Using simulator $UDID"
           echo "UDID=$UDID" >> "$GITHUB_ENV"
 
-      - name: Shared tests on the simulator
+      # One module at a time: linking for the simulator needs a lot of memory on a 7 GB runner.
+      - name: Link the shared test binaries
+        id: link
+        timeout-minutes: 45
         run: >
-          ./gradlew --stacktrace
-          :shared:core:iosSimulatorArm64Test
-          :shared:data:iosSimulatorArm64Test
-          :shared:search:iosSimulatorArm64Test
-          :shared:ui:iosSimulatorArm64Test
-          -PiosSimulator="$UDID"
+          ./gradlew --max-workers=1 --stacktrace
+          :shared:core:linkDebugTestIosSimulatorArm64
+          :shared:data:linkDebugTestIosSimulatorArm64
+          :shared:search:linkDebugTestIosSimulatorArm64
+          :shared:ui:linkDebugTestIosSimulatorArm64
+
+      - name: Save the Kotlin/Native cache
+        if: steps.konan.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.konan
+          key: ${{ steps.konan.outputs.cache-primary-key }}
+
+      # One module per step, so no two run on the simulator at once and a stuck one can't hold the
+      # runner for long. Each runs even if an earlier one failed, so one run shows every failure.
+      - name: Shared tests on the simulator (core)
+        if: ${{ !cancelled() && steps.link.outcome == 'success' }}
+        timeout-minutes: 10
+        run: ./gradlew --stacktrace :shared:core:iosSimulatorArm64Test -PiosSimulator="$UDID"
+
+      - name: Shared tests on the simulator (data)
+        if: ${{ !cancelled() && steps.link.outcome == 'success' }}
+        timeout-minutes: 10
+        run: ./gradlew --stacktrace :shared:data:iosSimulatorArm64Test -PiosSimulator="$UDID"
+
+      - name: Shared tests on the simulator (search)
+        if: ${{ !cancelled() && steps.link.outcome == 'success' }}
+        timeout-minutes: 10
+        run: ./gradlew --stacktrace :shared:search:iosSimulatorArm64Test -PiosSimulator="$UDID"
+
+      - name: Shared tests on the simulator (ui)
+        if: ${{ !cancelled() && steps.link.outcome == 'success' }}
+        timeout-minutes: 10
+        run: ./gradlew --stacktrace :shared:ui:iosSimulatorArm64Test -PiosSimulator="$UDID"
 
       # Builds the app, then runs the tests hosted in it (iosAppTests) and the UI tests (iosAppUITests).
       - name: Build the app and run its tests on the simulator
+        id: app
+        if: ${{ !cancelled() && steps.link.outcome == 'success' }}
+        timeout-minutes: 30
         run: >
           xcodebuild
           -project iosApp/iosApp.xcodeproj
@@ -107,16 +145,21 @@ jobs:
           CODE_SIGNING_ALLOWED=NO
           test
 
+      # The app is built even when one of its tests fails, so these still run then.
       - name: Privacy manifest covers the binary
+        if: ${{ !cancelled() && steps.app.outcome != 'skipped' }}
         run: |
           APP=$(find build/ios/Build/Products -maxdepth 3 -name "iosApp.app" | head -1)
+          if [ -z "$APP" ]; then echo "::error::The app wasn't built."; exit 1; fi
           python3 tools/check-privacy-symbols.py "$APP" iosApp/iosApp/PrivacyInfo.xcprivacy
 
       - name: Launch and screenshot
+        if: ${{ !cancelled() && steps.app.outcome != 'skipped' }}
         run: |
+          APP=$(find build/ios/Build/Products -maxdepth 3 -name "iosApp.app" | head -1)
+          if [ -z "$APP" ]; then echo "::error::The app wasn't built."; exit 1; fi
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
-          APP=$(find build/ios/Build/Products -maxdepth 3 -name "iosApp.app" | head -1)
           xcrun simctl install "$UDID" "$APP"
           xcrun simctl launch "$UDID" io.github.tunlezah.watches
           sleep 25

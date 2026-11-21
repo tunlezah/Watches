@@ -49,9 +49,14 @@ subprojects {
 }
 
 // iOS simulator tests run on the simulator CI picks (-PiosSimulator=<udid>), not a hard-coded model.
+// Each test is named as it starts, so a slow or stuck one shows in CI's log.
 subprojects {
     tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeSimulatorTest>().configureEach {
         providers.gradleProperty("iosSimulator").orNull?.let { device.set(it) }
+        testLogging {
+            events("started", "failed", "skipped")
+            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        }
     }
 }
 
