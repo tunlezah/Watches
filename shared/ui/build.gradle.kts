@@ -12,6 +12,8 @@ kotlin {
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
         androidResources { enable = true }
+        // The logic tests in commonTest run here on the JVM (Linux CI) and on the iOS simulator.
+        withHostTest { }
     }
     listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
         target.binaries.framework {
@@ -53,6 +55,9 @@ kotlin {
             implementation(libs.coil.compose)
             implementation(libs.filekit.dialogs.compose)
             implementation(libs.filekit.coil)
+        }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
         }
     }
 }

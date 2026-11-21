@@ -222,7 +222,7 @@ class PoliteHttpClientTest {
     }
 
     @Test fun networkErrorsReadAsOffline() = runTest {
-        val http = client { throw java.net.UnknownHostException("no network") }
+        val http = client { throw kotlinx.io.IOException("no network") }
         assertFailsWith<LookupFailure.Offline> { http.get("https://example.org/a", robots = RobotsPolicy.ApiPolicy) }
     }
 

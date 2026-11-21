@@ -1,4 +1,4 @@
-package io.github.tunlezah.watches
+package io.github.tunlezah.watches.ui.security
 
 import io.github.tunlezah.watches.core.TimeSource
 import io.github.tunlezah.watches.core.settings.LockAfter
@@ -6,14 +6,13 @@ import io.github.tunlezah.watches.data.SettingsRepository
 import io.github.tunlezah.watches.data.db.SettingDao
 import io.github.tunlezah.watches.data.db.SettingEntity
 import io.github.tunlezah.watches.ui.platform.DeviceAuth
-import io.github.tunlezah.watches.ui.security.AppLock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -64,7 +63,7 @@ class AppLockTest {
         lockOn()
         val fresh = AppLock(settings, auth, TimeSource { now })
         fresh.prime(settings.current().device)
-        assertTrue("locked before the first frame", fresh.locked.value)
+        assertTrue(fresh.locked.value, "locked before the first frame")
         fresh.onForeground()
         assertTrue(fresh.unlock())
         assertFalse(fresh.locked.value)
@@ -72,7 +71,7 @@ class AppLockTest {
         fresh.onBackground()
         pass(30.seconds)
         fresh.onForeground()
-        assertFalse("a quick trip to the file picker doesn't lock", fresh.locked.value)
+        assertFalse(fresh.locked.value, "a quick trip to the file picker doesn't lock")
 
         fresh.onBackground()
         pass(2.minutes)
@@ -85,7 +84,7 @@ class AppLockTest {
         lock.onForeground()
         lock.unlock()
         lock.onBackground()
-        assertTrue("so the app switcher shows the lock screen", lock.locked.value)
+        assertTrue(lock.locked.value, "so the app switcher shows the lock screen")
     }
 
     @Test fun thePinScreenItselfDoesNotRelock() = runBlocking {
@@ -103,7 +102,7 @@ class AppLockTest {
         auth.availability = DeviceAuth.Availability.NOT_SET_UP
         val fresh = AppLock(settings, auth, TimeSource { now })
         fresh.prime(settings.current().device)
-        assertFalse("no prompt could unlock it", fresh.locked.value)
+        assertFalse(fresh.locked.value, "no prompt could unlock it")
         fresh.onForeground()
         assertFalse(fresh.locked.value)
 

@@ -1,7 +1,9 @@
 # Parser fixtures
 
-Saved responses that the parser tests in `src/jvmTest` read. Each was fetched once, by hand, with the
-app's User-Agent and at least a second between requests, then trimmed to what the parsers read.
+Saved responses that the parser tests in `src/commonTest` read, on the JVM and on the iOS simulator. The
+build compiles them into the tests (`:shared:search:generateFixtures`), so no platform reads files at run
+time. Each was fetched once, by hand, with the app's User-Agent and at least a second between requests,
+then trimmed to what the parsers read.
 
 | Folder | What it is | Licence and handling |
 | --- | --- | --- |
@@ -12,4 +14,5 @@ app's User-Agent and at least a second between requests, then trimmed to what th
 There are no WatchBase fixtures yet. Its pages couldn't be fetched from the build server (see `docs/SOURCES.md`).
 
 To refresh a fixture after a site changes, save the page from a browser and reduce it the same way. Then
-run `./gradlew :shared:search:jvmTest` and update the parser until the tests pass.
+run `./gradlew :shared:search:jvmTest` and update the parser until the tests pass. The iOS workflow runs
+the same tests on the simulator (`:shared:search:iosSimulatorArm64Test`).

@@ -1,13 +1,13 @@
-package io.github.tunlezah.watches
+package io.github.tunlezah.watches.ui.theme
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import io.github.tunlezah.watches.core.settings.Accent
 import io.github.tunlezah.watches.core.settings.Direction
-import io.github.tunlezah.watches.ui.theme.Palettes
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.math.round
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** The colour rules in docs/DESIGN.md, for every design, mode and accent. */
 class DesignContrastTest {
@@ -18,7 +18,7 @@ class DesignContrastTest {
         return maxOf(la, lb).toDouble() / minOf(la, lb)
     }
 
-    private fun every(check: (name: String, colors: io.github.tunlezah.watches.ui.theme.WatchColors) -> Unit) {
+    private fun every(check: (name: String, colors: WatchColors) -> Unit) {
         for (d in Direction.entries) for (dark in listOf(true, false)) for (a in Accent.entries) {
             check("${d.label} ${if (dark) "dark" else "light"} ${a.label}", Palettes.colors(d, a, dark))
         }
@@ -26,7 +26,7 @@ class DesignContrastTest {
 
     private fun atLeast(min: Double, fg: Color, bg: Color, what: String) {
         val r = ratio(fg, bg)
-        assertTrue("$what is ${"%.2f".format(r)}:1, needs $min:1", r >= min)
+        assertTrue(r >= min, "$what is ${round(r * 100) / 100}:1, needs $min:1")
     }
 
     @Test fun textReadsOnEverySurface() = every { name, c ->

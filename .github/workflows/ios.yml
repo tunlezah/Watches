@@ -2,7 +2,7 @@ name: iOS
 
 # macOS minutes count ten times against a private repo's free allowance, so this runs when
 # iOS-specific code or the build changes, on version tags, and on demand. Shared Kotlin is still
-# compiled for iOS on every push by the Android workflow (compileKotlinIosSimulatorArm64).
+# compiled for iOS on every push by the Android workflow (main and test code).
 on:
   push:
     branches: ["**"]
@@ -11,19 +11,25 @@ on:
     paths:
       - "iosApp/**"
       - "shared/*/src/iosMain/**"
+      - "shared/*/src/iosTest/**"
       - "shared/*/build.gradle.kts"
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - "gradle/**"
+      - "version.xcconfig"
+      - "tools/check-privacy-symbols.py"
       - ".github/workflows/ios.yml"
   pull_request:
     paths:
       - "iosApp/**"
       - "shared/*/src/iosMain/**"
+      - "shared/*/src/iosTest/**"
       - "shared/*/build.gradle.kts"
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - "gradle/**"
+      - "version.xcconfig"
+      - "tools/check-privacy-symbols.py"
       - ".github/workflows/ios.yml"
   workflow_dispatch:
 
@@ -32,9 +38,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-launch:
+  build-and-test:
     runs-on: macos-15
-    timeout-minutes: 75
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
 
@@ -50,6 +56,13 @@ jobs:
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+
+      # The same Xcode as the release build: App Store Connect only takes builds made with a recent SDK.
+      - name: Select Xcode 26
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE"; else echo "::warning::No Xcode 26 on this runner; using the default."; fi
+          xcodebuild -version
 
       - name: Generate Xcode project
         run: |
@@ -72,9 +85,16 @@ jobs:
           echo "UDID=$UDID" >> "$GITHUB_ENV"
 
       - name: Shared tests on the simulator
-        run: ./gradlew --stacktrace :shared:core:iosSimulatorArm64Test :shared:data:iosSimulatorArm64Test -PiosSimulator="$UDID"
+        run: >
+          ./gradlew --stacktrace
+          :shared:core:iosSimulatorArm64Test
+          :shared:data:iosSimulatorArm64Test
+          :shared:search:iosSimulatorArm64Test
+          :shared:ui:iosSimulatorArm64Test
+          -PiosSimulator="$UDID"
 
-      - name: Build app for the simulator
+      # Builds the app, then runs the tests hosted in it (iosAppTests) and the UI tests (iosAppUITests).
+      - name: Build the app and run its tests on the simulator
         run: >
           xcodebuild
           -project iosApp/iosApp.xcodeproj
@@ -83,8 +103,14 @@ jobs:
           -sdk iphonesimulator
           -destination "id=$UDID"
           -derivedDataPath build/ios
+          -resultBundlePath build/ios/tests.xcresult
           CODE_SIGNING_ALLOWED=NO
-          build
+          test
+
+      - name: Privacy manifest covers the binary
+        run: |
+          APP=$(find build/ios/Build/Products -maxdepth 3 -name "iosApp.app" | head -1)
+          python3 tools/check-privacy-symbols.py "$APP" iosApp/iosApp/PrivacyInfo.xcprivacy
 
       - name: Launch and screenshot
         run: |
@@ -105,3 +131,15 @@ jobs:
           name: ios-launch-screenshot
           path: ios-launch.png
           retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: |
+            build/ios/tests.xcresult
+            shared/*/build/reports/tests/
+          retention-days: 14
+          if-no-files-found: ignore

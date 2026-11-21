@@ -14,15 +14,15 @@ import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /**
- * One test per source and page type, against saved pages in `src/jvmTest/resources/fixtures`.
- * When a site changes its layout, the matching test here fails before anyone sees wrong specs.
+ * One test per source and page type, against saved pages in `src/commonTest/fixtures`, on the JVM
+ * and on the iOS simulator. When a site changes its layout, the matching test here fails before
+ * anyone sees wrong specs.
  */
 class ParserFixturesTest {
 
     private val at = Instant.fromEpochMilliseconds(1_791_000_000_000)
 
-    private fun fixture(path: String): String =
-        requireNotNull(javaClass.getResource("/fixtures/$path")) { "Missing fixture $path" }.readText()
+    private fun fixture(path: String): String = Fixtures.text(path)
 
     private fun extras(record: io.github.tunlezah.watches.core.lookup.SourceRecord) = record.extras.associate { it.label to it.value }
 

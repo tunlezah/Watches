@@ -1,6 +1,5 @@
 package io.github.tunlezah.watches.data
 
-import androidx.room.Room
 import io.github.tunlezah.watches.core.TimeSource
 import io.github.tunlezah.watches.core.model.BoxItem
 import io.github.tunlezah.watches.core.model.BoxItemState
@@ -11,22 +10,15 @@ import io.github.tunlezah.watches.core.model.ServiceWork
 import io.github.tunlezah.watches.core.model.Watch
 import io.github.tunlezah.watches.core.model.WatchStatus
 import io.github.tunlezah.watches.data.db.AppDatabase
-import io.github.tunlezah.watches.data.db.configure
 import io.github.tunlezah.watches.core.model.NormalizedRect
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.data.files.ImageProcessor
 import io.github.tunlezah.watches.data.files.ImageSize
-import io.github.tunlezah.watches.data.files.JvmImageProcessor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
+import okio.FileSystem
 import okio.Path
-import okio.Path.Companion.toOkioPath
-import java.awt.image.BufferedImage
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.nio.file.Files
-import javax.imageio.ImageIO
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -41,7 +33,7 @@ import kotlin.time.Instant
 
 class CareRepositoryTest {
 
-    private lateinit var dir: File
+    private lateinit var dir: Path
     private lateinit var db: AppDatabase
     private lateinit var files: FileStore
     private lateinit var watches: WatchRepository
@@ -54,11 +46,11 @@ class CareRepositoryTest {
 
     @BeforeTest
     fun setUp() {
-        dir = Files.createTempDirectory("watches-care").toFile()
-        db = Room.databaseBuilder<AppDatabase>(name = File(dir, "test.db").absolutePath).configure()
-        files = FileStore(File(dir, "files").toOkioPath())
+        dir = newTestDir()
+        db = openTestDatabase(dir / "test.db")
+        files = FileStore(dir / "files")
         watches = WatchRepository(db, files, clock)
-        documents = DocumentRepository(db, files, JvmImageProcessor(), watches, clock)
+        documents = DocumentRepository(db, files, testImageProcessor(), watches, clock)
         services = ServiceRepository(db, watches, documents, files, clock)
         papers = BoxPapersRepository(db, watches)
     }
@@ -66,7 +58,7 @@ class CareRepositoryTest {
     @AfterTest
     fun tearDown() {
         db.close()
-        dir.deleteRecursively()
+        FileSystem.SYSTEM.deleteRecursively(dir)
     }
 
     private fun watch(brand: String = "Omega", model: String = "Seamaster 300") =
@@ -74,10 +66,10 @@ class CareRepositoryTest {
 
     private val pdf = "%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n".encodeToByteArray()
 
-    private fun jpeg(): ByteArray {
-        val img = BufferedImage(40, 30, BufferedImage.TYPE_INT_RGB)
-        return ByteArrayOutputStream().also { ImageIO.write(img, "jpg", it) }.toByteArray()
-    }
+    private fun jpeg(): ByteArray = testJpeg(40, 30, 0, 0, 0)
+
+    private fun names(folder: Path): List<String> =
+        if (FileSystem.SYSTEM.exists(folder)) FileSystem.SYSTEM.list(folder).map { it.name } else emptyList()
 
     private fun entry(watchId: String, on: LocalDate, vararg work: ServiceWork) =
         ServiceEntry("", watchId, on, servicedBy = "Omega Service Centre Sydney", work = work.toSet(), cost = Money(85_000, "AUD"),
@@ -121,7 +113,7 @@ class CareRepositoryTest {
 
         services.delete(b.id, withDocuments = true)
         assertNull(documents.get(invoiceB.id))
-        assertFalse(File(dir, "files/${invoiceB.file}").exists())
+        assertFalse(FileSystem.SYSTEM.exists(files.resolve(invoiceB.file)))
     }
 
     @Test fun documentsAreTypedByContentAndSearchable() = runBlocking<Unit> {
@@ -159,7 +151,7 @@ class CareRepositoryTest {
 
         val copied = documents.copyTo(manual.id, b.id)!!
         assertNotEquals(manual.file, copied.file)
-        assertTrue(File(dir, "files/${copied.file}").readBytes().contentEquals(pdf))
+        assertTrue(FileSystem.SYSTEM.read(files.resolve(copied.file)) { readByteArray() }.contentEquals(pdf))
 
         val dup = watches.duplicate(a.id)!!
         val dupDocs = documents.observe(dup.id).first()
@@ -194,23 +186,23 @@ class CareRepositoryTest {
     @Test fun heicIsStoredAsJpegAndAFailedConversionLeavesNothing() = runBlocking<Unit> {
         val heic = byteArrayOf(0, 0, 0, 0x18) + "ftypheic".encodeToByteArray() + ByteArray(32)
         val w = watches.create(watch())
-        val docDir = File(dir, "files/${FileStore.documentDir(w.id)}")
+        val docDir = files.resolve(FileStore.documentDir(w.id))
 
-        // The JVM decoder can't read HEIC, like a damaged file on a phone.
+        // A HEIC header with no picture behind it can't be decoded anywhere, like a damaged file.
         assertFailsWith<DocumentRepository.UnsupportedDocument> { documents.add(w.id, heic, DocumentKind.RECEIPT, "Receipt") }
-        assertTrue(docDir.listFiles().orEmpty().isEmpty(), "no stray files: ${docDir.listFiles()?.map { it.name }}")
+        assertTrue(names(docDir).isEmpty(), "no stray files: ${names(docDir)}")
         assertTrue(documents.observe(w.id).first().isEmpty())
 
-        val converting = object : ImageProcessor by JvmImageProcessor() {
+        val converting = object : ImageProcessor by testImageProcessor() {
             override suspend fun render(source: Path, crop: NormalizedRect?, maxEdge: Int, quality: Int, dest: Path): ImageSize {
-                dest.toFile().writeBytes(jpeg())
+                FileSystem.SYSTEM.write(dest) { write(jpeg()) }
                 return ImageSize(40, 30)
             }
         }
         val doc = DocumentRepository(db, files, converting, watches, clock).add(w.id, heic, DocumentKind.RECEIPT, "Receipt")
         assertEquals("image/jpeg", doc.mimeType)
         assertTrue(doc.file.endsWith(".jpg"))
-        assertEquals(listOf("${doc.id}.jpg"), docDir.listFiles().orEmpty().map { it.name }, "the HEIC original isn't kept")
+        assertEquals(listOf("${doc.id}.jpg"), names(docDir), "the HEIC original isn't kept")
     }
 
     @Test fun careSkipsWatchesNotOnHand() = runBlocking<Unit> {

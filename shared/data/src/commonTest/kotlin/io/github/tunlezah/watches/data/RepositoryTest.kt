@@ -1,6 +1,5 @@
 package io.github.tunlezah.watches.data
 
-import androidx.room.Room
 import androidx.room.execSQL
 import androidx.room.useWriterConnection
 import io.github.tunlezah.watches.core.TimeSource
@@ -16,19 +15,12 @@ import io.github.tunlezah.watches.core.settings.Accent
 import io.github.tunlezah.watches.core.settings.Direction
 import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.FieldProvenanceEntity
-import io.github.tunlezah.watches.data.db.configure
 import io.github.tunlezah.watches.data.files.FileStore
-import io.github.tunlezah.watches.data.files.JvmImageProcessor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
-import okio.Path.Companion.toOkioPath
-import java.awt.Color
-import java.awt.image.BufferedImage
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.nio.file.Files
-import javax.imageio.ImageIO
+import okio.FileSystem
+import okio.Path
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -43,30 +35,31 @@ import kotlin.time.Instant
 
 class RepositoryTest {
 
-    private lateinit var dir: File
+    private lateinit var dir: Path
     private lateinit var db: AppDatabase
     private lateinit var files: FileStore
     private lateinit var watches: WatchRepository
     private lateinit var photos: PhotoRepository
     private lateinit var settings: SettingsRepository
+    private val processor = testImageProcessor()
 
     private var now = Instant.fromEpochMilliseconds(1_760_000_000_000)
     private val clock = TimeSource { now.also { now += 1.seconds } }
 
     @BeforeTest
     fun setUp() {
-        dir = Files.createTempDirectory("watches-test").toFile()
-        db = Room.databaseBuilder<AppDatabase>(name = File(dir, "test.db").absolutePath).configure()
-        files = FileStore(File(dir, "files").toOkioPath())
+        dir = newTestDir()
+        db = openTestDatabase(dir / "test.db")
+        files = FileStore(dir / "files")
         watches = WatchRepository(db, files, clock)
-        photos = PhotoRepository(db, files, JvmImageProcessor(), clock)
+        photos = PhotoRepository(db, files, processor, clock)
         settings = SettingsRepository(db.settingDao())
     }
 
     @AfterTest
     fun tearDown() {
         db.close()
-        dir.deleteRecursively()
+        FileSystem.SYSTEM.deleteRecursively(dir)
     }
 
     private fun blank() = Watch(id = "", createdAt = now, updatedAt = now)
@@ -79,11 +72,7 @@ class RepositoryTest {
         serialNumber = "87654321", privateNotes = "Bought in Genève on a rainy day",
     )
 
-    private fun jpeg(width: Int, height: Int): ByteArray {
-        val img = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
-        img.createGraphics().apply { color = Color(30, 30, 34); fillRect(0, 0, width, height); dispose() }
-        return ByteArrayOutputStream().also { ImageIO.write(img, "jpg", it) }.toByteArray()
-    }
+    private fun jpeg(width: Int, height: Int): ByteArray = testJpeg(width, height)
 
     @Test
     fun createRoundTripsAndRecordsManualProvenance() = runBlocking<Unit> {
@@ -167,10 +156,10 @@ class RepositoryTest {
         assertTrue(files.exists(first.originalFile))
         assertTrue(files.exists(first.displayFile))
         assertTrue(files.exists(first.thumbFile))
-        val thumb = ImageIO.read(File(files.absolute(first.thumbFile)))
+        val thumb = processor.size(files.resolve(first.thumbFile))
         assertEquals(640, thumb.height, "thumb long edge")
         assertEquals(480, thumb.width)
-        val display = ImageIO.read(File(files.absolute(first.displayFile)))
+        val display = processor.size(files.resolve(first.displayFile))
         assertEquals(2560, display.height)
 
         assertEquals(first.id, watches.get(w.id)!!.coverPhotoId, "first photo becomes the cover")
@@ -182,7 +171,7 @@ class RepositoryTest {
         assertNotEquals(first.thumbFile, cropped.thumbFile)
         assertFalse(files.exists(first.thumbFile), "old rendition removed")
         assertEquals(first.originalFile, cropped.originalFile)
-        val croppedThumb = ImageIO.read(File(files.absolute(cropped.thumbFile)))
+        val croppedThumb = processor.size(files.resolve(cropped.thumbFile))
         assertEquals(640, croppedThumb.height)
         assertEquals(480, croppedThumb.width)
 
@@ -281,11 +270,11 @@ class RepositoryTest {
         lookups.saveSnapshots(w.id, listOf(record))
         lookups.saveSnapshots(w.id, listOf(record))
         assertEquals(listOf("grail" to "https://g/eta-7750"), lookups.snapshotSources(w.id))
-        val stored = File(dir, "files/${FileStore.snapshotDir(w.id)}").listFiles()!!.toList()
+        val stored = FileSystem.SYSTEM.list(files.resolve(FileStore.snapshotDir(w.id)))
         assertEquals(1, stored.size)
-        assertEquals("[1]", stored.single().readText())
+        assertEquals("[1]", FileSystem.SYSTEM.read(stored.single()) { readUtf8() })
         watches.delete(w.id)
-        assertFalse(File(dir, "files/${FileStore.snapshotDir(w.id)}").exists())
+        assertFalse(FileSystem.SYSTEM.exists(files.resolve(FileStore.snapshotDir(w.id))))
     }
 
     @Test fun disabledSourcesPersist() = runBlocking<Unit> {

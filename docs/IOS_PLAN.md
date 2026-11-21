@@ -1,6 +1,15 @@
 # Watches on iPhone: conversion plan
 
-Status: **plan only** (23 Oct 2026). Nothing in the app has been changed. Written against `f93940f` (0.5.0) and the green iOS CI run of 18 Oct. Library behaviour described below was checked in the published sources of Compose Multiplatform 1.12.1, FileKit 0.16.0 and Coil 3.6.3. Anything not yet confirmed is marked **verify**.
+Status: **milestone iOS-1 built** (21 Nov 2026, version 0.6.0); iOS-2 to iOS-4 to come. The plan was written on 23 Oct against `f93940f` (0.5.0) and the green iOS CI run of 18 Oct. Library behaviour described below was checked in the published sources of Compose Multiplatform 1.12.1, FileKit 0.16.0 and Coil 3.6.3. Anything not yet confirmed is marked **verify**.
+
+**iOS-1 as built.** All of 5.1, the test moves in 6.2, and the two Xcode test targets, as planned, with these differences:
+- **Version (5.1.4).** One file, `version.xcconfig` at the root, that Gradle and Xcode both read, instead of `gradle.properties` plus a generated xcconfig. Nothing is generated, so the two can't drift.
+- **Signing (5.1.5).** The release workflow signs manually, with a distribution certificate and an App Store profile, rather than with automatic signing through the API key. Automatic signing needs a development profile when archiving, and Apple won't create one for a team with no registered devices. The certificate can still be made without a Mac (README › iPhone › Signing and TestFlight). Without the secrets, the workflow builds and checks an unsigned archive.
+- **Privacy check (5.1.3).** `tools/check-privacy-symbols.py` (Python, which the macOS runners have) rather than a shell script. It also runs on every iOS workflow, against the Debug build, not just on releases.
+- **iOS dependency graph (6.2).** A Kotlin test on the simulator (`IosDependencyGraphTest`, in `shared/ui`) rather than an app-hosted Swift test: building the definitions needs no app bundle. The app-hosted target (`iosAppTests`) checks what the build put in the app instead.
+- **Parser fixtures (6.2).** Compiled into the tests as a generated source, the first option in 6.2.
+- **Photo library purpose string (5.1.2).** Kept for now. The picker shouldn't need it, but that's confirmed with real photos in iOS-3 before it goes.
+- **Decisions.** D4 (iPhone only) is done. D5 keeps iOS 17 until you say which iPhone you have. D10 uses GitHub's minutes; Xcode Cloud remains the cheaper option if you can borrow a Mac to set it up.
 
 Contents
 
@@ -538,7 +547,7 @@ Whichever you choose, trim the triggers: simulator tests on iOS changes only, UI
 
 | Milestone | Scope | Size | You test | Done when |
 | --- | --- | --- | --- | --- |
-| **iOS-1** On your iPhone | All of 5.1; the test moves in 6.2; app-hosted and UI test targets with one smoke test each; CI changes | L | Install from TestFlight. Try restoring a copy of your Android backup, keeping the Android phone as the main copy until iOS-3. | A TestFlight build runs on your iPhone; about 135 shared tests pass on the simulator; Android CI is green |
+| **iOS-1** On your iPhone (built, 0.6.0) | All of 5.1; the test moves in 6.2; app-hosted and UI test targets with one smoke test each; CI changes | L | Install from TestFlight. Try restoring a copy of your Android backup, keeping the Android phone as the main copy until iOS-3. | A TestFlight build runs on your iPhone; about 135 shared tests pass on the simulator; Android CI is green |
 | **iOS-2** Like an iPhone app | 5.2 | L | Reminders (the one-minute test), notifications after Don't Allow, the app switcher, forced themes, keyboards, swipe back, landscape, wording | The 5.2 tests pass; appendix D's system sections pass |
 | **iOS-3** Photos, documents and backups | 5.3 | L | HEIC and ProRAW photos, crops, PDFs, big backups to iCloud Drive, USB and Google Drive, leaving mid-backup, your Android backup restored | The 5.3 tests pass; appendix D's photo, document and backup sections pass |
 | **iOS-4** Checked and released | The XCUITest flows (6.4), accessibility and performance passes, docs (an iPhone section in the README, CHANGELOG, PLAN Q1 resolved), v1.0 for both phones | M–L | All of appendix D | The checklist passes; `v1.0.0` is on TestFlight and as an APK |

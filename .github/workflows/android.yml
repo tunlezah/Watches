@@ -39,13 +39,21 @@ jobs:
           WATCHES_KEYSTORE_PASSWORD: ${{ secrets.WATCHES_KEYSTORE_PASSWORD }}
           WATCHES_KEY_ALIAS: ${{ secrets.WATCHES_KEY_ALIAS }}
           WATCHES_KEY_PASSWORD: ${{ secrets.WATCHES_KEY_PASSWORD }}
+        # The shared tests run here on the JVM; their iOS builds are compiled too, so an iOS-only
+        # mistake shows up without waiting for the iOS workflow (which runs them on the simulator).
         run: >
           ./gradlew --stacktrace
           checkNetworkIsolation
+          checkIosProject
           :shared:core:jvmTest
           :shared:data:jvmTest
           :shared:search:jvmTest
+          :shared:ui:testAndroidHostTest
           :shared:ui:compileKotlinIosSimulatorArm64
+          :shared:core:compileTestKotlinIosSimulatorArm64
+          :shared:data:compileTestKotlinIosSimulatorArm64
+          :shared:search:compileTestKotlinIosSimulatorArm64
+          :shared:ui:compileTestKotlinIosSimulatorArm64
           :androidApp:recordRoborazziDebug
           :androidApp:assembleRelease
 

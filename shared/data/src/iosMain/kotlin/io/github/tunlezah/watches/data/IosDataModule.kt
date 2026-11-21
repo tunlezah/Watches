@@ -30,8 +30,8 @@ private fun appDataDir(): String {
     return dir.path ?: error("No path")
 }
 
-fun iosDataModule() = module {
-    val root = appDataDir()
+/** [root] holds the database and files: the app's own folder, or a test's. */
+fun iosDataModule(root: String = appDataDir()) = module {
     single { Room.databaseBuilder<AppDatabase>(name = "$root/${AppDatabase.FILE_NAME}").configure() }
     single { FileStore("$root/files".toPath()) }
     single<ImageProcessor> { IosImageProcessor() }

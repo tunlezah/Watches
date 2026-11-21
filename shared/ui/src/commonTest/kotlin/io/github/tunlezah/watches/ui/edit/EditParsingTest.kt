@@ -1,13 +1,12 @@
-package io.github.tunlezah.watches
+package io.github.tunlezah.watches.ui.edit
 
 import io.github.tunlezah.watches.core.model.Money
 import io.github.tunlezah.watches.core.spec.SpecFields
 import io.github.tunlezah.watches.core.spec.SpecValue
-import io.github.tunlezah.watches.ui.edit.EditViewModel
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 /** The edit form's text handling: what users type and what gets stored. */
 class EditParsingTest {

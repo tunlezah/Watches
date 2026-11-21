@@ -13,7 +13,7 @@ Every request uses an honest User-Agent, at most 1 request per second per host, 
 
 **Requests per lookup.** A search is one request per enabled source. Opening a result is one request: Grail and Ranfft one each; Wikidata up to three (the entity and its brand and maker labels from Wikidata, a second apart, then the Wikipedia summary). Result pictures are fetched only while their card is on screen. The first request to a host each day also fetches its `robots.txt`.
 
-**Fixtures.** Parser tests run against saved pages in `shared/search/src/jvmTest/resources/fixtures`. While the repository is public, the Grail and Ranfft fixtures are *reduced*: markup and facts only, with descriptions, glossary text and pictures removed. See the README in that folder.
+**Fixtures.** Parser tests run against saved pages in `shared/search/src/commonTest/fixtures`, on the JVM and on the iOS simulator. While the repository is public, the Grail and Ranfft fixtures are *reduced*: markup and facts only, with descriptions, glossary text and pictures removed. See the README in that folder.
 
 ## Ranfft DB
 

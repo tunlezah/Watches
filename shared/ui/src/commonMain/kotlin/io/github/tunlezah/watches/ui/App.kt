@@ -121,8 +121,9 @@ fun WatchesApp() {
 
     val loaded = settings
     if (loaded == null) {
-        // A few milliseconds while settings load: plain background, no flash of the wrong theme.
-        Box(Modifier.fillMaxSize().background(if (isSystemInDarkTheme()) Color(0xFF0E0E0E) else Color(0xFFF4F4F4)))
+        // A few milliseconds while settings load: the launch screen's colour (and Android's window
+        // background), so nothing flashes between them and the first frame.
+        Box(Modifier.fillMaxSize().background(if (isSystemInDarkTheme()) Color(0xFF121110) else Color(0xFFF5F1E8)))
         return
     }
     val lock = koinInject<AppLock>()

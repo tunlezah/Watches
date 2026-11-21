@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.6.0: iPhone, milestone iOS-1 (21 Nov 2026)
+
+The first step of the iPhone plan (`docs/IOS_PLAN.md`): everything needed to put a signed build on your iPhone through TestFlight, and the shared tests running on iOS. The app itself behaves as in 0.5.0.
+
+**Getting onto your iPhone**
+- A new **iOS release** workflow archives a Release build and uploads it to TestFlight, on version tags and on demand. It needs a paid Apple Developer Program membership and seven repository secrets, but no Mac: the README's "Signing and TestFlight" section has every step, including making the certificate with OpenSSL. Until the secrets exist, the workflow builds and checks an unsigned archive, so the release path is already tested.
+- An app icon, drawn from the Android icon by `tools/RenderIosAppIcon.java` so both phones show the same watch at 10:10.
+- The launch screen is the design's ground colour, light or dark, rather than plain white. The first frame matches it, on Android too.
+- A privacy manifest: nothing is tracked or collected, and the system APIs Apple asks apps to explain are declared. CI compares it with the built app (`tools/check-privacy-symbols.py`), since App Store Connect refuses uploads that leave one out.
+- iPhone only for now, and one window at a time.
+- The camera's purpose string now mentions papers, and a new one lets the share sheet's "Save Image" work: without it, saving a shared photo would have crashed the app.
+
+**One version for both phones**
+- `version.xcconfig` holds the version (0.6.0) and build number (6). Android's version name and code and the iPhone's version both come from it. TestFlight uploads add the workflow's run number, so each upload gets a new build number.
+
+**Tests on iOS**
+- 136 tests now run on the iPhone simulator, up from 53. The repository, care, backup and restore tests, the Lookup parsers against saved pages, the polite HTTP client, and the app lock, care, edit-form and colour-contrast rules moved into shared test code. They still run on the JVM, on every push.
+- Checks that need `java.util.zip` (archives open in standard tools, re-zipped archives restore, ZIP64, JSON keys match the schema) stay JVM-only, as `ArchiveInteropTest`.
+- New iOS tests: every definition the iPhone app wires up can be built, and Lookup's iOS network sessions keep no cookies and no cache.
+- The Xcode project gains two test targets. `iosAppTests` runs inside the app and checks what the build put in it: the privacy manifest, purpose strings, one window, the icon and launch colour, the version and the bundled fonts. `iosAppUITests` launches the app and finds its welcome screen.
+- Parser fixtures moved to `shared/search/src/commonTest/fixtures` and are compiled into the tests, so no platform reads files at run time.
+
+**Build and CI**
+- The iOS workflow uses Xcode 26, like the release build, and runs every module's shared tests, the app's own tests and the privacy check.
+- The Android workflow also compiles every module's tests for iOS, runs the shared UI tests, and runs `checkIosProject`, which checks the iOS project spec, the version, the icon and the privacy manifest on Linux.
+- `checkNetworkIsolation` also fails if core, data or ui calls Apple's networking APIs, which need no library.
+
+**What you need to do**
+- Join the Apple Developer Program and follow README › iPhone › Signing and TestFlight. Then run Actions › iOS release.
+- Decisions still open from the plan, with their defaults: the minimum iOS version stays 17 (D5) until you say which iPhone you have; library photos stay HEIC (D7), handled in iOS-3; macOS minutes use GitHub's allowance (D10).
+
 ## 0.5.0: Three designs, refined (18 Oct 2026)
 
 All three designs are now permanent. Each has been refined as a complete visual system, with its own type, colour, shape, ornament and motion. You choose between them in **Settings › Appearance**. The brief for each is in `docs/DESIGN.md`.

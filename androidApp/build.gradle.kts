@@ -15,6 +15,12 @@ val keyAliasName: String = providers.environmentVariable("WATCHES_KEY_ALIAS").or
 val keyPasswordValue: String? = providers.environmentVariable("WATCHES_KEY_PASSWORD").orNull
     ?: providers.gradleProperty("watches.keyPassword").orNull ?: keystorePassword
 
+// One version for both phones: Xcode reads the same file (iosApp/project.yml).
+val appVersion: Map<String, String> = providers.fileContents(rootProject.layout.projectDirectory.file("version.xcconfig")).asText.get()
+    .lines()
+    .mapNotNull { Regex("""^\s*(\w+)\s*=\s*(\S+)\s*$""").find(it)?.destructured?.let { (key, value) -> key to value } }
+    .toMap()
+
 android {
     namespace = "io.github.tunlezah.watches"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -23,8 +29,8 @@ android {
         applicationId = "io.github.tunlezah.watches"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = appVersion.getValue("CURRENT_PROJECT_VERSION").toInt()
+        versionName = appVersion.getValue("MARKETING_VERSION")
     }
 
     signingConfigs {

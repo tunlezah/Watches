@@ -1,16 +1,14 @@
-package io.github.tunlezah.watches
+package io.github.tunlezah.watches.ui.care
 
 import io.github.tunlezah.watches.core.format.DisplayPrefs
 import io.github.tunlezah.watches.core.model.ServiceEntry
 import io.github.tunlezah.watches.core.model.ServiceWork
 import io.github.tunlezah.watches.core.model.WatchStatus
 import io.github.tunlezah.watches.data.WatchCare
-import io.github.tunlezah.watches.ui.care.ReminderSync
-import io.github.tunlezah.watches.ui.care.ServiceDueViewModel
 import kotlinx.datetime.LocalDate
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /** The rules behind reminders and the Service tab, without any UI. */

@@ -19,9 +19,9 @@ Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md). Data sources: [`docs/SOURCES
 | `shared/search` | Spec-source adapters and HTTP. The only module allowed to use the network. |
 | `shared/ui` | Design system (three designs: Atelier, Instrument, Gallery; see [`docs/DESIGN.md`](docs/DESIGN.md)), screens, view models, navigation. Produces the iOS framework `WatchApp`. |
 | `androidApp` | Android shell: activity, manifest, signing, screenshot tests. |
-| `iosApp` | SwiftUI shell, generated with XcodeGen. |
+| `iosApp` | SwiftUI shell, generated with XcodeGen, with its app-hosted and UI tests. |
 
-Shared modules also have a JVM target, used only for fast tests.
+Shared tests live in `commonTest`, so the same tests run on the JVM (as Android host tests in `shared/ui`) and on the iOS simulator. The shared modules' JVM target exists only for those fast tests. The app's version, for both phones, is in [`version.xcconfig`](version.xcconfig).
 
 ## Build
 
@@ -29,12 +29,13 @@ Requirements: JDK 21 and the Android SDK (compile SDK 37). Gradle is provided by
 
 ```sh
 ./gradlew :androidApp:assembleDebug          # debug APK
-./gradlew :shared:core:jvmTest :shared:data:jvmTest :shared:search:jvmTest   # unit and parser tests
+./gradlew :shared:core:jvmTest :shared:data:jvmTest :shared:search:jvmTest :shared:ui:testAndroidHostTest   # shared tests
 WATCHES_LIVE_TESTS=1 ./gradlew :shared:search:jvmTest --tests '*LiveSourcesTest*'   # one real lookup per source
 ./gradlew :androidApp:recordRoborazziDebug   # screenshots of every design -> androidApp/build/outputs/roborazzi
-./gradlew checkNetworkIsolation              # fails if core, data or ui can compile against a network library
-./gradlew :shared:ui:compileKotlinIosSimulatorArm64   # checks shared code compiles for iOS (works on Linux)
-./gradlew :shared:data:iosSimulatorArm64Test        # shared tests on an iOS simulator (macOS only; CI runs it)
+./gradlew checkNetworkIsolation              # fails if core, data or ui can reach the network, by library or Apple's APIs
+./gradlew checkIosProject                    # checks the iOS project spec, version, icon and privacy manifest (works on Linux)
+./gradlew :shared:ui:compileTestKotlinIosSimulatorArm64   # checks shared code and its tests compile for iOS (works on Linux)
+./gradlew :shared:ui:iosSimulatorArm64Test   # the shared tests on an iOS simulator (macOS only; CI runs every module)
 ```
 
 ### Release APK and signing
@@ -52,7 +53,7 @@ Sideloaded updates must always be signed with the same key, or Android refuses t
 ./gradlew :androidApp:assembleRelease   # -> androidApp/build/outputs/apk/release/androidApp-release.apk
 ```
 
-Without these variables the release APK is built unsigned.
+Without these variables the release APK is built unsigned. Its version name and code come from `version.xcconfig`, which the iPhone build reads too.
 
 For CI, add these repository secrets: `WATCHES_KEYSTORE_BASE64` (the keystore, base64-encoded), `WATCHES_KEYSTORE_PASSWORD`, `WATCHES_KEY_ALIAS` and `WATCHES_KEY_PASSWORD`. The Android workflow then uploads a signed APK as an artifact.
 
@@ -72,16 +73,70 @@ Permissions:
 
 None of these is a location, contacts, storage or camera permission. Photos are taken with the phone's camera app, and backups are saved through the system file picker.
 
-## iOS
+## iPhone
 
-iOS needs a Mac with Xcode. The `iOS` GitHub Actions workflow builds the app for the simulator, launches it and saves a screenshot. It runs when iOS-specific code or the build changes, on `v*` tags, and on demand (Actions › iOS › Run workflow), because macOS minutes are costly on a private repo. The Android workflow still compiles the shared Kotlin for iOS on every push. Locally:
+The same app runs on iPhone: the shared Kotlin code, every screen included, inside a small SwiftUI shell. The plan for finishing it is [`docs/IOS_PLAN.md`](docs/IOS_PLAN.md); milestone iOS-1 is built.
+
+### Building and testing
+
+Building for iOS needs a Mac with Xcode 26. The Xcode project is generated from `iosApp/project.yml`:
 
 ```sh
 brew install xcodegen
 cd iosApp && xcodegen generate && open iosApp.xcodeproj
 ```
 
-The Xcode build phase compiles the shared Kotlin framework (`:shared:ui:embedAndSignAppleFrameworkForXcode`).
+The Xcode build phase compiles the shared Kotlin framework (`:shared:ui:embedAndSignAppleFrameworkForXcode`). To run it on your own phone from Xcode, pick your team under Signing & Capabilities.
+
+Two GitHub Actions workflows use a macOS runner. They run only when needed, because macOS minutes count ten times on a private repo:
+- **iOS** runs every module's shared tests on the simulator, builds the app, and runs the tests hosted in the app (`iosAppTests`, which check what the bundle contains) and the UI tests (`iosAppUITests`, which launch the app to its welcome screen). It also checks the privacy manifest against the binary and saves a screenshot. It runs when iOS code or the build changes, on `v*` tags, and on demand.
+- **iOS release** archives a Release build and uploads it to TestFlight, on `v*` tags and on demand (Actions › iOS release › Run workflow). Until the signing secrets below exist, it builds and checks an unsigned archive instead.
+
+The Android workflow compiles the shared code and its tests for iOS on every push, and runs `checkIosProject`.
+
+The app icon is drawn from the Android one: after changing `ic_launcher_foreground.xml`, run `java tools/RenderIosAppIcon.java`.
+
+### Signing and TestFlight
+
+Builds reach the iPhone through TestFlight. That needs a paid Apple Developer Program membership, but no Mac. Once:
+
+1. Enrol in the [Apple Developer Program](https://developer.apple.com/programs/) as an individual. Your Team ID is under Account › Membership details.
+2. In Certificates, Identifiers & Profiles › Identifiers, register an App ID with the explicit bundle ID `io.github.tunlezah.watches`. It needs no capabilities.
+3. Make a distribution certificate. On any computer with OpenSSL, using your own email address:
+   ```sh
+   openssl req -new -newkey rsa:2048 -nodes -keyout watches-distribution.key -out watches-distribution.csr -subj "/emailAddress=you@example.com/CN=Watches distribution"
+   ```
+   Upload the `.csr` under Certificates › + › Apple Distribution, and download the certificate. Then join the two into a `.p12`, choosing a password when asked. `-legacy` (OpenSSL 3) writes a `.p12` that macOS's keychain can read; leave it out on OpenSSL 1.1.
+   ```sh
+   openssl x509 -inform DER -in distribution.cer -out distribution.pem
+   openssl pkcs12 -export -legacy -inkey watches-distribution.key -in distribution.pem -out watches-distribution.p12
+   ```
+4. Under Profiles › + › App Store Connect (Distribution), make a profile for that App ID and certificate, and download it.
+5. In [App Store Connect](https://appstoreconnect.apple.com), create the app (Apps › +): iOS, the bundle ID above, and a name no other app uses, such as "Watches – Collection". The home screen still says "Watches".
+6. Under Users and Access › Integrations › App Store Connect API, make a team key with the App Manager role (the first time, the Account Holder requests API access there). Note its Key ID and the Issuer ID, and download the `.p8`, which can be downloaded only once.
+7. Add these repository secrets (Settings › Secrets and variables › Actions). Encode files with `base64 -i file` on a Mac, or `base64 -w0 file` on Linux.
+
+| Secret | Value |
+| --- | --- |
+| `APPLE_TEAM_ID` | Your Team ID |
+| `IOS_DIST_P12_BASE64` | `watches-distribution.p12`, base64-encoded |
+| `IOS_DIST_P12_PASSWORD` | The `.p12`'s password |
+| `IOS_PROFILE_BASE64` | The profile (`.mobileprovision`), base64-encoded |
+| `ASC_KEY_ID` | The API key's Key ID |
+| `ASC_ISSUER_ID` | The Issuer ID |
+| `ASC_KEY_P8_BASE64` | The `.p8`, base64-encoded |
+
+Keep the key, the `.p12` and the `.p8` somewhere private, such as a password manager. They're never committed.
+
+Then run Actions › iOS release › Run workflow, or push a `v*` tag. Once App Store Connect has processed the build (a few minutes), add yourself to an internal group under TestFlight › Internal Testing, install the TestFlight app on the iPhone, and install Watches from it. Later builds install over it and keep your data, as long as the bundle ID and team stay the same.
+
+Each TestFlight build stops opening 90 days after it was uploaded, so release at least that often. Your data stays on the phone in the meantime.
+
+### Privacy on iPhone
+
+- iOS asks for the camera when you first take a photo, for notifications when you first switch on a reminder, and for Face ID when you turn on the app lock. The photo picker needs no permission: it hands over only the photos you pick.
+- `iosApp/iosApp/PrivacyInfo.xcprivacy` declares that nothing is tracked or collected, and explains the system APIs Apple asks about. `tools/check-privacy-symbols.py` compares it with the built app in CI.
+- App data lives in the app's Application Support folder, which iCloud and computer backups skip: your backups are the files you save.
 
 ## Performance checks on the phone
 
@@ -123,7 +178,7 @@ In code, each design is one `DirectionStyle` plus a type scale and palette (`sha
 1. Check the site's terms and `robots.txt`. Record the result in `docs/SOURCES.md`, and skip any site that forbids automated access.
 2. Implement `SpecSource` in `shared/search/.../sources`. Use one search request and one detail request per lookup, always through `PoliteHttpClient`. Keep parsing in pure `parseSearch`/`parseDetail` functions.
 3. Map every value to a key from `SpecFields` (core), converting units with `UnitParser` and words with `Vocabulary`. Anything without a field goes in `extras`.
-4. Save trimmed fixtures under `shared/search/src/jvmTest/resources/fixtures/<source>/` (see the README there) and add a parser test.
+4. Save trimmed fixtures under `shared/search/src/commonTest/fixtures/<source>/` (see the README there) and add a parser test. Parser tests run on the JVM and on the iOS simulator.
 5. Add the source to `searchModule`. Its switch appears in Settings automatically.
 
 ## Backup, restore and export
