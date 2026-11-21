@@ -6,6 +6,8 @@ Status: **milestone iOS-1 built** (21 Nov 2026, version 0.6.0); iOS-2 to iOS-4 t
 - **Version (5.1.4).** One file, `version.xcconfig` at the root, that Gradle and Xcode both read, instead of `gradle.properties` plus a generated xcconfig. Nothing is generated, so the two can't drift.
 - **Signing (5.1.5).** The release workflow signs manually, with a distribution certificate and an App Store profile, rather than with automatic signing through the API key. Automatic signing needs a development profile when archiving, and Apple won't create one for a team with no registered devices. The certificate can still be made without a Mac (README › iPhone › Signing and TestFlight). Without the secrets, the workflow builds and checks an unsigned archive.
 - **Privacy check (5.1.3).** `tools/check-privacy-symbols.py` (Python, which the macOS runners have) rather than a shell script. It also runs on every iOS workflow, against the Debug build, not just on releases.
+- **No boot time reason (5.1.3).** The check finds neither of Apple's boot time APIs (`mach_absolute_time`, `systemUptime`) in the app's binary, so the manifest doesn't declare them. The only uses were in Xcode's test frameworks, which the Debug app CI tests also carries; the check leaves those out, with test bundles, since none of them ship.
+- **CI (7.3).** The iOS workflow links the four modules' test binaries first, then saves Kotlin/Native's simulator builds of every library in the Actions cache, so a later failure still keeps them. Each module's simulator tests run in their own step. A run takes about 16 minutes. After a change to `gradle/libs.versions.toml`, or a week without runs (GitHub drops caches unused for 7 days), it takes about 26. While the repository is public, GitHub's macOS runners cost nothing; the ten-times rate in 7.4 applies only to a private repository.
 - **iOS dependency graph (6.2).** A Kotlin test on the simulator (`IosDependencyGraphTest`, in `shared/ui`) rather than an app-hosted Swift test: building the definitions needs no app bundle. The app-hosted target (`iosAppTests`) checks what the build put in the app instead.
 - **Parser fixtures (6.2).** Compiled into the tests as a generated source, the first option in 6.2.
 - **Photo library purpose string (5.1.2).** Kept for now. The picker shouldn't need it, but that's confirmed with real photos in iOS-3 before it goes.
@@ -214,7 +216,7 @@ Sizes: **S** under half a day · **M** about a day · **L** two to three days. E
 - Add `iosApp/iosApp/PrivacyInfo.xcprivacy`: no tracking, no tracking domains, no collected data, and the "required reason" APIs used by the app and the statically linked Kotlin framework. Expected:
   - disk space, `E174.1`: checking space before writing a restore;
   - file timestamps, `C617.1`: Okio and FileKit reading the metadata of files in the app's container;
-  - system boot time, `35F9.1`: measuring elapsed time (the coroutines' monotonic clock, the Diagnostics timings);
+  - system boot time, `35F9.1`: measuring elapsed time (the coroutines' monotonic clock, the Diagnostics timings). Not needed after all: see "iOS-1 as built";
   - user defaults, `CA92.1`, only if a library turns out to use them.
 - Make it checkable: after archiving, list the binary's imported symbols (`nm -u`). Fail if one from Apple's required-reason list appears that the manifest doesn't declare. On a Mac, Xcode's privacy report for the archive gives the same answer.
 - Tests: that symbol check, in the release workflow.

@@ -23,13 +23,13 @@ The first step of the iPhone plan (`docs/IOS_PLAN.md`): everything needed to put
 - Parser fixtures moved to `shared/search/src/commonTest/fixtures` and are compiled into the tests, so no platform reads files at run time.
 
 **Build and CI**
-- The iOS workflow uses Xcode 26, like the release build, and runs every module's shared tests, the app's own tests and the privacy check.
+- The iOS workflow uses Xcode 26, like the release build, and runs every module's shared tests, the app's own tests and the privacy check. It keeps Kotlin/Native's simulator build of every library between runs, so a run takes about 16 minutes rather than 26.
 - The Android workflow also compiles every module's tests for iOS, runs the shared UI tests, and runs `checkIosProject`, which checks the iOS project spec, the version, the icon and the privacy manifest on Linux.
 - `checkNetworkIsolation` also fails if core, data or ui calls Apple's networking APIs, which need no library.
 
 **What you need to do**
 - Join the Apple Developer Program and follow README › iPhone › Signing and TestFlight. Then run Actions › iOS release.
-- Decisions still open from the plan, with their defaults: the minimum iOS version stays 17 (D5) until you say which iPhone you have; library photos stay HEIC (D7), handled in iOS-3; macOS minutes use GitHub's allowance (D10).
+- Decisions still open from the plan, with their defaults: the minimum iOS version stays 17 (D5) until you say which iPhone you have; library photos stay HEIC (D7), handled in iOS-3; macOS minutes use GitHub's allowance (D10), which costs nothing while the repository is public.
 
 ## 0.5.0: Three designs, refined (18 Oct 2026)
 

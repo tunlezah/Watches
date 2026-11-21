@@ -3,7 +3,8 @@
 <!--
   Watches' privacy manifest. Nothing is tracked or collected: the collection never leaves the phone.
   The "required reason" APIs below are the ones the app's binary uses, including the statically linked
-  Kotlin framework. tools/check-privacy-symbols.sh compares this list with the built app in CI.
+  Kotlin framework. tools/check-privacy-symbols.py compares this list with the built app in CI. No boot
+  time API (mach_absolute_time, systemUptime) appears in the app's binary, so none is declared.
 -->
 <plist version="1.0">
 <dict>
@@ -32,15 +33,6 @@
 			<array>
 				<string>C617.1</string>
 				<string>3B52.1</string>
-			</array>
-		</dict>
-		<!-- Elapsed time inside the app: timeouts, request spacing and the Diagnostics timings. -->
-		<dict>
-			<key>NSPrivacyAccessedAPIType</key>
-			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
-			<key>NSPrivacyAccessedAPITypeReasons</key>
-			<array>
-				<string>35F9.1</string>
 			</array>
 		</dict>
 	</array>

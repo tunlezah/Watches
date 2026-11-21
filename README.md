@@ -88,8 +88,8 @@ cd iosApp && xcodegen generate && open iosApp.xcodeproj
 
 The Xcode build phase compiles the shared Kotlin framework (`:shared:ui:embedAndSignAppleFrameworkForXcode`). To run it on your own phone from Xcode, pick your team under Signing & Capabilities.
 
-Two GitHub Actions workflows use a macOS runner. They run only when needed, because macOS minutes count ten times on a private repo:
-- **iOS** runs every module's shared tests on the simulator, builds the app, and runs the tests hosted in the app (`iosAppTests`, which check what the bundle contains) and the UI tests (`iosAppUITests`, which launch the app to its welcome screen). It also checks the privacy manifest against the binary and saves a screenshot. It runs when iOS code or the build changes, on `v*` tags, and on demand.
+Two GitHub Actions workflows use a macOS runner. They run only when needed, because macOS minutes count ten times on a private repo (while this repository is public, they're free):
+- **iOS** runs every module's shared tests on the simulator, builds the app, and runs the tests hosted in the app (`iosAppTests`, which check what the bundle contains) and the UI tests (`iosAppUITests`, which launch the app to its welcome screen). It also checks the privacy manifest against the binary and saves a screenshot. It runs when iOS code or the build changes, on `v*` tags, and on demand. A run takes about 16 minutes. The first after a dependency change, or after a week without runs, takes about 26, because Kotlin/Native builds every library for the simulator again; the workflow keeps that build in the Actions cache.
 - **iOS release** archives a Release build and uploads it to TestFlight, on `v*` tags and on demand (Actions › iOS release › Run workflow). Until the signing secrets below exist, it builds and checks an unsigned archive instead.
 
 The Android workflow compiles the shared code and its tests for iOS on every push, and runs `checkIosProject`.
