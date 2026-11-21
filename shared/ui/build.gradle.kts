@@ -59,6 +59,9 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+        iosTest.dependencies {
+            implementation(libs.kotlinx.coroutines.test)
+        }
     }
 }
 

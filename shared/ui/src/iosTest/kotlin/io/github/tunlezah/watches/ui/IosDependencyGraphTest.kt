@@ -11,6 +11,11 @@ import io.github.tunlezah.watches.ui.lookup.ApplyViewModel
 import io.github.tunlezah.watches.ui.lookup.LookupTarget
 import io.github.tunlezah.watches.ui.lookup.LookupViewModel
 import io.github.tunlezah.watches.ui.platform.iosPlatformModule
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import okio.FileSystem
 import okio.Path.Companion.toPath
 import org.koin.core.annotation.KoinInternalApi
@@ -29,8 +34,12 @@ import kotlin.uuid.Uuid
  */
 class IosDependencyGraphTest {
 
-    @OptIn(KoinInternalApi::class)
+    @OptIn(KoinInternalApi::class, ExperimentalCoroutinesApi::class)
     @Test fun everyDefinitionCanBeBuilt() {
+        // View models start loading as soon as they're built, on the main dispatcher. A test dispatcher
+        // that never runs holds that work back, so nothing is still using the database when it's closed
+        // below. Work racing that close once crashed the test process (signal 11).
+        Dispatchers.setMain(StandardTestDispatcher())
         val root = NSTemporaryDirectory().toPath() / "watches-graph-${Uuid.random()}"
         FileSystem.SYSTEM.createDirectories(root)
         val app = koinApplication {
@@ -48,6 +57,7 @@ class IosDependencyGraphTest {
             runCatching { app.koin.get<AppDatabase>().close() }
             app.close()
             FileSystem.SYSTEM.deleteRecursively(root)
+            Dispatchers.resetMain()
         }
     }
 
