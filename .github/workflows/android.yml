@@ -1,5 +1,7 @@
 name: Android
 
+# Checks, tests and the release APK on every push. On a v* tag, the signed APK is also published as
+# a GitHub release. Signing needs the repository secrets in README › Release APK and signing.
 on:
   push:
   pull_request:
@@ -9,10 +11,16 @@ concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    outputs:
+      signed: ${{ steps.apk.outputs.signed }}
+      version: ${{ steps.apk.outputs.version }}
     steps:
       - uses: actions/checkout@v5
 
@@ -57,12 +65,38 @@ jobs:
           :androidApp:recordRoborazziDebug
           :androidApp:assembleRelease
 
+      # Without a key Gradle writes androidApp-release-unsigned.apk, which Android won't install. Say so
+      # on the run's page, and give the APK a name that carries its version.
+      - name: Name and check the APK
+        id: apk
+        shell: bash
+        run: |
+          VERSION=$(sed -n 's/^MARKETING_VERSION *= *//p' version.xcconfig)
+          BUILD=$(sed -n 's/^CURRENT_PROJECT_VERSION *= *//p' version.xcconfig)
+          OUT=androidApp/build/outputs/apk/release
+          mkdir -p dist
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ -f "$OUT/androidApp-release.apk" ]; then
+            APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+            # Fails the step if the signature doesn't verify.
+            "$APKSIGNER" verify --print-certs "$OUT/androidApp-release.apk" > "$RUNNER_TEMP/certs.txt"
+            CERT=$(sed -n 's/.*certificate SHA-256 digest: //p' "$RUNNER_TEMP/certs.txt" | head -1)
+            cp "$OUT/androidApp-release.apk" "dist/Watches-$VERSION-$BUILD.apk"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "Signed APK \`Watches-$VERSION-$BUILD.apk\`. Certificate SHA-256: \`$CERT\` (the same for every build signed with your key)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            cp "$OUT/androidApp-release-unsigned.apk" "dist/Watches-$VERSION-$BUILD-unsigned.apk"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::The APK is unsigned, so Android won't install it. Add the signing secrets: README › Release APK and signing."
+          fi
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: watches-release-apk
-          path: androidApp/build/outputs/apk/release/*.apk
+          path: dist/*.apk
           retention-days: 14
+          if-no-files-found: error
 
       - name: Upload screenshots
         if: always()
@@ -79,3 +113,61 @@ jobs:
           name: test-reports
           path: "**/build/reports/tests/"
           retention-days: 14
+
+  # Publishes the signed APK on a v* tag, with that version's changelog entry as the notes. A job of
+  # its own, so only these steps, not the build, can write to the repository.
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Refuse an unsigned APK
+        if: needs.build.outputs.signed != 'true'
+        run: |
+          echo "::error::The APK is unsigned, so Android wouldn't install it. Add the signing secrets (README › Release APK and signing), then run this workflow again on the tag."
+          exit 1
+
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
+
+      - name: Tag matches the app's version
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          TAG_VERSION=${GITHUB_REF_NAME#v}
+          if [ "${TAG_VERSION%%-*}" != "$VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match version.xcconfig ($VERSION). Bump MARKETING_VERSION and CURRENT_PROJECT_VERSION there, then tag that commit v<version>."
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: watches-release-apk
+          path: dist
+
+      # Run again on the same tag, it replaces the APK on the existing release.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          awk -v head="## $VERSION" '
+            /^## / { inside = ($0 == head || index($0, head ":") == 1 || index($0, head " ") == 1); next }
+            inside { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/*.apk --clobber
+          else
+            FLAGS=()
+            if [ -s "$RUNNER_TEMP/notes.md" ]; then FLAGS+=(--notes-file "$RUNNER_TEMP/notes.md"); else FLAGS+=(--generate-notes); fi
+            # A tag such as v0.7.0-rc1 is published as a pre-release.
+            case "$GITHUB_REF_NAME" in *-*) FLAGS+=(--prerelease) ;; esac
+            gh release create "$GITHUB_REF_NAME" dist/*.apk --verify-tag --title "Watches ${GITHUB_REF_NAME#v}" "${FLAGS[@]}"
+          fi
+          echo "::notice::Released $GITHUB_REF_NAME: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME"
