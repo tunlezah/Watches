@@ -198,6 +198,26 @@ class BackupRepositoryTest {
         assertTrue(!phone.files.exists("restore-journal.txt") && !phone.files.exists("restore-aftercare"))
     }
 
+    @Test fun aFileThatDiffersFromTheBackupsIsRestoredBesideItAndThenReplacesIt() = runBlocking<Unit> {
+        val phone = phones.new()
+        phone.seed()
+        val archive = phone.archive()
+        val photo = phone.everything().photo.first()
+        val inBackup = phone.files.read(photo.originalFile)
+        // The same path now holds something else on the phone. The backup's file can't be written over
+        // it before the restore is saved, so it goes in beside it under another name.
+        phone.files.write(photo.originalFile, jpeg(9))
+        val preview = phone.backup.inspect { source(archive) }
+        phone.backup.restore({ source(archive) }, preview, RestoreMode.REPLACE)
+
+        val restored = phone.everything().photo.first { it.id == photo.id }
+        assertTrue(restored.originalFile != photo.originalFile, "kept under a name of its own: ${restored.originalFile}")
+        assertTrue(restored.originalFile.substringBeforeLast('/') == photo.originalFile.substringBeforeLast('/'), "in the same folder")
+        assertTrue(phone.files.read(restored.originalFile).contentEquals(inBackup), "and it is the backup's file")
+        assertTrue(!phone.files.exists(photo.originalFile), "the file it replaced is gone once the restore is saved")
+        assertEquals(phone.everything().referencedFiles, phone.mediaFiles().keys, "and nothing else is left over")
+    }
+
     @Test fun twoFilesWhoseNamesDifferOnlyByCaseBothSurviveARestore() = runBlocking<Unit> {
         // A phone's disk tells "a.jpg" from "A.JPG". A Mac's usually doesn't, so a backup that holds
         // both must not have one overwrite the other there (docs/MACOS_PLAN.md, 9.5). The app never

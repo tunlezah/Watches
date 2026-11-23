@@ -541,9 +541,11 @@ class BackupRepository(
         )
     }
 
+    /** A name beside [relative] that nothing has: six letters or digits are added. */
     private suspend fun uniqueVariant(relative: String): String {
         while (true) {
-            val candidate = ArchivePaths.variant(relative, Random.nextInt(0, 36 * 36 * 36 * 36 * 36 * 36).toString(36).padStart(6, '0'))
+            // Six base-36 digits is more than an Int holds, so the range is a Long's.
+            val candidate = ArchivePaths.variant(relative, Random.nextLong(0, VARIANTS).toString(36).padStart(6, '0'))
             if (!files.exists(candidate)) return candidate
         }
     }
@@ -583,6 +585,8 @@ class BackupRepository(
         const val AFTERCARE = "restore-aftercare"
         /** Settings that belong to one phone (app lock, last backup) and never travel. */
         const val DEVICE_SETTING = "device."
+        /** How many six-character names there are: 36 to the sixth. */
+        const val VARIANTS = 36L * 36 * 36 * 36 * 36 * 36
         const val MAX_MANIFEST = 32L * 1024 * 1024
         const val MAX_COLLECTION = 512L * 1024 * 1024
         const val SPACE_MARGIN = 64L * 1024 * 1024
