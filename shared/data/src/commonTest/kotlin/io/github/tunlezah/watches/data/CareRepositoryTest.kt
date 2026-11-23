@@ -2,6 +2,7 @@ package io.github.tunlezah.watches.data
 
 import io.github.tunlezah.watches.data.photos.PhotoMetadata
 import io.github.tunlezah.watches.data.photos.PhotoFixtures
+import io.github.tunlezah.watches.data.photos.PhotoFormat
 import io.github.tunlezah.watches.core.TimeSource
 import io.github.tunlezah.watches.core.model.BoxItem
 import io.github.tunlezah.watches.core.model.BoxItemState
@@ -214,6 +215,24 @@ class CareRepositoryTest {
         val kept = files.read(doc.file)
         assertFalse(PhotoMetadata.hasLocation(kept))
         assertEquals(PhotoFixtures.bytes("gps.png").size, kept.size, "otherwise the file that arrived")
+    }
+
+    @Test fun aPhotoDocumentInAFormatOnlySomeDevicesShowIsStoredAsAJpeg() = runBlocking<Unit> {
+        val w = watches.create(watch())
+        // A document's photo comes in the way a watch's does: what this device reads is converted, the rest refused.
+        val readable = testImageProcessor().readableFormats
+        var kept = 0
+        for ((name, format) in listOf("other.gif" to PhotoFormat.GIF, "other.bmp" to PhotoFormat.BMP, "other.tiff" to PhotoFormat.TIFF)) {
+            if (format in readable) {
+                val doc = documents.add(w.id, PhotoFixtures.bytes(name), DocumentKind.RECEIPT, name)
+                assertEquals("image/jpeg", doc.mimeType, name)
+                assertTrue(doc.file.endsWith("${doc.id}.jpg"), name)
+                kept++
+            } else {
+                assertFailsWith<DocumentRepository.UnsupportedDocument>(name) { documents.add(w.id, PhotoFixtures.bytes(name), DocumentKind.RECEIPT, name) }
+            }
+        }
+        assertEquals(kept, names(files.resolve(FileStore.documentDir(w.id))).size, "one file for each document kept, and nothing else")
     }
 
     @Test fun aPhotoDocumentThePlatformStillFindsALocationInIsStoredAsAJpegMadeFromIt() = runBlocking<Unit> {

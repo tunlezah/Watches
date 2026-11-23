@@ -7,17 +7,20 @@ package io.github.tunlezah.watches.data.photos
  * are ones some systems open and others don't, so a photo in one of them is converted to a JPEG as
  * it comes in and never kept as an original (docs/MACOS_PLAN.md, section 5).
  */
-enum class PhotoFormat(val extension: String, val mime: String, val stored: Boolean) {
-    JPEG("jpg", "image/jpeg", stored = true),
+enum class PhotoFormat(val extension: String, val mime: String, val stored: Boolean, private val alsoNamed: Set<String> = emptySet()) {
+    JPEG("jpg", "image/jpeg", stored = true, alsoNamed = setOf("jpeg")),
     PNG("png", "image/png", stored = true),
     WEBP("webp", "image/webp", stored = true),
-    HEIC("heic", "image/heic", stored = true),
+    HEIC("heic", "image/heic", stored = true, alsoNamed = setOf("heif")),
     AVIF("avif", "image/avif", stored = false),
 
     /** TIFF, and the camera raw formats built on it (DNG, and most makers' own). */
-    TIFF("tiff", "image/tiff", stored = false),
+    TIFF("tiff", "image/tiff", stored = false, alsoNamed = setOf("tif", "dng")),
     GIF("gif", "image/gif", stored = false),
     BMP("bmp", "image/bmp", stored = false);
+
+    /** Every extension a file in this format usually has, for a file picker to offer. What a file is, is still told from its bytes. */
+    val extensions: Set<String> get() = setOf(extension) + alsoNamed
 
     companion object {
         /** How much of a file [detect] may need: a HEIC's brand list can run past the first few bytes. */

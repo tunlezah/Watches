@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +55,7 @@ import io.github.tunlezah.watches.ui.components.WatchTextField
 import io.github.tunlezah.watches.ui.theme.WatchIcons
 import io.github.tunlezah.watches.ui.theme.WatchTheme
 import io.github.tunlezah.watches.data.files.DocumentFormats
+import io.github.tunlezah.watches.data.photos.PhotoFormat
 import io.github.tunlezah.watches.ui.platform.PlatformLimits
 import io.github.tunlezah.watches.ui.platform.platformLimits
 import io.github.vinceglb.filekit.dialogs.FileKitType
@@ -63,11 +65,19 @@ import io.github.vinceglb.filekit.readBytes
 import io.github.vinceglb.filekit.size
 import kotlinx.coroutines.launch
 
-/** The extensions the document pickers offer; the content is checked again when stored. */
-val DocumentExtensions = setOf("pdf", "jpg", "jpeg", "png", "webp", "heic", "heif")
+/**
+ * The formats this device's image code reads, for the pickers. The app provides its own; without
+ * it (a screen drawn on its own, in a test) these are the ones every device reads.
+ */
+val LocalReadableFormats = staticCompositionLocalOf { PhotoFormat.entries.filter { it.stored }.toSet() }
 
-/** What the document picker offers here: PDFs only where this platform can't yet take photos in (see [platformLimits]). */
-fun documentExtensions(): Set<String> = if (platformLimits.photos == null) DocumentExtensions else setOf("pdf")
+/**
+ * The extensions the document picker offers on a device that reads [readable]: PDFs, and photos in
+ * every format the device can take in. Only PDFs where this platform can't yet take photos in at
+ * all (see [platformLimits]). What a file is, is told again from its bytes when it is stored.
+ */
+fun documentExtensions(readable: Set<PhotoFormat>, limits: PlatformLimits = platformLimits): Set<String> =
+    if (limits.photos == null) setOf("pdf") + readable.flatMap { it.extensions } else setOf("pdf")
 
 /**
  * The sentence to show instead of storing [bytes], when they are a photo and this platform takes
@@ -93,7 +103,7 @@ fun ServiceEditScreen(
     val close = { if (state.dirty) confirmDiscard = true else onClose() }
     BackHandler(enabled = state.dirty && !confirmDiscard) { confirmDiscard = true }
 
-    val picker = rememberFilePickerLauncher(type = FileKitType.File(documentExtensions())) { file ->
+    val picker = rememberFilePickerLauncher(type = FileKitType.File(documentExtensions(LocalReadableFormats.current))) { file ->
         if (file != null) scope.launch {
             if (file.size() > io.github.tunlezah.watches.data.DocumentRepository.MAX_BYTES) vm.edit { it.copy(error = "That file is larger than 50 MB.") }
             else vm.attach(file.readBytes(), file.name)

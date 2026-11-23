@@ -311,6 +311,32 @@ class RepositoryTest {
     }
 
     @Test
+    fun aPhotoFromAStreamIsStoredExactlyAsOneFromMemory() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        val arrived = PhotoFixtures.bytes("gps-exif-mm.jpg")
+        val fromMemory = photos.add(w.id, arrived.copyOf())
+        // A picked file comes in as a stream, which is closed once it has been read.
+        var closed = false
+        val stream = object : okio.ForwardingSource(okio.Buffer().write(arrived)) {
+            override fun close() {
+                closed = true
+                super.close()
+            }
+        }
+        val fromStream = photos.add(w.id, stream)
+        assertTrue(closed, "the stream was closed")
+        assertTrue(files.read(fromMemory.originalFile).contentEquals(files.read(fromStream.originalFile)), "the same original either way")
+        assertFalse(PhotoMetadata.hasLocation(files.read(fromStream.originalFile)))
+        assertEquals(fromMemory.width to fromMemory.height, fromStream.width to fromStream.height)
+        val stored = FileSystem.SYSTEM.list(files.resolve(FileStore.photoDir(w.id))).map { it.name }
+        assertEquals(6, stored.size, "two photos, three files each, and nothing left over: $stored")
+
+        // A stream that isn't a picture is closed too, and leaves nothing.
+        assertFails { photos.add(w.id, okio.Buffer().writeUtf8("not a picture at all")) }
+        assertEquals(6, FileSystem.SYSTEM.list(files.resolve(FileStore.photoDir(w.id))).size)
+    }
+
+    @Test
     fun thePictureToCropOnIsTheWholeUprightPictureMadeByTheAppsOwnImageCode() = runBlocking<Unit> {
         val w = watches.create(speedmaster)
         // Stored on its side, as a phone writes a portrait photo.

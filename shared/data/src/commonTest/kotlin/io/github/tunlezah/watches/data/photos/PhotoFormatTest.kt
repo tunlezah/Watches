@@ -1,10 +1,10 @@
 package io.github.tunlezah.watches.data.photos
 
 import io.github.tunlezah.watches.data.files.DocumentFormats
-import io.github.tunlezah.watches.data.files.ImageFormats
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** Formats are told from a file's own bytes, the same way on every platform. */
 class PhotoFormatTest {
@@ -56,13 +56,21 @@ class PhotoFormatTest {
         assertNull(PhotoFormat.detect(bytes(0xFF)))
     }
 
-    @Test fun originalsKeepTheirFormatsExtensionAndTheRestAreImg() {
-        assertEquals("jpg", ImageFormats.extension(bytes(0xFF, 0xD8, 0xFF, 0xE0)))
-        assertEquals("heic", ImageFormats.extension(ftyp("heic")))
-        assertEquals("img", ImageFormats.extension(text("GIF89a") + ByteArray(8)))
-        assertEquals("img", ImageFormats.extension(text("nothing")))
-        // Documents take the same four, and PDFs.
+    @Test fun aDocumentIsAPdfOrAPictureInAnyFormatTheAppKnows() {
+        assertEquals("application/pdf" to "pdf", DocumentFormats.detect(text("%PDF-1.7")))
         assertEquals("image/webp" to "webp", DocumentFormats.detect(text("RIFF") + bytes(0x24, 0, 0, 0) + text("WEBPVP8 ")))
-        assertNull(DocumentFormats.detect(text("GIF89a") + ByteArray(8)))
+        assertEquals("image/heic" to "heic", DocumentFormats.detect(ftyp("heic")))
+        assertEquals("image/gif" to "gif", DocumentFormats.detect(text("GIF89a") + ByteArray(8)))
+        assertNull(DocumentFormats.detect(text("nothing")))
+    }
+
+    @Test fun everyFormatNamesTheExtensionsAPickerShouldOffer() {
+        assertEquals(setOf("jpg", "jpeg"), PhotoFormat.JPEG.extensions)
+        assertEquals(setOf("heic", "heif"), PhotoFormat.HEIC.extensions)
+        assertEquals(setOf("tiff", "tif", "dng"), PhotoFormat.TIFF.extensions)
+        for (format in PhotoFormat.entries) assertTrue(format.extension in format.extensions, "$format")
+        // No extension belongs to two formats.
+        val all = PhotoFormat.entries.flatMap { it.extensions }
+        assertEquals(all.size, all.toSet().size, "$all")
     }
 }

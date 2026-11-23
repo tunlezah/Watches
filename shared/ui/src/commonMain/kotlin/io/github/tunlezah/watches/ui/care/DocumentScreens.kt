@@ -235,7 +235,7 @@ private fun AddDocumentDialog(
         }
     }
     val photos = platformLimits.photos == null
-    val picker = rememberFilePickerLauncher(type = FileKitType.File(documentExtensions())) { take(it) }
+    val picker = rememberFilePickerLauncher(type = FileKitType.File(documentExtensions(LocalReadableFormats.current))) { take(it) }
     val camera = rememberCameraLauncher { take(it) }
     val offered = elsewhere.filter { it.document.kind == kind }
 

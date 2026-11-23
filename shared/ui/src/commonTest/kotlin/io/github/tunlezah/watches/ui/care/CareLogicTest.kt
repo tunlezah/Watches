@@ -5,6 +5,7 @@ import io.github.tunlezah.watches.core.model.ServiceEntry
 import io.github.tunlezah.watches.core.model.ServiceWork
 import io.github.tunlezah.watches.core.model.WatchStatus
 import io.github.tunlezah.watches.data.WatchCare
+import io.github.tunlezah.watches.data.photos.PhotoFormat
 import io.github.tunlezah.watches.ui.platform.PlatformLimits
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
@@ -85,5 +86,11 @@ class CareLogicTest {
         assertNull(photoDocumentLimit(pdf, limits))
         // The phones have no limit: everything they are offered is stored.
         assertNull(photoDocumentLimit(jpeg, PlatformLimits()))
+
+        // The picker offers PDFs, and photos in whatever this device's image code reads.
+        val everywhere = setOf(PhotoFormat.JPEG, PhotoFormat.PNG, PhotoFormat.WEBP, PhotoFormat.HEIC)
+        assertEquals(setOf("pdf", "jpg", "jpeg", "png", "webp", "heic", "heif"), documentExtensions(everywhere, PlatformLimits()))
+        assertTrue("tif" in documentExtensions(everywhere + PhotoFormat.TIFF, PlatformLimits()))
+        assertEquals(setOf("pdf"), documentExtensions(everywhere, limits))
     }
 }

@@ -5,6 +5,9 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import io.github.tunlezah.watches.data.files.ImageProcessor
+import io.github.tunlezah.watches.ui.care.LocalReadableFormats
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -133,11 +136,15 @@ fun WatchesApp() {
     val scope = rememberCoroutineScope()
     LifecycleEventEffect(Lifecycle.Event.ON_START) { scope.launch { lock.onForeground() } }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { scope.launch { lock.onBackground() } }
+    // What this device's image code reads, for the pickers that offer files by extension.
+    val readable = koinInject<ImageProcessor>().readableFormats
     WatchTheme(loaded) {
-        Box(Modifier.fillMaxSize()) {
-            // While locked the app stays composed underneath (it keeps its place), hidden from screen readers.
-            Box(Modifier.fillMaxSize().then(if (locked) Modifier.clearAndSetSemantics { } else Modifier)) { AppShell() }
-            if (locked) LockCover(onUnlock = { scope.launch { lock.unlock() } })
+        CompositionLocalProvider(LocalReadableFormats provides readable) {
+            Box(Modifier.fillMaxSize()) {
+                // While locked the app stays composed underneath (it keeps its place), hidden from screen readers.
+                Box(Modifier.fillMaxSize().then(if (locked) Modifier.clearAndSetSemantics { } else Modifier)) { AppShell() }
+                if (locked) LockCover(onUnlock = { scope.launch { lock.unlock() } })
+            }
         }
     }
 }

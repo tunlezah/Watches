@@ -14,9 +14,8 @@ import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.BoxPapersItemEntity
 import io.github.tunlezah.watches.data.db.toEntity
 import io.github.tunlezah.watches.data.db.toModel
-import io.github.tunlezah.watches.data.photos.LocationRemoval
-import io.github.tunlezah.watches.data.photos.PhotoMetadata
-import io.github.tunlezah.watches.data.files.findsLocation
+import io.github.tunlezah.watches.data.photos.PhotoFormat
+import io.github.tunlezah.watches.data.photos.PhotoIntake
 import io.github.tunlezah.watches.data.files.DocumentFormats
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.data.files.ImageProcessor
@@ -25,6 +24,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
+import okio.Buffer
 import kotlin.coroutines.cancellation.CancellationException
 
 /** One watch's service and warranty inputs, as the Service tab and reminders need them. */
@@ -157,8 +157,9 @@ class DocumentRepository(
     private val time: TimeSource = TimeSource.System,
 ) {
     private val dao = db.documentDao()
+    private val intake = PhotoIntake(files, processor)
 
-    class UnsupportedDocument : Exception("Only PDFs and photos (JPEG, PNG, WebP, HEIC) can be kept as documents.")
+    class UnsupportedDocument : Exception("Only PDFs and photos this device can open can be kept as documents.")
     class TooLarge : Exception("That file is larger than ${MAX_BYTES / (1024 * 1024)} MB.")
 
     fun observe(watchId: String): Flow<List<WatchDocument>> = dao.observeForWatch(watchId).map { rows -> rows.map { it.toModel() } }
@@ -183,10 +184,12 @@ class DocumentRepository(
 
     /**
      * Keeps a PDF or photo with a watch (and optionally a service entry). The type comes from the
-     * file's own bytes, not its name. Photos lose their GPS location, as watch photos do: it is
-     * overwritten in [bytes] before they are stored. HEIC is stored as JPEG, which every viewer and
-     * app it's shared with can open; so is a photo whose metadata can't be followed far enough to
-     * be sure its location has gone, or in which this platform's own reader still finds one.
+     * file's own bytes, not its name.
+     *
+     * A photo comes in the way a watch's photos do ([PhotoIntake]), so it loses its location. A
+     * JPEG, PNG or WebP is otherwise kept as it arrived. Anything else is kept as a JPEG made from
+     * it, which every viewer and app it's shared with can open: a HEIC, a format only some devices
+     * show, and a photo whose location can't be removed for certain.
      */
     suspend fun add(
         watchId: String,
@@ -196,45 +199,30 @@ class DocumentRepository(
         serviceEntryId: String? = null,
     ): WatchDocument {
         if (bytes.size > MAX_BYTES) throw TooLarge()
-        val (detected, ext) = DocumentFormats.detect(bytes) ?: throw UnsupportedDocument()
-        val image = detected.startsWith("image/")
-        // A JPEG made from the photo, rather than the photo itself.
-        var convert = detected == DocumentFormats.HEIC || (image && PhotoMetadata.removeLocation(bytes) == LocationRemoval.UNREADABLE)
+        val (detected, _) = DocumentFormats.detect(bytes) ?: throw UnsupportedDocument()
         val id = Ids.new()
-        val kept = "${FileStore.documentDir(watchId)}/$id.$ext"
-        val converted = "${FileStore.documentDir(watchId)}/$id.jpg"
+        val dir = FileStore.documentDir(watchId)
         // Until the row is written the file is ours to clean up; after that the row owns it.
-        try {
-            if (!convert) {
-                files.write(kept, bytes)
-                // The platform's own reader gets a say too.
-                if (image && processor.findsLocation(files.resolve(kept))) {
-                    withContext(NonCancellable) { files.delete(kept) }
-                    convert = true
-                }
+        val (path, mime) = if (detected == DocumentFormats.PDF) {
+            val pdf = "$dir/$id.pdf"
+            try {
+                files.write(pdf, bytes)
+            } catch (e: Throwable) {
+                withContext(NonCancellable) { files.delete(pdf) }
+                throw e
             }
-            if (convert) {
-                val source = "${FileStore.documentDir(watchId)}/$id-incoming.$ext"
-                files.write(source, bytes)
-                try {
-                    processor.render(files.resolve(source), null, HEIC_EDGE, HEIC_QUALITY, files.resolve(converted))
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    throw UnsupportedDocument()
-                } finally {
-                    withContext(NonCancellable) { files.delete(source) }
-                }
+            pdf to detected
+        } else {
+            val stored = try {
+                intake.store(Buffer().write(bytes), dir, id, PHOTOS)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A picture this device has no decoder for, or a damaged one.
+                throw UnsupportedDocument()
             }
-        } catch (e: Throwable) {
-            withContext(NonCancellable) {
-                files.delete(kept)
-                files.delete(converted)
-            }
-            throw e
+            stored.path to stored.format.mime
         }
-        val path = if (convert) converted else kept
-        val mime = if (convert) "image/jpeg" else detected
         val doc = WatchDocument(
             id = id,
             watchId = watchId,
@@ -296,7 +284,9 @@ class DocumentRepository(
 
     companion object {
         const val MAX_BYTES = 50 * 1024 * 1024
-        private const val HEIC_EDGE = 4096
-        private const val HEIC_QUALITY = 92
+        /** A photographed page stays sharp at this size, and a phone's largest photo shrinks to a tenth of its bytes. */
+        private val PHOTOS = PhotoIntake.Rule(
+            kept = setOf(PhotoFormat.JPEG, PhotoFormat.PNG, PhotoFormat.WEBP), jpegEdge = 4096, jpegQuality = 92, tryUnknown = false,
+        )
     }
 }

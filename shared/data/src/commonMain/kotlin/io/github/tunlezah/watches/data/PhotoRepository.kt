@@ -8,18 +8,18 @@ import io.github.tunlezah.watches.core.model.PhotoKind
 import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.toEntity
 import io.github.tunlezah.watches.data.db.toModel
-import io.github.tunlezah.watches.data.files.findsLocation
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.data.files.ImageProcessor
-import io.github.tunlezah.watches.data.photos.LocationRemoval
 import io.github.tunlezah.watches.data.photos.PhotoFormat
-import io.github.tunlezah.watches.data.photos.PhotoMetadata
+import io.github.tunlezah.watches.data.photos.PhotoIntake
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
+import okio.Buffer
+import okio.Source
 import kotlin.random.Random
 
 /**
@@ -37,6 +37,7 @@ class PhotoRepository(
 ) {
     private val dao = db.photoDao()
     private val watchDao = db.watchDao()
+    private val intake = PhotoIntake(files, processor)
 
     // One import at a time keeps peak memory flat when many photos arrive together.
     private val importLock = Mutex()
@@ -47,7 +48,7 @@ class PhotoRepository(
 
     suspend fun byId(id: String): Photo? = dao.get(id)?.toModel()
 
-    /** Adds a picture to a watch. [bytes] is the file as it arrived; any location in it is overwritten in place. */
+    /** Adds a picture to a watch. [bytes] is the file as it arrived. */
     suspend fun add(
         watchId: String,
         bytes: ByteArray,
@@ -55,9 +56,28 @@ class PhotoRepository(
         attribution: String? = null,
         attributionUrl: String? = null,
         id: String = Ids.new(),
+    ): Photo = add(watchId, Buffer().write(bytes), kind, attribution, attributionUrl, id)
+
+    /**
+     * Adds a picture to a watch from a stream, which is read to its end and closed. A picked file
+     * comes in this way, so however large it is, it is never held in memory to get here.
+     *
+     * The original the app keeps is whatever [PhotoIntake] leaves. A picture in a stored format is
+     * kept byte for byte once its location has been overwritten. Anything else is kept as a
+     * full-size JPEG made from it: a format only some devices can show (TIFF, GIF, a camera's raw
+     * file), a file whose metadata can't be followed far enough to be sure the location has gone,
+     * or one in which this platform's own reader still finds a location afterwards.
+     */
+    suspend fun add(
+        watchId: String,
+        source: Source,
+        kind: PhotoKind = PhotoKind.USER,
+        attribution: String? = null,
+        attributionUrl: String? = null,
+        id: String = Ids.new(),
     ): Photo = importLock.withLock {
         val dir = FileStore.photoDir(watchId)
-        val original = storeOriginal(dir, id, bytes)
+        val original = intake.store(source, dir, "$id-original", ORIGINALS).path
         try {
             val size = processor.size(files.resolve(original))
             val (display, thumb) = renderRenditions(dir, id, original, crop = null)
@@ -86,38 +106,6 @@ class PhotoRepository(
             withContext(NonCancellable) { files.delete(original) }
             throw e
         }
-    }
-
-    /**
-     * Stores an incoming picture as an original the app may keep, and returns its path.
-     *
-     * A picture in a stored format is kept byte for byte once its location has been overwritten.
-     * Anything else is kept as a full-size JPEG made from it: a format only some devices can show
-     * (TIFF, GIF, a camera's raw file), a file whose metadata can't be followed far enough to be
-     * sure the location has gone, or one in which this platform's own reader still finds a location
-     * afterwards. A JPEG made this way carries no metadata at all.
-     */
-    private suspend fun storeOriginal(dir: String, id: String, bytes: ByteArray): String {
-        val format = PhotoFormat.detect(bytes)
-        if (format != null && format.stored && PhotoMetadata.removeLocation(bytes) != LocationRemoval.UNREADABLE) {
-            val path = "$dir/$id-original.${format.extension}"
-            files.write(path, bytes)
-            // The platform's own reader gets a say too. A file that isn't a picture at all is found out a step later.
-            if (!processor.findsLocation(files.resolve(path))) return path
-            withContext(NonCancellable) { files.delete(path) }
-        }
-        val incoming = "$dir/$id-incoming.${format?.extension ?: "img"}"
-        val path = "$dir/$id-original.jpg"
-        files.write(incoming, bytes)
-        try {
-            processor.render(files.resolve(incoming), null, ORIGINAL_EDGE, ORIGINAL_QUALITY, files.resolve(path))
-        } catch (e: Throwable) {
-            withContext(NonCancellable) { files.delete(path) }
-            throw e
-        } finally {
-            withContext(NonCancellable) { files.delete(incoming) }
-        }
-        return path
     }
 
     suspend fun reorder(watchId: String, orderedIds: List<String>) {
@@ -209,6 +197,11 @@ class PhotoRepository(
     }
 
     companion object {
+        /** A watch's photo is kept in any stored format; anything else becomes a full-size JPEG. */
+        private val ORIGINALS = PhotoIntake.Rule(
+            kept = PhotoFormat.entries.filter { it.stored }.toSet(), jpegEdge = ORIGINAL_EDGE, jpegQuality = ORIGINAL_QUALITY, tryUnknown = true,
+        )
+
         private const val CROP_PREVIEWS = "${FileStore.CACHE_DIR}/crop"
 
         const val DISPLAY_EDGE = 2560
