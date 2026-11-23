@@ -19,6 +19,7 @@ import io.github.tunlezah.watches.ui.WatchesApp
 import io.github.tunlezah.watches.ui.backup.BackupCoordinator
 import io.github.tunlezah.watches.ui.backup.BackupState
 import io.github.tunlezah.watches.ui.backup.BackupTask
+import io.github.vinceglb.filekit.FileKit
 import org.koin.core.context.startKoin
 import java.awt.Color
 import java.awt.Desktop
@@ -58,6 +59,9 @@ fun main(args: Array<String>) {
         instance.close()
         return
     }
+
+    // FileKit shows the open and save panels. On a desktop it is told the app's name before its first use.
+    FileKit.init(appId = "Watches")
 
     // As on the phones, nothing is built until a screen asks for it.
     val backups = startKoin { modules(desktopModules(dir.path)) }.koin.get<BackupCoordinator>()

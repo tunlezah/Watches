@@ -57,6 +57,8 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.koin.compose)
+    // The shared screens open the Mac's file panels through FileKit, which wants the app's name at start-up.
+    implementation(libs.filekit.core)
     // Dispatchers.Main, which the view models run on, is the Swing event thread on a desktop.
     implementation(libs.kotlinx.coroutines.swing)
 
