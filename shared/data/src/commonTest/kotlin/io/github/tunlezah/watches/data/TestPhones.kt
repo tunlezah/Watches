@@ -14,6 +14,7 @@ import io.github.tunlezah.watches.core.model.ServiceEntry
 import io.github.tunlezah.watches.core.model.ServiceWork
 import io.github.tunlezah.watches.core.model.Watch
 import io.github.tunlezah.watches.core.settings.Accent
+import io.github.tunlezah.watches.data.photos.StoredPhotoCheck
 import io.github.tunlezah.watches.data.backup.AppInfo
 import io.github.tunlezah.watches.data.backup.BackupRepository
 import io.github.tunlezah.watches.data.backup.CollectionData
@@ -58,7 +59,8 @@ class TestPhones {
         val papers = BoxPapersRepository(db, watches)
         val lookup = LookupRepository(db, files, clock)
         val settings = SettingsRepository(db.settingDao())
-        val backup = BackupRepository(db, files, watches, photos, AppInfo("test", "tests"), clock)
+        val storedPhotos = StoredPhotoCheck(db, files, photos, documents)
+        val backup = BackupRepository(db, files, watches, photos, AppInfo("test", "tests"), clock, storedPhotos)
 
         suspend fun everything(): CollectionData {
             val d = db.backupDao()

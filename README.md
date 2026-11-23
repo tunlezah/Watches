@@ -184,14 +184,15 @@ Each TestFlight build stops opening 90 days after it was uploaded, so release at
 
 ## Mac
 
-The same app runs on a Mac: the shared Kotlin code, every screen included, in a small desktop shell (`desktopApp`) on Compose's desktop target. It needs an Apple silicon Mac on macOS 13 or later. The plan is [`docs/MACOS_PLAN.md`](docs/MACOS_PLAN.md); milestone mac-1 is built.
+The same app runs on a Mac: the shared Kotlin code, every screen included, in a small desktop shell (`desktopApp`) on Compose's desktop target. It needs an Apple silicon Mac on macOS 13 or later. The plan is [`docs/MACOS_PLAN.md`](docs/MACOS_PLAN.md); milestones mac-1 and mac-2 are built.
 
 What the Mac build does today:
-- The collection, search, Lookup, service history, box & papers, PDF documents, and the three designs.
+- The collection, search, Lookup, service history, box & papers, documents, and the three designs.
+- Photos: adding them from files, cropping, saving a Lookup picture, and photos as documents. The Mac handles a photo with the same image code as the iPhone (Apple's own decoders, HEIC included), which the app reaches through a small native library, the Mac bridge (`macBridge`).
 - Backup, restore and CSV export. A backup made on a phone restores on the Mac, and one made on the Mac restores on a phone.
 
 What it leaves out for now, and says so on the screen:
-- **Adding and cropping photos**, saving a Lookup picture, and photos as documents. Photos from a backup show as usual. The desktop's image code doesn't yet follow the phones' rules for rotation, location removal and HEIC, so the Mac writes no photos until the shared photo component is done (plan, section 5).
+- **Taking a photo with the camera.** Add photos from files instead.
 - **Reminders and the app lock.**
 - **PDF pages inside the app.** A PDF opens in Preview instead.
 - **Menus, shortcuts and Mac wording.** Screens still say "this phone".
@@ -219,7 +220,10 @@ WATCHES_DATA_DIR=/tmp/try ./gradlew :desktopApp:run    # the same, with its coll
 ./gradlew :desktopApp:test                             # wiring, the shell's rules, the self-test, and screenshots
 ./gradlew :desktopApp:createDistributable              # the app with its own Java runtime, for this computer
 ./gradlew :desktopApp:packageDmg                       # the Mac disk image (on a Mac only)
+./gradlew :macBridge:linkReleaseSharedMacosArm64       # the Mac bridge on its own (on a Mac only)
 ```
+
+Photos need the Mac bridge, which only a Mac can build, and which the disk image carries. `:desktopApp:run` and a build on Linux have plain-Java image code instead: they show photos but don't take new ones in, and say so. To run the shared tests on a Mac through the bridge, as the macOS workflow does, give them the library: `WATCHES_BRIDGE=$PWD/macBridge/build/bin/macosArm64/releaseShared/libwatchesbridge.dylib ./gradlew :shared:data:jvmTest`.
 
 - **Screenshots.** `:desktopApp:test` draws the app in every design, light and dark, at three window widths, into `desktopApp/build/outputs/screenshots`. It needs no display.
 - **Self-test.** `Watches --self-test [folder]` checks a build without opening a window: it starts the app's wiring in a temporary folder, makes sample watches, backs them up and restores the backup, exports a CSV and draws a frame. CI runs it inside the packaged app, because the bundled Java runtime is trimmed to the modules the app needs, and a missing one shows only when the app runs.

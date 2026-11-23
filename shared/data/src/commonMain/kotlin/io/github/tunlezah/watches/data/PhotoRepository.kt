@@ -11,7 +11,11 @@ import io.github.tunlezah.watches.data.db.toModel
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.data.files.ImageProcessor
 import io.github.tunlezah.watches.data.photos.PhotoFormat
+import io.github.tunlezah.watches.data.files.findsLocation
 import io.github.tunlezah.watches.data.photos.PhotoIntake
+import io.github.tunlezah.watches.data.photos.PhotoMetadata
+import io.github.tunlezah.watches.data.photos.StoredPhotoCheck
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.NonCancellable
@@ -118,6 +122,60 @@ class PhotoRepository(
     }
 
     /**
+     * Brings a photo that is already stored up to the rules a new one meets, and says whether it
+     * had to change anything ([StoredPhotoCheck] goes through them all).
+     *
+     * An original that still carries a location, or is in a format that isn't stored, goes back
+     * through the way in: the location is overwritten, or the picture re-made as a JPEG. Removing
+     * a location needs no decoder, so that works even for a photo this device can't show. If the
+     * photo's recorded size isn't the upright picture's (older image code didn't always turn it),
+     * the size is corrected and its display image and thumbnail are made again; a crop drawn on a
+     * picture of another shape means nothing by then, and is dropped.
+     */
+    suspend fun recheck(photoId: String): Boolean = importLock.withLock {
+        val photo = dao.get(photoId)?.toModel() ?: return false
+        if (!files.exists(photo.originalFile)) return false
+        val dir = FileStore.photoDir(photo.watchId)
+        val original = if (meetsTheRules(photo.originalFile)) {
+            photo.originalFile
+        } else {
+            intake.store(files.source(photo.originalFile), dir, "${photo.id}-original-${tag()}", ORIGINALS).path
+        }
+        try {
+            // A photo this device can't decode keeps the size it came with.
+            val size = try {
+                processor.size(files.resolve(original))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            val reshaped = size != null && (size.width != photo.width || size.height != photo.height)
+            if (original == photo.originalFile && !reshaped) return false
+            var current = photo.copy(originalFile = original)
+            if (size != null) {
+                val crop = photo.crop.takeUnless { reshaped }
+                val (display, thumb) = renderRenditions(dir, photo.id, original, crop)
+                current = current.copy(displayFile = display, thumbFile = thumb, width = size.width, height = size.height, crop = crop)
+            }
+            dao.upsert(current.toEntity())
+            for (old in setOf(photo.originalFile, photo.displayFile, photo.thumbFile) - setOf(current.originalFile, current.displayFile, current.thumbFile)) files.delete(old)
+            true
+        } catch (e: Throwable) {
+            if (original != photo.originalFile) withContext(NonCancellable) { files.delete(original) }
+            throw e
+        }
+    }
+
+    /** True if the file at [path] could have come through [PhotoIntake] as it is: a stored format, with no location. */
+    private suspend fun meetsTheRules(path: String): Boolean {
+        if (files.size(path) > CHECKED_IN_MEMORY) return false
+        val bytes = files.read(path)
+        val format = PhotoFormat.detect(bytes) ?: return false
+        return format.stored && !PhotoMetadata.hasLocation(bytes) && !processor.findsLocation(files.resolve(path))
+    }
+
+    /**
      * The whole upright picture as a JPEG, for the Crop screen to show, or null if there is no such
      * photo. Throws if this device can't read the original.
      *
@@ -179,8 +237,11 @@ class PhotoRepository(
     }
 
     /** Rendition names carry a random suffix so image caches never show a stale crop. */
+    /** A few random letters, so a file that replaces another never has its name. */
+    private fun tag(): String = Random.nextInt(0, 1 shl 30).toString(36)
+
     private suspend fun renderRenditions(dir: String, id: String, original: String, crop: NormalizedRect?): Pair<String, String> {
-        val tag = Random.nextInt(0, 1 shl 30).toString(36)
+        val tag = tag()
         val display = "$dir/$id-display-$tag.jpg"
         val thumb = "$dir/$id-thumb-$tag.jpg"
         try {
@@ -201,6 +262,9 @@ class PhotoRepository(
         private val ORIGINALS = PhotoIntake.Rule(
             kept = PhotoFormat.entries.filter { it.stored }.toSet(), jpegEdge = ORIGINAL_EDGE, jpegQuality = ORIGINAL_QUALITY, tryUnknown = true,
         )
+
+        /** As [PhotoIntake] has it: a larger file is re-made, not cleaned in memory. */
+        private const val CHECKED_IN_MEMORY = 128L * 1024 * 1024
 
         private const val CROP_PREVIEWS = "${FileStore.CACHE_DIR}/crop"
 

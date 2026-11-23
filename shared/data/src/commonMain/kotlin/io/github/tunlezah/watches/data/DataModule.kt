@@ -5,6 +5,7 @@ import io.github.tunlezah.watches.data.backup.AppInfo
 import io.github.tunlezah.watches.data.backup.BackupRepository
 import io.github.tunlezah.watches.data.backup.CsvExporter
 import io.github.tunlezah.watches.data.db.AppDatabase
+import io.github.tunlezah.watches.data.photos.StoredPhotoCheck
 import org.koin.dsl.module
 
 /**
@@ -23,5 +24,6 @@ val dataModule = module {
     single { ServiceRepository(get(), get(), get(), get(), get()) }
     single { BoxPapersRepository(get(), get()) }
     single { CsvExporter(get(), get()) }
-    single { BackupRepository(get(), get(), get(), get(), getOrNull<AppInfo>() ?: AppInfo.Unknown, get()) }
+    single { StoredPhotoCheck(get(), get(), get(), get()) }
+    single { BackupRepository(get(), get(), get(), get(), getOrNull<AppInfo>() ?: AppInfo.Unknown, get(), get()) }
 }

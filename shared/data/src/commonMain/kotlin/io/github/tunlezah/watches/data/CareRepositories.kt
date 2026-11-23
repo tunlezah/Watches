@@ -15,7 +15,10 @@ import io.github.tunlezah.watches.data.db.BoxPapersItemEntity
 import io.github.tunlezah.watches.data.db.toEntity
 import io.github.tunlezah.watches.data.db.toModel
 import io.github.tunlezah.watches.data.photos.PhotoFormat
+import io.github.tunlezah.watches.data.files.findsLocation
 import io.github.tunlezah.watches.data.photos.PhotoIntake
+import io.github.tunlezah.watches.data.photos.PhotoMetadata
+import io.github.tunlezah.watches.data.photos.StoredPhotoCheck
 import io.github.tunlezah.watches.data.files.DocumentFormats
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.data.files.ImageProcessor
@@ -25,6 +28,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import okio.Buffer
+import kotlin.random.Random
 import kotlin.coroutines.cancellation.CancellationException
 
 /** One watch's service and warranty inputs, as the Service tab and reminders need them. */
@@ -181,6 +185,30 @@ class DocumentRepository(
     }
 
     fun absolute(document: WatchDocument): String = files.absolute(document.file)
+
+    /**
+     * Brings a photographed document that is already stored up to the rules a new one meets, and
+     * says whether it had to change anything ([StoredPhotoCheck] goes through them all): one that
+     * still carries a location, or is in a format a document isn't kept in, goes back through the
+     * way in. A PDF is left alone.
+     */
+    suspend fun recheck(documentId: String): Boolean {
+        val doc = dao.get(documentId)?.toModel() ?: return false
+        if (!doc.mimeType.startsWith("image/") || !files.exists(doc.file)) return false
+        val bytes = files.read(doc.file)
+        val format = PhotoFormat.detect(bytes)
+        if (format != null && format in PHOTOS.kept && !PhotoMetadata.hasLocation(bytes) && !processor.findsLocation(files.resolve(doc.file))) return false
+        // Under a new name, so the file being read is never the one being written.
+        val stored = intake.store(Buffer().write(bytes), FileStore.documentDir(doc.watchId), "${doc.id}-${Random.nextInt(0, 1 shl 30).toString(36)}", PHOTOS)
+        try {
+            dao.upsert(doc.copy(file = stored.path, mimeType = stored.format.mime, sizeBytes = files.size(stored.path)).toEntity())
+        } catch (e: Throwable) {
+            withContext(NonCancellable) { files.delete(stored.path) }
+            throw e
+        }
+        files.delete(doc.file)
+        return true
+    }
 
     /**
      * Keeps a PDF or photo with a watch (and optionally a service entry). The type comes from the

@@ -11,6 +11,7 @@ import io.github.tunlezah.watches.data.files.MacBridge
 import io.github.tunlezah.watches.data.photos.PhotoMetadata
 import io.github.tunlezah.watches.search.describeSecureConnections
 import io.github.tunlezah.watches.ui.diagnostics.SampleGenerator
+import io.github.tunlezah.watches.ui.platform.platformLimits
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -71,6 +72,8 @@ internal object SelfTest {
                 if (Bridge.expected()) {
                     MacBridge.problem?.let { throw IllegalStateException("The Mac bridge didn't load", it) }
                     require(MacBridge.isLoaded) { "This app has no Mac bridge among its resources" }
+                    // With the bridge, the screens offer photos as they do on the phones.
+                    require(platformLimits.photos == null) { "Photos are still switched off: ${platformLimits.photos}" }
                 }
                 val photos = koin.get<PhotoRepository>()
                 val files = koin.get<FileStore>()
