@@ -27,6 +27,7 @@ import io.github.tunlezah.watches.search.SourceState
 import io.github.tunlezah.watches.search.SourceStatus
 import io.github.tunlezah.watches.search.http.LookupFailure
 import io.github.tunlezah.watches.search.sources.WikidataSource
+import io.github.tunlezah.watches.ui.platform.platformLimits
 import io.github.tunlezah.watches.ui.photos.PhotoImporter
 import io.github.tunlezah.watches.ui.components.UndoableActions
 import kotlinx.coroutines.CancellationException
@@ -190,7 +191,7 @@ class ResultViewModel(
                 _state.update {
                     it.copy(
                         inTray = record != null && session.inTray(record.source, record.key),
-                        canSavePictures = s.target is LookupTarget.Watch,
+                        canSavePictures = s.target is LookupTarget.Watch && platformLimits.photos == null,
                     )
                 }
             }

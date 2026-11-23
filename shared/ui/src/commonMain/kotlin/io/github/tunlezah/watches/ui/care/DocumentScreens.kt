@@ -75,9 +75,9 @@ import io.github.tunlezah.watches.ui.platform.openPdf
 import io.github.tunlezah.watches.ui.theme.WatchIcons
 import io.github.tunlezah.watches.ui.theme.WatchTheme
 import io.github.vinceglb.filekit.PlatformFile
-import io.github.vinceglb.filekit.dialogs.FileKitOpenCameraSettings
 import io.github.vinceglb.filekit.dialogs.FileKitType
-import io.github.vinceglb.filekit.dialogs.compose.rememberCameraPickerLauncher
+import io.github.tunlezah.watches.ui.platform.platformLimits
+import io.github.tunlezah.watches.ui.platform.rememberCameraLauncher
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.name
 import io.github.vinceglb.filekit.readBytes
@@ -234,8 +234,9 @@ private fun AddDocumentDialog(
             if (file.size() > DocumentRepository.MAX_BYTES) onTooLarge() else onFile(file.readBytes(), file.name, kind)
         }
     }
-    val picker = rememberFilePickerLauncher(type = FileKitType.File(DocumentExtensions)) { take(it) }
-    val camera = rememberCameraPickerLauncher(FileKitOpenCameraSettings.createDefault()) { take(it) }
+    val photos = platformLimits.photos == null
+    val picker = rememberFilePickerLauncher(type = FileKitType.File(documentExtensions())) { take(it) }
+    val camera = rememberCameraLauncher { take(it) }
     val offered = elsewhere.filter { it.document.kind == kind }
 
     AlertDialog(
@@ -248,8 +249,11 @@ private fun AddDocumentDialog(
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (k in DocumentKind.entries) SelectChip(k.label, kind == k, { kind = k }, underline = false, role = Role.RadioButton)
                 }
-                WatchButton("Choose a PDF or photo", { picker.launch() }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
-                WatchButton("Photograph a paper copy", { camera.launch() }, Modifier.fillMaxWidth(), icon = WatchIcons.Camera)
+                WatchButton(if (photos) "Choose a PDF or photo" else "Choose a PDF", { picker.launch() }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
+                if (photos && camera.available) {
+                    WatchButton("Photograph a paper copy", { camera.launch() }, Modifier.fillMaxWidth(), icon = WatchIcons.Camera)
+                }
+                platformLimits.photos?.let { Text(it, style = t.type.bodySmall, color = c.fg3) }
                 if (kind.isGuide && offered.isNotEmpty()) {
                     FieldLabel("Or use one from another watch")
                     for (g in offered.take(8)) {

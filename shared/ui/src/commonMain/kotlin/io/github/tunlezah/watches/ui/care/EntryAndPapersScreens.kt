@@ -53,6 +53,9 @@ import io.github.tunlezah.watches.ui.components.WatchButton
 import io.github.tunlezah.watches.ui.components.WatchTextField
 import io.github.tunlezah.watches.ui.theme.WatchIcons
 import io.github.tunlezah.watches.ui.theme.WatchTheme
+import io.github.tunlezah.watches.data.files.DocumentFormats
+import io.github.tunlezah.watches.ui.platform.PlatformLimits
+import io.github.tunlezah.watches.ui.platform.platformLimits
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.name
@@ -62,6 +65,17 @@ import kotlinx.coroutines.launch
 
 /** The extensions the document pickers offer; the content is checked again when stored. */
 val DocumentExtensions = setOf("pdf", "jpg", "jpeg", "png", "webp", "heic", "heif")
+
+/** What the document picker offers here: PDFs only where this platform can't yet take photos in (see [platformLimits]). */
+fun documentExtensions(): Set<String> = if (platformLimits.photos == null) DocumentExtensions else setOf("pdf")
+
+/**
+ * The sentence to show instead of storing [bytes], when they are a photo and this platform takes
+ * only PDFs for now. Null when the file can be stored. The type comes from the bytes, as it does
+ * when storing, so a photo renamed to .pdf is caught too.
+ */
+internal fun photoDocumentLimit(bytes: ByteArray, limits: PlatformLimits = platformLimits): String? =
+    limits.photos?.takeIf { DocumentFormats.detect(bytes)?.first?.startsWith("image/") == true }
 
 @Composable
 fun ServiceEditScreen(
@@ -79,7 +93,7 @@ fun ServiceEditScreen(
     val close = { if (state.dirty) confirmDiscard = true else onClose() }
     BackHandler(enabled = state.dirty && !confirmDiscard) { confirmDiscard = true }
 
-    val picker = rememberFilePickerLauncher(type = FileKitType.File(DocumentExtensions)) { file ->
+    val picker = rememberFilePickerLauncher(type = FileKitType.File(documentExtensions())) { file ->
         if (file != null) scope.launch {
             if (file.size() > io.github.tunlezah.watches.data.DocumentRepository.MAX_BYTES) vm.edit { it.copy(error = "That file is larger than 50 MB.") }
             else vm.attach(file.readBytes(), file.name)

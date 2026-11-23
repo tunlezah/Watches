@@ -1,5 +1,6 @@
 package io.github.tunlezah.watches.ui.settings
 
+import io.github.tunlezah.watches.ui.platform.platformLimits
 import io.github.tunlezah.watches.ui.components.Masthead
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.selection.selectableGroup
@@ -412,7 +413,7 @@ fun PrivacyPage(state: PrivacyState, onAppLock: (Boolean) -> Unit, onLockAfter: 
                 state.appLock ->
                     "Paused: this phone has no screen lock now, so Watches opens without asking. Set one up in your phone's settings and the lock resumes."
                 state.availability == DeviceAuth.Availability.NOT_SET_UP -> "Set up a screen lock in your phone's settings first, then come back to turn this on."
-                else -> "This phone can't lock apps with its screen lock."
+                else -> platformLimits.appLock ?: "This phone can't lock apps with its screen lock."
             },
         ) {
             SwitchRow(

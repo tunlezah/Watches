@@ -1,5 +1,6 @@
 package io.github.tunlezah.watches.ui.care
 
+import io.github.tunlezah.watches.ui.platform.platformLimits
 import io.github.tunlezah.watches.ui.components.Masthead
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -151,14 +152,14 @@ fun ServiceHistoryScreen(
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text("Remind me when it's due", style = t.type.body, color = if (state.intervalMonths != null) c.fg else c.fg3)
-                                Text("A notification on this phone at 9 am on the due date.", style = t.type.bodySmall, color = c.fg3)
+                                Text(platformLimits.reminders ?: "A notification on this phone at 9 am on the due date.", style = t.type.bodySmall, color = c.fg3)
                             }
                             Switch(
                                 checked = state.reminder, onCheckedChange = null, enabled = state.intervalMonths != null,
                                 colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent, uncheckedTrackColor = c.surface2, uncheckedThumbColor = c.fg3, uncheckedBorderColor = c.lineStrong),
                             )
                         }
-                        if (state.notificationsBlocked) {
+                        if (state.notificationsBlocked && platformLimits.reminders == null) {
                             Text("Notifications are turned off for Watches. Allow them in the phone's settings to get the reminder.", style = t.type.bodySmall, color = c.danger)
                         }
                     }
@@ -214,7 +215,11 @@ fun RemindersSettings(granted: Boolean, onAllow: () -> Unit) {
             "Switch a reminder on from a watch's Service screen. It arrives as a notification at 9 am on the day the service is due. Nothing is sent anywhere.",
             style = t.type.bodySmall, color = c.fg2,
         )
-        if (granted) Text("Notifications are allowed.", style = t.type.body, color = c.fg)
-        else WatchButton("Allow notifications", onAllow, kind = ButtonKind.Tonal)
+        val limit = platformLimits.reminders
+        when {
+            limit != null -> Text(limit, style = t.type.body, color = c.fg)
+            granted -> Text("Notifications are allowed.", style = t.type.body, color = c.fg)
+            else -> WatchButton("Allow notifications", onAllow, kind = ButtonKind.Tonal)
+        }
     }
 }

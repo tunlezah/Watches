@@ -571,8 +571,8 @@ class BackupRepository(
     }
 
     private companion object {
-        /** The database schema version (AppDatabase). Bump with it. */
-        const val SCHEMA_VERSION = 1
+        /** The database schema version. */
+        const val SCHEMA_VERSION = AppDatabase.VERSION
         const val JOURNAL = "restore-journal.txt"
         /** Present while a committed restore's search index and renditions still need redoing. */
         const val AFTERCARE = "restore-aftercare"

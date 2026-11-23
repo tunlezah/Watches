@@ -5,9 +5,11 @@ import io.github.tunlezah.watches.core.model.ServiceEntry
 import io.github.tunlezah.watches.core.model.ServiceWork
 import io.github.tunlezah.watches.core.model.WatchStatus
 import io.github.tunlezah.watches.data.WatchCare
+import io.github.tunlezah.watches.ui.platform.PlatformLimits
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
 
@@ -72,5 +74,16 @@ class CareLogicTest {
         assertEquals(setOf("warranty", "later"), s.warranties.map { it.watchId }.toSet())
         assertTrue(s.warranties.single { it.watchId == "warranty" }.opensPapers)
         assertEquals(7, s.onHand)
+    }
+
+    @Test fun aPlatformThatTakesOnlyPdfsTurnsAPhotoAwayByItsContent() {
+        val limits = PlatformLimits(photos = "Not yet")
+        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte())
+        val pdf = "%PDF-1.7".encodeToByteArray()
+        // The name doesn't come into it, so a photo renamed to .pdf is still a photo.
+        assertEquals("Not yet", photoDocumentLimit(jpeg, limits))
+        assertNull(photoDocumentLimit(pdf, limits))
+        // The phones have no limit: everything they are offered is stored.
+        assertNull(photoDocumentLimit(jpeg, PlatformLimits()))
     }
 }

@@ -15,6 +15,8 @@ kotlin {
         // The logic tests in commonTest run here on the JVM (Linux CI) and on the iOS simulator.
         withHostTest { }
     }
+    // The Mac app (desktopApp) runs on this target, and so do the shared tests on Linux.
+    jvm()
     listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
         target.binaries.framework {
             baseName = "WatchApp"
