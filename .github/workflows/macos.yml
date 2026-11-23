@@ -58,6 +58,16 @@ jobs:
       - name: Package the disk image
         run: ./gradlew --stacktrace :desktopApp:packageDmg
 
+      # jpackage writes what went wrong to files of its own, not to the build's output.
+      - name: Show the packaging tool's logs
+        if: failure()
+        run: |
+          for f in desktopApp/build/compose/logs/*/*.txt; do
+            [ -f "$f" ] || continue
+            echo "== $f"
+            cat "$f"
+          done
+
       # The self-test runs inside the app on the disk image, which is the thing that gets installed:
       # the launcher, the trimmed Java runtime and the native libraries, as packaged.
       - name: Mount the disk image
@@ -75,12 +85,17 @@ jobs:
       - name: Check the bundle
         run: |
           VERSION=$(sed -n 's/^MARKETING_VERSION *= *//p' version.xcconfig)
+          BUILD=$(sed -n 's/^CURRENT_PROJECT_VERSION *= *//p' version.xcconfig)
+          # jpackage refuses a bundle version that starts with 0, so until 1.0.0 the bundle carries
+          # 1.0.<build> (desktopApp/build.gradle.kts). The app itself reports the real version.
+          case "$VERSION" in 0.*) BUNDLE_VERSION="1.0.$BUILD" ;; *) BUNDLE_VERSION="$VERSION" ;; esac
           PLIST="$APP/Contents/Info.plist"
           plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$PLIST"; }
           FAIL=0
           expect() { if [ "$2" != "$3" ]; then echo "::error::$1 is '$2', expected '$3'"; FAIL=1; else echo "$1: $2"; fi; }
           expect "Bundle ID" "$(plist CFBundleIdentifier)" "io.github.tunlezah.watches.mac"
-          expect "Version" "$(plist CFBundleShortVersionString)" "$VERSION"
+          expect "Bundle version" "$(plist CFBundleShortVersionString)" "$BUNDLE_VERSION"
+          expect "Build" "$(plist CFBundleVersion)" "$BUILD"
           expect "Minimum macOS" "$(plist LSMinimumSystemVersion)" "13.0"
           file "$APP/Contents/MacOS/Watches" | grep -q arm64 || { echo "::error::The launcher isn't built for Apple silicon"; FAIL=1; }
           # An Apple silicon Mac runs nothing unsigned. Without a Developer ID the bundle is signed ad hoc.

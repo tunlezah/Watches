@@ -14,6 +14,11 @@ val appVersion: Map<String, String> = providers.fileContents(rootProject.layout.
 val marketingVersion: String = appVersion.getValue("MARKETING_VERSION")
 val buildNumber: String = appVersion.getValue("CURRENT_PROJECT_VERSION")
 
+// jpackage won't make a Mac bundle whose version starts with 0, and the app is at 0.x. Until 1.0.0
+// the bundle is 1.0.<build> instead, which still rises with every build. That number shows only in
+// Finder's Get Info: About, the disk image's name and every backup's manifest carry the real version.
+val macBundleVersion: String = if (marketingVersion.substringBefore('.') == "0") "1.0.$buildNumber" else marketingVersion
+
 // The version as a constant the shell can read: it goes into About and into every backup's manifest.
 val generateBuildInfo = tasks.register("generateBuildInfo") {
     val output = layout.buildDirectory.dir("generated/buildInfo/kotlin")
@@ -99,6 +104,7 @@ compose.desktop {
                 bundleID = "io.github.tunlezah.watches.mac"
                 dockName = "Watches"
                 minimumSystemVersion = "13.0"
+                packageVersion = macBundleVersion
                 packageBuildVersion = buildNumber
                 iconFile.set(project.file("icons/Watches.icns"))
             }
