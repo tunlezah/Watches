@@ -41,5 +41,3 @@ actual fun decodePixels(file: Path): TestPixels {
 }
 
 actual val decodableFormats: Set<PhotoFormat> = setOf(PhotoFormat.JPEG, PhotoFormat.PNG, PhotoFormat.WEBP, PhotoFormat.HEIC)
-
-actual val rendersBySharedGeometry: Boolean = true

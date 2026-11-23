@@ -5,7 +5,7 @@ import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.configure
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.data.files.ImageProcessor
-import io.github.tunlezah.watches.data.files.IosImageProcessor
+import io.github.tunlezah.watches.data.files.AppleImageProcessor
 import kotlinx.cinterop.ExperimentalForeignApi
 import okio.Path.Companion.toPath
 import io.github.tunlezah.watches.data.backup.AppInfo
@@ -34,7 +34,7 @@ private fun appDataDir(): String {
 fun iosDataModule(root: String = appDataDir()) = module {
     single { Room.databaseBuilder<AppDatabase>(name = "$root/${AppDatabase.FILE_NAME}").configure() }
     single { FileStore("$root/files".toPath()) }
-    single<ImageProcessor> { IosImageProcessor() }
+    single<ImageProcessor> { AppleImageProcessor() }
     single {
         val version = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String
         AppInfo(version ?: "unknown", "iOS ${UIDevice.currentDevice.systemVersion}")

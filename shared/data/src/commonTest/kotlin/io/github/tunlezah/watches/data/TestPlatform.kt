@@ -44,10 +44,3 @@ expect fun decodePixels(file: Path): TestPixels
 
 /** The stored formats this platform's image code can decode. The plain-Java one can't read WebP or HEIC. */
 expect val decodableFormats: Set<io.github.tunlezah.watches.data.photos.PhotoFormat>
-
-/**
- * True where renditions are cut and sized by the shared geometry (RenderPlan), to the pixel. The
- * iPhone's present image code works in fractions and can be a pixel out; it joins when the Apple
- * codec replaces it (docs/MACOS_PLAN.md, 8.2.5).
- */
-expect val rendersBySharedGeometry: Boolean

@@ -61,6 +61,10 @@ kotlin {
     jvm()
     iosArm64()
     iosSimulatorArm64()
+    // The Mac app itself runs on the JVM target. This native one is for what the Mac shares with the
+    // iPhone: Apple's own frameworks, used from one source set (appleMain) by both. Its tests run on
+    // a Mac directly, with no simulator.
+    macosArm64()
 
     sourceSets.all {
         languageSettings.optIn("kotlin.time.ExperimentalTime")
@@ -99,7 +103,7 @@ room {
 }
 
 dependencies {
-    listOf("kspAndroid", "kspJvm", "kspIosArm64", "kspIosSimulatorArm64").forEach {
+    listOf("kspAndroid", "kspJvm", "kspIosArm64", "kspIosSimulatorArm64", "kspMacosArm64").forEach {
         add(it, libs.room.compiler)
     }
 }

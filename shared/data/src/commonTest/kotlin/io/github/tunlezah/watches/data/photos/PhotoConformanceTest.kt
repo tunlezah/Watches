@@ -6,7 +6,6 @@ import io.github.tunlezah.watches.data.decodableFormats
 import io.github.tunlezah.watches.data.decodePixels
 import io.github.tunlezah.watches.data.files.ImageSize
 import io.github.tunlezah.watches.data.newTestDir
-import io.github.tunlezah.watches.data.rendersBySharedGeometry
 import io.github.tunlezah.watches.data.testImageProcessor
 import io.github.tunlezah.watches.data.testJpeg
 import kotlinx.coroutines.test.runTest
@@ -95,7 +94,7 @@ class PhotoConformanceTest {
         val aligned = listOf(null, NormalizedRect(0.25f, 0.1f, 0.75f, 0.9f), NormalizedRect(0f, 0f, 0.5f, 1f))
         // Crops whose edges fall between pixels: the shared geometry says which way each goes.
         val between = listOf(NormalizedRect(0.123f, 0.456f, 0.789f, 0.987f), NormalizedRect(0.3333f, 0.1111f, 0.6667f, 0.5555f))
-        for (crop in aligned + if (rendersBySharedGeometry) between else emptyList()) {
+        for (crop in aligned + between) {
             for (edge in listOf(2560, 640, 100)) {
                 val plan = RenderPlan.of(3000, 2000, Orientation.NORMAL, crop, edge)
                 val out = dir / "sized.jpg"
@@ -148,6 +147,28 @@ class PhotoConformanceTest {
         // And it is upright as it stands, with nothing left to say it should be turned again.
         assertEquals(Orientation.NORMAL, PhotoMetadata.orientation(FileSystem.SYSTEM.read(out) { readByteArray() }))
         assertTheReferencePicture(decodePixels(out), "a rendition of a turned photo")
+    }
+
+    @Test fun thePlatformsOwnReaderFindsALocationAndAgreesWhenItHasGone() = runTest {
+        // The second opinion the app asks for each time it stores a photo. It is only worth having if this
+        // platform's reader really does find the location in an ordinary photo...
+        for (name in listOf("gps-exif-ii.jpg", "gps-exif-mm.jpg")) assertTrue(processor.hasLocation(fixture(name)), "$name: found before cleaning")
+        assertFalse(processor.hasLocation(fixture("no-gps.jpg")), "no-gps.jpg: none to find")
+        // ...and finds none once the shared code has removed it, in any format this platform reads.
+        val located = listOf(
+            "gps-exif-ii.jpg" to PhotoFormat.JPEG, "gps-exif-mm.jpg" to PhotoFormat.JPEG, "gps-xmp.jpg" to PhotoFormat.JPEG,
+            "gps.png" to PhotoFormat.PNG, "gps.webp" to PhotoFormat.WEBP, "gps.heic" to PhotoFormat.HEIC,
+        )
+        for ((name, format) in located) {
+            if (format !in decodableFormats) continue
+            val bytes = PhotoFixtures.bytes(name)
+            assertEquals(LocationRemoval.REMOVED, PhotoMetadata.removeLocation(bytes), name)
+            val cleaned = dir / "cleaned-$name"
+            FileSystem.SYSTEM.write(cleaned) { write(bytes) }
+            assertFalse(processor.hasLocation(cleaned), "$name: gone after cleaning, by this platform's own reader")
+            // The cleaned file is still the same picture to this platform.
+            assertEquals(ImageSize(64, 48), processor.size(cleaned), name)
+        }
     }
 
     @Test fun transparentAreasComeOutBlack() = runTest {

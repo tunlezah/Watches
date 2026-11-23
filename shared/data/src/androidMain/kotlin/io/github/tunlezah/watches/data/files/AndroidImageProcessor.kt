@@ -34,10 +34,9 @@ class AndroidImageCodec : ImageCodec {
         require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Not a readable image" }
         // BitmapFactory hands pixels over as stored, so the turning is read separately. ExifInterface
         // reports it for every format, a HEIC's own rotation included.
-        val orientation = runCatching {
-            ExifInterface(file.toString()).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-        }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
-        ImageInfo(bounds.outWidth, bounds.outHeight, Orientation.fromExif(orientation))
+        val exif = runCatching { ExifInterface(file.toString()) }.getOrNull()
+        val orientation = exif?.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) ?: ExifInterface.ORIENTATION_NORMAL
+        ImageInfo(bounds.outWidth, bounds.outHeight, Orientation.fromExif(orientation), hasLocation = exif?.latLong != null)
     }
 
     override suspend fun render(source: Path, plan: RenderPlan, quality: Int, dest: Path) = withContext(Dispatchers.Default) {

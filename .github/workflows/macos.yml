@@ -1,9 +1,10 @@
 name: macOS
 
-# Packages the Mac app as a disk image and checks it. macOS minutes count ten times against a private
-# repo's free allowance, so this runs when the Mac shell or the build changes, on version tags, and
-# on demand. Everything else about the Mac app (compiling, tests, screenshots, the self-test of a
-# packaged build) runs on Linux on every push, in the Android workflow.
+# Packages the Mac app as a disk image and checks it, and runs the tests of the code the Mac shares
+# with the iPhone (Apple's image code) on the Mac itself. macOS minutes count ten times against a
+# private repo's free allowance, so this runs when the Mac shell, that shared code or the build
+# changes, on version tags, and on demand. Everything else about the Mac app (compiling, tests,
+# screenshots, the self-test of a packaged build) runs on Linux on every push, in the Android workflow.
 on:
   push:
     branches: ["**"]
@@ -12,6 +13,10 @@ on:
     paths:
       - "desktopApp/**"
       - "shared/*/src/jvmMain/**"
+      - "shared/*/src/appleMain/**"
+      - "shared/*/src/appleTest/**"
+      - "shared/data/src/commonMain/**/photos/**"
+      - "shared/data/src/commonTest/**"
       - "shared/*/build.gradle.kts"
       - "build.gradle.kts"
       - "settings.gradle.kts"
@@ -22,6 +27,10 @@ on:
     paths:
       - "desktopApp/**"
       - "shared/*/src/jvmMain/**"
+      - "shared/*/src/appleMain/**"
+      - "shared/*/src/appleTest/**"
+      - "shared/data/src/commonMain/**/photos/**"
+      - "shared/data/src/commonTest/**"
       - "shared/*/build.gradle.kts"
       - "build.gradle.kts"
       - "settings.gradle.kts"
@@ -54,6 +63,26 @@ jobs:
           java-version: "21"
 
       - uses: gradle/actions/setup-gradle@v4
+
+      # Kotlin/Native's toolchain and the Mac builds of the libraries the shared data code uses.
+      - name: Restore the Kotlin/Native cache
+        id: konan
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.konan
+          key: konan-mac-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+
+      # The photo conformance suite (docs/MACOS_PLAN.md, 9.4) and the rest of the shared data tests,
+      # against Apple's image code as the Mac runs it. No simulator: these run on the Mac itself.
+      - name: Shared data tests on the Mac
+        run: ./gradlew --stacktrace :shared:data:macosArm64Test
+
+      - name: Save the Kotlin/Native cache
+        if: always() && steps.konan.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.konan
+          key: ${{ steps.konan.outputs.cache-primary-key }}
 
       - name: Package the disk image
         run: ./gradlew --stacktrace :desktopApp:packageDmg

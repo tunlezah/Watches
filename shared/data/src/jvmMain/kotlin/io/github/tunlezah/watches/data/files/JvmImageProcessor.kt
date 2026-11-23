@@ -32,8 +32,10 @@ class JvmImageCodec : ImageCodec {
             val reader = ImageIO.getImageReaders(stream).asSequence().firstOrNull() ?: error("Not a readable image")
             try {
                 reader.input = stream
-                // The JDK's readers hand pixels over as stored, so the turning comes from the file's EXIF.
-                ImageInfo(reader.getWidth(0), reader.getHeight(0), PhotoMetadata.orientation(File(file.toString()).readBytes()))
+                // The JDK's readers hand pixels over as stored, and the JDK has no metadata reader of its
+                // own, so the turning and the location both come from the shared one.
+                val bytes = File(file.toString()).readBytes()
+                ImageInfo(reader.getWidth(0), reader.getHeight(0), PhotoMetadata.orientation(bytes), hasLocation = PhotoMetadata.hasLocation(bytes))
             } finally {
                 reader.dispose()
             }

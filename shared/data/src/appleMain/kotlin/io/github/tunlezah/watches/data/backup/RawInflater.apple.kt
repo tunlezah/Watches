@@ -22,7 +22,7 @@ import platform.zlib.inflateEnd
 import platform.zlib.inflateInit2_
 import platform.zlib.z_stream
 
-/** zlib, which ships with iOS, in raw mode (negative window bits). */
+/** zlib, which ships with iOS and macOS, in raw mode (negative window bits). */
 @OptIn(ExperimentalForeignApi::class)
 actual class RawInflater actual constructor() {
     private val stream = nativeHeap.alloc<z_stream>()

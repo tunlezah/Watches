@@ -216,6 +216,17 @@ class CareRepositoryTest {
         assertEquals(PhotoFixtures.bytes("gps.png").size, kept.size, "otherwise the file that arrived")
     }
 
+    @Test fun aPhotoDocumentThePlatformStillFindsALocationInIsStoredAsAJpegMadeFromIt() = runBlocking<Unit> {
+        val w = watches.create(watch())
+        val doubting = object : ImageProcessor by testImageProcessor() {
+            override suspend fun hasLocation(file: Path) = true
+        }
+        val doc = DocumentRepository(db, files, doubting, watches, clock).add(w.id, PhotoFixtures.bytes("gps.png"), DocumentKind.RECEIPT, "Receipt")
+        assertEquals("image/jpeg", doc.mimeType)
+        assertEquals(listOf("${doc.id}.jpg"), names(files.resolve(FileStore.documentDir(w.id))), "only the JPEG is kept")
+        assertFalse(PhotoMetadata.hasLocation(files.read(doc.file)))
+    }
+
     @Test fun aPhotoDocumentThatCantBeCleanedIsStoredAsAJpegMadeFromIt() = runBlocking<Unit> {
         val w = watches.create(watch())
         // Its XMP is marked as compressed, so the location in it can't be overwritten where it lies.

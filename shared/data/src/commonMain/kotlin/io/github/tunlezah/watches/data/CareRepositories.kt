@@ -16,6 +16,7 @@ import io.github.tunlezah.watches.data.db.toEntity
 import io.github.tunlezah.watches.data.db.toModel
 import io.github.tunlezah.watches.data.photos.LocationRemoval
 import io.github.tunlezah.watches.data.photos.PhotoMetadata
+import io.github.tunlezah.watches.data.files.findsLocation
 import io.github.tunlezah.watches.data.files.DocumentFormats
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.data.files.ImageProcessor
@@ -185,7 +186,7 @@ class DocumentRepository(
      * file's own bytes, not its name. Photos lose their GPS location, as watch photos do: it is
      * overwritten in [bytes] before they are stored. HEIC is stored as JPEG, which every viewer and
      * app it's shared with can open; so is a photo whose metadata can't be followed far enough to
-     * be sure its location has gone.
+     * be sure its location has gone, or in which this platform's own reader still finds one.
      */
     suspend fun add(
         watchId: String,
@@ -198,17 +199,25 @@ class DocumentRepository(
         val (detected, ext) = DocumentFormats.detect(bytes) ?: throw UnsupportedDocument()
         val image = detected.startsWith("image/")
         // A JPEG made from the photo, rather than the photo itself.
-        val convert = detected == DocumentFormats.HEIC || (image && PhotoMetadata.removeLocation(bytes) == LocationRemoval.UNREADABLE)
-        val mime = if (convert) "image/jpeg" else detected
+        var convert = detected == DocumentFormats.HEIC || (image && PhotoMetadata.removeLocation(bytes) == LocationRemoval.UNREADABLE)
         val id = Ids.new()
-        val path = "${FileStore.documentDir(watchId)}/$id.${if (convert) "jpg" else ext}"
+        val kept = "${FileStore.documentDir(watchId)}/$id.$ext"
+        val converted = "${FileStore.documentDir(watchId)}/$id.jpg"
         // Until the row is written the file is ours to clean up; after that the row owns it.
         try {
+            if (!convert) {
+                files.write(kept, bytes)
+                // The platform's own reader gets a say too.
+                if (image && processor.findsLocation(files.resolve(kept))) {
+                    withContext(NonCancellable) { files.delete(kept) }
+                    convert = true
+                }
+            }
             if (convert) {
                 val source = "${FileStore.documentDir(watchId)}/$id-incoming.$ext"
                 files.write(source, bytes)
                 try {
-                    processor.render(files.resolve(source), null, HEIC_EDGE, HEIC_QUALITY, files.resolve(path))
+                    processor.render(files.resolve(source), null, HEIC_EDGE, HEIC_QUALITY, files.resolve(converted))
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -216,13 +225,16 @@ class DocumentRepository(
                 } finally {
                     withContext(NonCancellable) { files.delete(source) }
                 }
-            } else {
-                files.write(path, bytes)
             }
         } catch (e: Throwable) {
-            withContext(NonCancellable) { files.delete(path) }
+            withContext(NonCancellable) {
+                files.delete(kept)
+                files.delete(converted)
+            }
             throw e
         }
+        val path = if (convert) converted else kept
+        val mime = if (convert) "image/jpeg" else detected
         val doc = WatchDocument(
             id = id,
             watchId = watchId,

@@ -13,6 +13,8 @@ data class ImageInfo(
     val storedHeight: Int,
     /** How this platform's decoder hands the pixels over: [Orientation.NORMAL] if it has already turned them. */
     val orientation: Orientation,
+    /** Whether this platform's own metadata reader finds a location in the file. */
+    val hasLocation: Boolean = false,
 )
 
 /**
@@ -45,6 +47,8 @@ open class CodecImageProcessor(
         val info = codec.probe(file)
         return if (info.orientation.swapsAxes) ImageSize(info.storedHeight, info.storedWidth) else ImageSize(info.storedWidth, info.storedHeight)
     }
+
+    override suspend fun hasLocation(file: Path): Boolean = codec.probe(file).hasLocation
 
     override suspend fun render(source: Path, crop: NormalizedRect?, maxEdge: Int, quality: Int, dest: Path): ImageSize {
         val info = codec.probe(source)

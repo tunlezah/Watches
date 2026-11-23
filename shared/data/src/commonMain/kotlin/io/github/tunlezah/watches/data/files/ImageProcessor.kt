@@ -2,6 +2,7 @@ package io.github.tunlezah.watches.data.files
 
 import io.github.tunlezah.watches.core.model.NormalizedRect
 import io.github.tunlezah.watches.data.photos.PhotoFormat
+import kotlinx.coroutines.CancellationException
 import okio.Path
 
 data class ImageSize(val width: Int, val height: Int)
@@ -17,6 +18,13 @@ interface ImageProcessor {
 
     /** Pixel size after orientation is applied. */
     suspend fun size(file: Path): ImageSize
+
+    /**
+     * True if this platform's own metadata reader finds a location in [file]. The shared cleaner has
+     * already run by the time this is asked: it is a second opinion from unrelated code, and a photo
+     * that fails it isn't kept as it is.
+     */
+    suspend fun hasLocation(file: Path): Boolean
 
     /**
      * Decodes [source], applies orientation and [crop], downsamples so the long edge is at most
@@ -58,4 +66,13 @@ object DocumentFormats {
         }
         return false
     }
+}
+
+/** [ImageProcessor.hasLocation], for a file that may not be a picture at all: one this platform can't read says nothing either way. */
+suspend fun ImageProcessor.findsLocation(file: Path): Boolean = try {
+    hasLocation(file)
+} catch (e: CancellationException) {
+    throw e
+} catch (_: Exception) {
+    false
 }

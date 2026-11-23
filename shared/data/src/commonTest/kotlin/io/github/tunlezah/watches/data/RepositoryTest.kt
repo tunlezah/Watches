@@ -22,6 +22,7 @@ import io.github.tunlezah.watches.core.settings.Direction
 import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.FieldProvenanceEntity
 import io.github.tunlezah.watches.data.files.FileStore
+import io.github.tunlezah.watches.data.files.ImageProcessor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
@@ -306,6 +307,27 @@ class RepositoryTest {
         assertEquals(64 to 48, photo.width to photo.height)
         assertEquals(ImageSize(64, 48), processor.size(files.resolve(photo.thumbFile)))
         assertFalse(PhotoMetadata.hasLocation(files.read(photo.displayFile)))
+    }
+
+    @Test
+    fun aPhotoThePlatformStillFindsALocationInIsKeptAsAJpegMadeFromIt() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        // The shared code says the location has gone. This platform's reader, asked for a second opinion, disagrees.
+        val doubting = object : ImageProcessor by processor {
+            override suspend fun hasLocation(file: Path) = true
+        }
+        val arrived = PhotoFixtures.bytes("gps-exif-ii.jpg")
+        val photo = PhotoRepository(db, files, doubting, clock).add(w.id, arrived)
+
+        assertTrue(photo.originalFile.endsWith("-original.jpg"))
+        val kept = files.read(photo.originalFile)
+        assertTrue(kept.size != arrived.size, "the file that arrived isn't the one kept")
+        assertFalse(PhotoMetadata.hasLocation(kept))
+        // A JPEG made from the picture has no metadata for a location to be in.
+        assertEquals(LocationRemoval.NONE, PhotoMetadata.removeLocation(kept.copyOf()))
+        assertEquals(64 to 48, photo.width to photo.height)
+        val stored = FileSystem.SYSTEM.list(files.resolve(FileStore.photoDir(w.id))).map { it.name }
+        assertEquals(3, stored.size, "an original and two renditions, and nothing left over: $stored")
     }
 
     @Test

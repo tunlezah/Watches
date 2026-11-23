@@ -13,6 +13,8 @@ kotlin {
     jvm()
     iosArm64()
     iosSimulatorArm64()
+    // For the code the Mac shares with the iPhone (shared/data's appleMain).
+    macosArm64()
 
     sourceSets.all {
         languageSettings.optIn("kotlin.time.ExperimentalTime")

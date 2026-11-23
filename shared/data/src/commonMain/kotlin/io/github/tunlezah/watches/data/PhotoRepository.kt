@@ -8,6 +8,7 @@ import io.github.tunlezah.watches.core.model.PhotoKind
 import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.toEntity
 import io.github.tunlezah.watches.data.db.toModel
+import io.github.tunlezah.watches.data.files.findsLocation
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.data.files.ImageProcessor
 import io.github.tunlezah.watches.data.photos.LocationRemoval
@@ -92,15 +93,18 @@ class PhotoRepository(
      *
      * A picture in a stored format is kept byte for byte once its location has been overwritten.
      * Anything else is kept as a full-size JPEG made from it: a format only some devices can show
-     * (TIFF, GIF, a camera's raw file), or a file whose metadata can't be followed far enough to be
-     * sure the location has gone. A JPEG made this way carries no metadata at all.
+     * (TIFF, GIF, a camera's raw file), a file whose metadata can't be followed far enough to be
+     * sure the location has gone, or one in which this platform's own reader still finds a location
+     * afterwards. A JPEG made this way carries no metadata at all.
      */
     private suspend fun storeOriginal(dir: String, id: String, bytes: ByteArray): String {
         val format = PhotoFormat.detect(bytes)
         if (format != null && format.stored && PhotoMetadata.removeLocation(bytes) != LocationRemoval.UNREADABLE) {
             val path = "$dir/$id-original.${format.extension}"
             files.write(path, bytes)
-            return path
+            // The platform's own reader gets a say too. A file that isn't a picture at all is found out a step later.
+            if (!processor.findsLocation(files.resolve(path))) return path
+            withContext(NonCancellable) { files.delete(path) }
         }
         val incoming = "$dir/$id-incoming.${format?.extension ?: "img"}"
         val path = "$dir/$id-original.jpg"

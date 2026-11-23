@@ -36,5 +36,3 @@ actual fun decodePixels(file: Path): TestPixels {
 
 actual val decodableFormats: Set<io.github.tunlezah.watches.data.photos.PhotoFormat> =
     setOf(io.github.tunlezah.watches.data.photos.PhotoFormat.JPEG, io.github.tunlezah.watches.data.photos.PhotoFormat.PNG)
-
-actual val rendersBySharedGeometry: Boolean = true
