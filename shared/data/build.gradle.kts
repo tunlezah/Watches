@@ -9,18 +9,18 @@ plugins {
 // The photo tests use small real photos from src/commonTest/fixtures/photos (made by
 // tools/photo_fixtures.py). They're compiled into the tests as a generated source, so the same tests
 // read them on the JVM, on Android and on the iOS simulator, none of which share a file system.
-val generatePhotoFixtures = tasks.register("generatePhotoFixtures") {
-    val input = layout.projectDirectory.dir("src/commonTest/fixtures/photos")
-    val output = layout.buildDirectory.dir("generated/photoFixtures/kotlin")
+fun registerFixtures(task: String, folder: String, pkg: String, objectName: String) = tasks.register(task) {
+    val input = layout.projectDirectory.dir("src/commonTest/fixtures/$folder")
+    val output = layout.buildDirectory.dir("generated/$folder-fixtures/kotlin")
     inputs.dir(input)
     outputs.dir(output)
     doLast {
         val files = input.asFile.listFiles().orEmpty().filter { it.isFile && it.name != "README.md" }.sortedBy { it.name }
         val source = buildString {
-            appendLine("// Generated from src/commonTest/fixtures/photos by :shared:data:generatePhotoFixtures. Do not edit.")
-            appendLine("package io.github.tunlezah.watches.data.photos")
+            appendLine("// Generated from src/commonTest/fixtures/$folder by :shared:data:$task. Do not edit.")
+            appendLine("package $pkg")
             appendLine()
-            appendLine("internal object PhotoFixtures {")
+            appendLine("internal object $objectName {")
             appendLine("    val names: List<String> = listOf(${files.joinToString { "\"${it.name}\"" }})")
             appendLine()
             appendLine("    /** A fresh copy each time: the tests change the bytes they're given. */")
@@ -42,9 +42,15 @@ val generatePhotoFixtures = tasks.register("generatePhotoFixtures") {
             appendLine("    }")
             appendLine("}")
         }
-        output.get().asFile.apply { deleteRecursively(); mkdirs() }.resolve("PhotoFixtures.kt").writeText(source)
+        output.get().asFile.apply { deleteRecursively(); mkdirs() }.resolve("$objectName.kt").writeText(source)
     }
 }
+
+val generatePhotoFixtures = registerFixtures("generatePhotoFixtures", "photos", "io.github.tunlezah.watches.data.photos", "PhotoFixtures")
+
+// A backup made by the Mac's image code (the macOS workflow's ReferenceArchiveMaker step), which the
+// same tests restore on every platform.
+val generateArchiveFixtures = registerFixtures("generateArchiveFixtures", "archives", "io.github.tunlezah.watches.data", "ArchiveFixtures")
 
 kotlin {
     android {
@@ -93,6 +99,7 @@ kotlin {
         }
         commonTest {
             kotlin.srcDir(generatePhotoFixtures)
+            kotlin.srcDir(generateArchiveFixtures)
             dependencies {
                 implementation(kotlin("test"))
                 implementation(libs.kotlinx.coroutines.test)
