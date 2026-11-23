@@ -103,6 +103,23 @@ jobs:
           grep -h -o "MacBridgeTest: the tests ran on Apple's codec[^<]*" shared/data/build/test-results/jvmTest/*.xml \
             || { echo "::error::The JVM tests didn't run through the bridge"; exit 1; }
 
+      # A backup made here, by the Mac's image code, is what the phones' tests restore
+      # (ReferenceArchiveTest). Each run makes one afresh and keeps it; the one in the repository
+      # came from a run like this.
+      - name: Make the reference archive
+        run: |
+          WATCHES_REFERENCE_ARCHIVE="$RUNNER_TEMP/reference-archive/mac.zip" ./gradlew --stacktrace :shared:data:jvmTest --rerun --tests "*ReferenceArchiveMaker*"
+          ls -la "$RUNNER_TEMP/reference-archive"
+          unzip -l "$RUNNER_TEMP/reference-archive/mac.zip"
+
+      - name: Upload the reference archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: reference-archive
+          path: ${{ runner.temp }}/reference-archive/mac.zip
+          retention-days: 14
+          if-no-files-found: error
+
       - name: Save the Kotlin/Native cache
         if: always() && steps.konan.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
