@@ -24,3 +24,7 @@ actual fun testJpeg(width: Int, height: Int, red: Int, green: Int, blue: Int): B
     img.createGraphics().apply { color = Color(red, green, blue); fillRect(0, 0, width, height); dispose() }
     return ByteArrayOutputStream().also { ImageIO.write(img, "jpg", it) }.toByteArray()
 }
+
+actual fun keepForInspection(folder: String, name: String, bytes: ByteArray) {
+    java.io.File("build/outputs/$folder").apply { mkdirs() }.resolve(name).writeBytes(bytes)
+}

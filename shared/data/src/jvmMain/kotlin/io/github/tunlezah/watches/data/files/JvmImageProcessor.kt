@@ -4,6 +4,7 @@ import io.github.tunlezah.watches.data.photos.CodecImageProcessor
 import io.github.tunlezah.watches.data.photos.ImageCodec
 import io.github.tunlezah.watches.data.photos.ImageInfo
 import io.github.tunlezah.watches.data.photos.Orientation
+import io.github.tunlezah.watches.data.photos.PhotoMetadata
 import io.github.tunlezah.watches.data.photos.RenderPlan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,8 +21,8 @@ import javax.imageio.ImageWriteParam
 /**
  * The plain-Java codec, on the JDK's own image readers. It runs the shared tests on any machine,
  * and it is what the desktop app has until the Mac's own codec arrives (docs/MACOS_PLAN.md, 8.2.5).
- * It reads JPEG and PNG, decodes the whole picture at once, and doesn't read a photo's rotation,
- * which is why the Mac doesn't take photos in yet.
+ * It reads the formats the JDK does (JPEG, PNG, GIF, BMP, TIFF, but not WebP or HEIC) and decodes
+ * the whole picture at once, which is why the Mac doesn't take photos in yet.
  */
 class JvmImageCodec : ImageCodec {
 
@@ -31,7 +32,8 @@ class JvmImageCodec : ImageCodec {
             val reader = ImageIO.getImageReaders(stream).asSequence().firstOrNull() ?: error("Not a readable image")
             try {
                 reader.input = stream
-                ImageInfo(reader.getWidth(0), reader.getHeight(0), Orientation.NORMAL)
+                // The JDK's readers hand pixels over as stored, so the turning comes from the file's EXIF.
+                ImageInfo(reader.getWidth(0), reader.getHeight(0), PhotoMetadata.orientation(File(file.toString()).readBytes()))
             } finally {
                 reader.dispose()
             }

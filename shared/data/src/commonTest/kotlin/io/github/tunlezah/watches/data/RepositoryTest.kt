@@ -1,5 +1,11 @@
 package io.github.tunlezah.watches.data
 
+import kotlin.test.assertFailsWith
+import io.github.tunlezah.watches.data.photos.PhotoMetadata
+import io.github.tunlezah.watches.data.photos.PhotoFormat
+import io.github.tunlezah.watches.data.photos.PhotoFixtures
+import io.github.tunlezah.watches.data.photos.LocationRemoval
+import io.github.tunlezah.watches.data.files.ImageSize
 import androidx.room.execSQL
 import androidx.room.useWriterConnection
 import io.github.tunlezah.watches.core.TimeSource
@@ -282,5 +288,62 @@ class RepositoryTest {
         assertEquals(setOf("grail"), settings.current().disabledSources)
         settings.update { it.copy(disabledSources = emptySet()) }
         assertEquals(emptySet(), settings.current().disabledSources)
+    }
+
+    @Test
+    fun aPhotosLocationIsGoneFromItsStoredOriginalAndItsTurningIsApplied() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        // A portrait photo as an iPhone writes it: stored on its side, with a location.
+        val arrived = PhotoFixtures.bytes("gps-exif-mm.jpg")
+        assertTrue(PhotoMetadata.hasLocation(arrived))
+        val photo = photos.add(w.id, PhotoFixtures.bytes("gps-exif-mm.jpg"))
+
+        assertTrue(photo.originalFile.endsWith("-original.jpg"))
+        val kept = files.read(photo.originalFile)
+        assertFalse(PhotoMetadata.hasLocation(kept), "the original is stored without its location")
+        assertEquals(arrived.size, kept.size, "and is otherwise the file that arrived")
+        // Its size, and its renditions, are of the upright picture.
+        assertEquals(64 to 48, photo.width to photo.height)
+        assertEquals(ImageSize(64, 48), processor.size(files.resolve(photo.thumbFile)))
+        assertFalse(PhotoMetadata.hasLocation(files.read(photo.displayFile)))
+    }
+
+    @Test
+    fun aFormatOnlySomeDevicesShowIsKeptAsAJpeg() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        for (name in listOf("other.gif", "other.bmp", "other.tiff")) {
+            val photo = photos.add(w.id, PhotoFixtures.bytes(name))
+            assertTrue(photo.originalFile.endsWith("-original.jpg"), "$name: ${photo.originalFile}")
+            assertEquals(PhotoFormat.JPEG, PhotoFormat.detect(files.read(photo.originalFile)), name)
+            assertEquals(64 to 48, photo.width to photo.height, name)
+        }
+        val stored = FileSystem.SYSTEM.list(files.resolve(FileStore.photoDir(w.id))).map { it.name }
+        assertEquals(9, stored.size, "an original and two renditions each, and nothing left over: $stored")
+        assertTrue(stored.none { "incoming" in it })
+    }
+
+    @Test
+    fun aPhotoWhoseMetadataCantBeFollowedIsKeptAsAJpegMadeWithoutIt() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        // The pointer to its GPS directory leads nowhere, so the location can't be found to be removed.
+        val damaged = PhotoFixtures.bytes("gps-exif-ii.jpg")
+        val pointer = (0..damaged.size - 8).first { i -> damaged[i] == 0x25.toByte() && damaged[i + 1] == 0x88.toByte() && damaged[i + 2] == 0x04.toByte() && damaged[i + 3] == 0.toByte() }
+        for (i in 8..10) damaged[pointer + i] = 0x7F
+        assertEquals(LocationRemoval.UNREADABLE, PhotoMetadata.removeLocation(damaged.copyOf()))
+
+        val photo = photos.add(w.id, damaged)
+        val kept = files.read(photo.originalFile)
+        assertFalse(PhotoMetadata.hasLocation(kept))
+        assertFalse(kept.contentEquals(damaged), "the damaged file itself isn't kept")
+        assertEquals(64 to 48, photo.width to photo.height)
+    }
+
+    @Test
+    fun somethingThatIsNotAPictureIsRefusedAndLeavesNothingBehind() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        assertFailsWith<Exception> { photos.add(w.id, "not a picture at all".encodeToByteArray()) }
+        val folder = files.resolve(FileStore.photoDir(w.id))
+        assertTrue(!FileSystem.SYSTEM.exists(folder) || FileSystem.SYSTEM.list(folder).isEmpty())
+        assertTrue(photos.forWatch(w.id).isEmpty())
     }
 }

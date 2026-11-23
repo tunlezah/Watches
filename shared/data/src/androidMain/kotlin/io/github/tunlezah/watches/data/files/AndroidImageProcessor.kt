@@ -24,18 +24,6 @@ class AndroidImageProcessor : ImageProcessor {
         if (swapsAxes(orientation(file))) ImageSize(opts.outHeight, opts.outWidth) else ImageSize(opts.outWidth, opts.outHeight)
     }
 
-    override suspend fun stripLocation(file: Path) = withContext(Dispatchers.IO) {
-        // ExifInterface can rewrite JPEG, PNG and WebP. Other formats keep their metadata.
-        runCatching {
-            val exif = ExifInterface(file.toString())
-            if (GPS_TAGS.any { exif.getAttribute(it) != null }) {
-                GPS_TAGS.forEach { exif.setAttribute(it, null) }
-                exif.saveAttributes()
-            }
-        }
-        Unit
-    }
-
     override suspend fun render(source: Path, crop: NormalizedRect?, maxEdge: Int, quality: Int, dest: Path): ImageSize =
         withContext(Dispatchers.Default) {
             val path = source.toString()
@@ -112,17 +100,6 @@ class AndroidImageProcessor : ImageProcessor {
     }
 
     companion object {
-        private val GPS_TAGS = listOf(
-            ExifInterface.TAG_GPS_LATITUDE, ExifInterface.TAG_GPS_LATITUDE_REF,
-            ExifInterface.TAG_GPS_LONGITUDE, ExifInterface.TAG_GPS_LONGITUDE_REF,
-            ExifInterface.TAG_GPS_ALTITUDE, ExifInterface.TAG_GPS_ALTITUDE_REF,
-            ExifInterface.TAG_GPS_TIMESTAMP, ExifInterface.TAG_GPS_DATESTAMP,
-            ExifInterface.TAG_GPS_PROCESSING_METHOD, ExifInterface.TAG_GPS_AREA_INFORMATION,
-            ExifInterface.TAG_GPS_DEST_LATITUDE, ExifInterface.TAG_GPS_DEST_LONGITUDE,
-            ExifInterface.TAG_GPS_IMG_DIRECTION, ExifInterface.TAG_GPS_SPEED, ExifInterface.TAG_GPS_TRACK,
-            ExifInterface.TAG_GPS_H_POSITIONING_ERROR, ExifInterface.TAG_GPS_VERSION_ID,
-        )
-
         /** Maps a crop in display orientation to the raw (stored) pixel grid. */
         fun toRaw(r: NormalizedRect, orientation: Int): NormalizedRect = when (orientation) {
             ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> NormalizedRect(1 - r.right, r.top, 1 - r.left, r.bottom)

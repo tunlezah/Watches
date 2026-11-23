@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+**One photo component for Android, iPhone and Mac (milestone mac-2, in progress)**
+
+The Mac plan's section 5: each platform had its own image code, and nothing tested that they agreed. The rules are moving into shared code.
+- **A photo's location is removed by shared code, on every platform.** It finds the GPS data in a file's EXIF and XMP and overwrites it where it lies, in JPEG, PNG, WebP and HEIC. The file keeps its length, and the picture, the capture date and everything else are untouched. Until now Android couldn't remove the location from a HEIC at all, the iPhone probably couldn't from a WebP, and a failure was silent.
+- **An original that can't be cleaned isn't kept.** If a file's metadata can't be followed far enough to be sure, the app keeps a full-size JPEG made from the photo instead, which carries no metadata.
+- **Formats only some devices show are kept as JPEG.** A TIFF, GIF, BMP or camera raw file added as a photo is stored as a full-size JPEG made from it, so a restored copy shows on every device. Formats are told from a file's bytes by one shared function: JPEG, PNG, WebP and HEIC are stored as they are.
+- **What a crop means in pixels is shared arithmetic** (`RenderPlan`): the rectangle to cut and the size to write come out the same on every platform. Android's rotation maths moved there, with tests for all eight orientations.
+- **Tests with real photos.** Small photos with a known location, rotation and format are compiled into the shared tests, which run on the JVM and on the iPhone simulator. CI then reads the cleaned photos back with a different library (Pillow) to confirm the location has gone and the picture is unchanged. The same code was run on real photos from a Nikon camera and a Nokia phone, HEIF included, with the same result.
+- Still to come in this milestone: the conformance suite on Android's and Apple's own decoders, one Apple codec for iPhone and Mac, the Crop screen on the same decoder, the one-time pass over photos already stored, and photos switched on for the Mac.
+
 ## 0.7.0: Mac, milestone mac-1 (23 Nov 2026)
 
 **The Mac app**

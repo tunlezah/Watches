@@ -9,8 +9,10 @@ import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.toEntity
 import io.github.tunlezah.watches.data.db.toModel
 import io.github.tunlezah.watches.data.files.FileStore
-import io.github.tunlezah.watches.data.files.ImageFormats
 import io.github.tunlezah.watches.data.files.ImageProcessor
+import io.github.tunlezah.watches.data.photos.LocationRemoval
+import io.github.tunlezah.watches.data.photos.PhotoFormat
+import io.github.tunlezah.watches.data.photos.PhotoMetadata
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.NonCancellable
@@ -22,6 +24,9 @@ import kotlin.random.Random
 /**
  * Photos are stored three ways: the untouched original (location stripped), a cropped display
  * rendition and a small thumbnail. Crops are non-destructive: re-cropping renders from the original.
+ *
+ * An original is always in a format every device can show, and never carries a location: the rules
+ * are shared code, so they are the same on Android, iPhone and Mac (docs/MACOS_PLAN.md, section 5).
  */
 class PhotoRepository(
     private val db: AppDatabase,
@@ -41,6 +46,7 @@ class PhotoRepository(
 
     suspend fun byId(id: String): Photo? = dao.get(id)?.toModel()
 
+    /** Adds a picture to a watch. [bytes] is the file as it arrived; any location in it is overwritten in place. */
     suspend fun add(
         watchId: String,
         bytes: ByteArray,
@@ -50,10 +56,8 @@ class PhotoRepository(
         id: String = Ids.new(),
     ): Photo = importLock.withLock {
         val dir = FileStore.photoDir(watchId)
-        val original = "$dir/$id-original.${ImageFormats.extension(bytes)}"
-        files.write(original, bytes)
+        val original = storeOriginal(dir, id, bytes)
         try {
-            processor.stripLocation(files.resolve(original))
             val size = processor.size(files.resolve(original))
             val (display, thumb) = renderRenditions(dir, id, original, crop = null)
             val photo = Photo(
@@ -81,6 +85,35 @@ class PhotoRepository(
             withContext(NonCancellable) { files.delete(original) }
             throw e
         }
+    }
+
+    /**
+     * Stores an incoming picture as an original the app may keep, and returns its path.
+     *
+     * A picture in a stored format is kept byte for byte once its location has been overwritten.
+     * Anything else is kept as a full-size JPEG made from it: a format only some devices can show
+     * (TIFF, GIF, a camera's raw file), or a file whose metadata can't be followed far enough to be
+     * sure the location has gone. A JPEG made this way carries no metadata at all.
+     */
+    private suspend fun storeOriginal(dir: String, id: String, bytes: ByteArray): String {
+        val format = PhotoFormat.detect(bytes)
+        if (format != null && format.stored && PhotoMetadata.removeLocation(bytes) != LocationRemoval.UNREADABLE) {
+            val path = "$dir/$id-original.${format.extension}"
+            files.write(path, bytes)
+            return path
+        }
+        val incoming = "$dir/$id-incoming.${format?.extension ?: "img"}"
+        val path = "$dir/$id-original.jpg"
+        files.write(incoming, bytes)
+        try {
+            processor.render(files.resolve(incoming), null, ORIGINAL_EDGE, ORIGINAL_QUALITY, files.resolve(path))
+        } catch (e: Throwable) {
+            withContext(NonCancellable) { files.delete(path) }
+            throw e
+        } finally {
+            withContext(NonCancellable) { files.delete(incoming) }
+        }
+        return path
     }
 
     suspend fun reorder(watchId: String, orderedIds: List<String>) {
@@ -150,5 +183,9 @@ class PhotoRepository(
         const val THUMB_EDGE = 640
         const val DISPLAY_QUALITY = 88
         const val THUMB_QUALITY = 82
+
+        /** For an original that has to be re-made as a JPEG: every pixel a phone's camera gives, at high quality. */
+        const val ORIGINAL_EDGE = 16_384
+        const val ORIGINAL_QUALITY = 95
     }
 }

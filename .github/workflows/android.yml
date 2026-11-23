@@ -107,6 +107,15 @@ jobs:
             echo "::warning::The APK is unsigned, so Android won't install it. androidApp/build.gradle.kts should sign release builds with the debug key when there's no release key."
           fi
 
+      # The app removes a photo's location with its own code, and the shared tests keep the photos
+      # they cleaned. Pillow, which shares no code with the app, reads them back: no location, the
+      # dates kept, the pictures untouched.
+      - name: Independent check of location removal
+        run: |
+          python3 -m venv "$RUNNER_TEMP/photo-check"
+          "$RUNNER_TEMP/photo-check/bin/pip" install --quiet pillow pillow-heif
+          "$RUNNER_TEMP/photo-check/bin/python" tools/photo_fixtures.py check shared/data/build/outputs/cleaned-photos
+
       # The packaged desktop app carries its own Java runtime, cut down to the modules it's thought to
       # need. A missing one shows only when the app runs, so the app is run: it starts its wiring, makes
       # a collection, backs it up and restores it, and draws a frame.

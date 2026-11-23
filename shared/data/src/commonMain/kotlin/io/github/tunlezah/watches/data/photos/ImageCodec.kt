@@ -46,8 +46,6 @@ open class CodecImageProcessor(
         return if (info.orientation.swapsAxes) ImageSize(info.storedHeight, info.storedWidth) else ImageSize(info.storedWidth, info.storedHeight)
     }
 
-    override suspend fun stripLocation(file: Path) = Unit
-
     override suspend fun render(source: Path, crop: NormalizedRect?, maxEdge: Int, quality: Int, dest: Path): ImageSize {
         val info = codec.probe(source)
         val plan = RenderPlan.of(info.storedWidth, info.storedHeight, info.orientation, crop, maxEdge)

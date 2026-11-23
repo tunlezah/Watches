@@ -7,16 +7,16 @@ import okio.Path
 data class ImageSize(val width: Int, val height: Int)
 
 /**
- * Platform image work. Every call decodes off the main thread and never holds a full-size
- * bitmap longer than it must. Sizes and crops are in display orientation (EXIF applied).
+ * Image work. Every call decodes off the main thread and never holds a full-size bitmap longer
+ * than it must. Sizes and crops are in display orientation: the upright picture a person sees.
+ *
+ * Removing a photo's location isn't here: that is shared code that works on the file's bytes
+ * before it is stored ([io.github.tunlezah.watches.data.photos.PhotoMetadata]).
  */
 interface ImageProcessor {
 
     /** Pixel size after orientation is applied. */
     suspend fun size(file: Path): ImageSize
-
-    /** Removes GPS location metadata in place, where the format allows. Other metadata is kept. */
-    suspend fun stripLocation(file: Path)
 
     /**
      * Decodes [source], applies orientation and [crop], downsamples so the long edge is at most

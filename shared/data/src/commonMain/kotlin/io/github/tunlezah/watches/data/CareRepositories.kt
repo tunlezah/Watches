@@ -14,6 +14,8 @@ import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.BoxPapersItemEntity
 import io.github.tunlezah.watches.data.db.toEntity
 import io.github.tunlezah.watches.data.db.toModel
+import io.github.tunlezah.watches.data.photos.LocationRemoval
+import io.github.tunlezah.watches.data.photos.PhotoMetadata
 import io.github.tunlezah.watches.data.files.DocumentFormats
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.data.files.ImageProcessor
@@ -180,8 +182,10 @@ class DocumentRepository(
 
     /**
      * Keeps a PDF or photo with a watch (and optionally a service entry). The type comes from the
-     * file's own bytes, not its name. Photos lose their GPS location, as watch photos do. HEIC is
-     * stored as JPEG, which every viewer and app it's shared with can open.
+     * file's own bytes, not its name. Photos lose their GPS location, as watch photos do: it is
+     * overwritten in [bytes] before they are stored. HEIC is stored as JPEG, which every viewer and
+     * app it's shared with can open; so is a photo whose metadata can't be followed far enough to
+     * be sure its location has gone.
      */
     suspend fun add(
         watchId: String,
@@ -192,14 +196,16 @@ class DocumentRepository(
     ): WatchDocument {
         if (bytes.size > MAX_BYTES) throw TooLarge()
         val (detected, ext) = DocumentFormats.detect(bytes) ?: throw UnsupportedDocument()
-        val heic = detected == DocumentFormats.HEIC
-        val mime = if (heic) "image/jpeg" else detected
+        val image = detected.startsWith("image/")
+        // A JPEG made from the photo, rather than the photo itself.
+        val convert = detected == DocumentFormats.HEIC || (image && PhotoMetadata.removeLocation(bytes) == LocationRemoval.UNREADABLE)
+        val mime = if (convert) "image/jpeg" else detected
         val id = Ids.new()
-        val path = "${FileStore.documentDir(watchId)}/$id.${if (heic) "jpg" else ext}"
+        val path = "${FileStore.documentDir(watchId)}/$id.${if (convert) "jpg" else ext}"
         // Until the row is written the file is ours to clean up; after that the row owns it.
         try {
-            if (heic) {
-                val source = "${FileStore.documentDir(watchId)}/$id.heic"
+            if (convert) {
+                val source = "${FileStore.documentDir(watchId)}/$id-incoming.$ext"
                 files.write(source, bytes)
                 try {
                     processor.render(files.resolve(source), null, HEIC_EDGE, HEIC_QUALITY, files.resolve(path))
@@ -212,7 +218,6 @@ class DocumentRepository(
                 }
             } else {
                 files.write(path, bytes)
-                if (mime.startsWith("image/")) runCatching { processor.stripLocation(files.resolve(path)) }
             }
         } catch (e: Throwable) {
             withContext(NonCancellable) { files.delete(path) }

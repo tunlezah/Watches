@@ -47,3 +47,6 @@ actual fun testJpeg(width: Int, height: Int, red: Int, green: Int, blue: Int): B
     if (out.isNotEmpty()) out.usePinned { memcpy(it.addressOf(0), data.bytes, data.length) }
     return out
 }
+
+// The simulator's files aren't the build machine's: there is nowhere to keep them for a later step.
+actual fun keepForInspection(folder: String, name: String, bytes: ByteArray) = Unit
