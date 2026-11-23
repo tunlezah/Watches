@@ -1,0 +1,83 @@
+name: Make Android signing key
+
+# Run once, by hand, to make the key the Android workflow signs with, without installing anything.
+# README › Release APK and signing › The key, for CI has the steps.
+#
+# A workflow can't save repository secrets, so the key comes back as a download (deleted after a
+# day) for you to paste into the WATCHES_KEYSTORE_BASE64 secret and keep. It's locked with the
+# WATCHES_KEYSTORE_PASSWORD secret you add first. While the repository is public, anyone signed in
+# to GitHub can download a run's files, so that password is what protects the key until the
+# download is gone. Nothing secret is written to the log.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  make-key:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Make the key
+        shell: bash
+        env:
+          WATCHES_KEYSTORE_PASSWORD: ${{ secrets.WATCHES_KEYSTORE_PASSWORD }}
+          # Only whether it exists, never its value.
+          HAS_KEY: ${{ secrets.WATCHES_KEYSTORE_BASE64 != '' }}
+        run: |
+          if [ "$HAS_KEY" = "true" ]; then
+            echo "::error::WATCHES_KEYSTORE_BASE64 already holds a key. Builds signed with a new key won't install over the app, so this makes no new one. If you really mean to replace the key, delete that secret first."
+            exit 1
+          fi
+          if [ ${#WATCHES_KEYSTORE_PASSWORD} -lt 16 ]; then
+            echo "::error::Add a WATCHES_KEYSTORE_PASSWORD secret of at least 16 characters first (Settings › Secrets and variables › Actions). It locks the key, and the download can be fetched by anyone signed in to GitHub while the repository is public."
+            exit 1
+          fi
+
+          OUT="$RUNNER_TEMP/watches-signing-key"
+          mkdir -p "$OUT"
+          # PKCS12 has one password for the store and the key, which is what the build expects
+          # when WATCHES_KEY_PASSWORD isn't set. The alias is the build's default.
+          keytool -genkeypair -keystore "$OUT/watches-release.jks" -storetype PKCS12 \
+            -alias watches -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Watches" \
+            -storepass:env WATCHES_KEYSTORE_PASSWORD
+          base64 -w0 "$OUT/watches-release.jks" > "$OUT/WATCHES_KEYSTORE_BASE64.txt"
+
+          # The certificate's fingerprint is public; signed builds show the same one in their summary.
+          CERT=$(keytool -list -v -keystore "$OUT/watches-release.jks" -storepass:env WATCHES_KEYSTORE_PASSWORD \
+            | sed -n 's/^[[:space:]]*SHA256: //p' | head -1 | tr -d ':' | tr 'A-F' 'a-f')
+          if [ -z "$CERT" ]; then echo "::error::The key was made but couldn't be read back."; exit 1; fi
+
+          cat > "$OUT/README.txt" <<EOF
+          The Android signing key for Watches.
+
+          1. Open WATCHES_KEYSTORE_BASE64.txt and copy all of it (one long line).
+          2. In the repository, Settings > Secrets and variables > Actions > New repository secret:
+             name WATCHES_KEYSTORE_BASE64, value the text you copied.
+          3. Keep watches-release.jks and the WATCHES_KEYSTORE_PASSWORD password together somewhere
+             private, such as a password manager, with a second copy. Every update must be signed
+             with this key: without it, no later build installs over the app.
+          4. Delete this download from the workflow run's page (it's also deleted after a day).
+
+          Certificate SHA-256: $CERT
+          EOF
+
+          {
+            echo "Made a signing key. Certificate SHA-256: \`$CERT\`."
+            echo
+            echo "Download **watches-signing-key** below, follow its README.txt, then delete the download."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Hand back the key
+        uses: actions/upload-artifact@v4
+        with:
+          name: watches-signing-key
+          path: ${{ runner.temp }}/watches-signing-key/
+          retention-days: 1
+          if-no-files-found: error

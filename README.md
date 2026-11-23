@@ -57,13 +57,23 @@ Without these variables the release APK is built unsigned, and Android won't ins
 
 #### The key, for CI
 
-Make the key once, on any computer with a JDK or Android Studio (both include `keytool`). It asks for a password and a name; the alias `watches` is the default above.
+Make the key once, in either of two ways. Both use the alias `watches`, the default above.
+
+**On GitHub, with nothing to install.** GitHub can make the key, but a workflow can't save secrets, so you paste it in yourself:
+
+1. Add a repository secret (Settings › Secrets and variables › Actions) named `WATCHES_KEYSTORE_PASSWORD`: a password of at least 16 characters that you make up and save in a password manager. It locks the key.
+2. Run Actions › Make Android signing key › Run workflow.
+3. Download `watches-signing-key` from the run's page and follow its `README.txt`: paste the contents of `WATCHES_KEYSTORE_BASE64.txt` into a new secret of that name, keep `watches-release.jks` with the password, then delete the download.
+
+The download is deleted after a day anyway. While this repository is public, anyone signed in to GitHub can fetch a run's downloads, so until then only the password protects the key. The workflow won't make another key once `WATCHES_KEYSTORE_BASE64` exists.
+
+**On your own computer**, with a JDK or Android Studio (both include `keytool`). It asks for a password and a name:
 
 ```sh
 keytool -genkeypair -v -keystore watches-release.jks -alias watches -keyalg RSA -keysize 4096 -validity 10000
 ```
 
-Add these repository secrets (Settings › Secrets and variables › Actions). Encode the keystore with `base64 -w0 watches-release.jks` on Linux, or `base64 -i watches-release.jks` on a Mac.
+Then add these repository secrets. Encode the keystore with `base64 -w0 watches-release.jks` on Linux, or `base64 -i watches-release.jks` on a Mac.
 
 | Secret | Value |
 | --- | --- |
