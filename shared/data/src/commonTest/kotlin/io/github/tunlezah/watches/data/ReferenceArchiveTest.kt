@@ -54,12 +54,6 @@ class ReferenceArchiveTest {
     }
 
     @Test fun aBackupMadeOnAMacRestoresHereAndShowsTheSamePictures() = runBlocking<Unit> {
-        // The archive comes from the macOS workflow's own run of ReferenceArchiveMaker. Until the first
-        // one has been committed there is nothing to restore, and this says so rather than passing quietly.
-        if ("mac.zip" !in ArchiveFixtures.names) {
-            println("ReferenceArchiveTest: NOT RUN. fixtures/archives/mac.zip isn't in the repository yet.")
-            return@runBlocking
-        }
         val phone = phones.new()
         val archive = phones.scratchDir() / "mac.zip"
         FileSystem.SYSTEM.write(archive) { write(ArchiveFixtures.bytes("mac.zip")) }
@@ -123,16 +117,20 @@ class ReferenceArchiveTest {
         // the same size to the pixel, and the same picture, as the Mac made it.
         for ((name, photo) in listOf("the HEIC" to heic, "the cropped JPEG" to cropped, "the PNG" to alpha, "the TIFF" to tiff)) {
             if (PhotoFormat.detect(files.read(photo.originalFile)) !in phone.processor.readableFormats) continue
-            for (file in listOf(Rendition.DISPLAY, Rendition.THUMB)) {
-                val theirs = decodePixels(files.resolve(file.of(photo)))
-                phone.photos.rerender(photo.id)
-                val mine = decodePixels(files.resolve(file.of(phone.photos.byId(photo.id)!!)))
-                assertEquals(theirs.width to theirs.height, mine.width to mine.height, "$name: its ${file.name.lowercase()} image is the size the Mac made")
+            // The Mac's two renditions are read first: rendering again replaces them both.
+            val theirs = Rendition.entries.associateWith { decodePixels(files.resolve(it.of(photo))) }
+            phone.photos.rerender(photo.id)
+            val again = phone.photos.byId(photo.id)!!
+            for (rendition in Rendition.entries) {
+                val made = rendition.name.lowercase()
+                val mac = theirs.getValue(rendition)
+                val mine = decodePixels(files.resolve(rendition.of(again)))
+                assertEquals(mac.width to mac.height, mine.width to mine.height, "$name: its $made image is the size the Mac made")
                 // The middle of each cell of a four by four grid: clear of the edges between the colours.
                 for (cx in 0 until 4) for (cy in 0 until 4) {
                     val x = (2 * cx + 1) * mine.width / 8
                     val y = (2 * cy + 1) * mine.height / 8
-                    assertColour(theirs.at(x, y), mine.at(x, y), "$name at $x,$y: the Mac's ${file.name.lowercase()} image and this device's")
+                    assertColour(mac.at(x, y), mine.at(x, y), "$name at $x,$y: the Mac's $made image and this device's")
                 }
             }
         }
