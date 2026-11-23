@@ -18,6 +18,16 @@ Status: **milestone mac-1 built** (23 Nov 2026, version 0.7.0); mac-2 under way;
 
 **What has and hasn't been checked.** On Linux: every test, the real window opening to the welcome screen, and the packaged app passing its self-test. On an Apple silicon runner (macOS 15): the disk image builds, the app inside it passes the self-test, and its bundle has the right identity, version and a valid ad hoc signature. The app is 157 MB, and the download 93 MB. The iPhone workflow passed with the shared-code changes. Not yet checked anywhere: the app on a real Mac, including macOS 27, the file panels, and a real backup from a phone. That is yours to try, with appendix C's "Install and update" and "Moving a collection".
 
+**mac-2 so far** (8.2.1 to 8.2.4 built; 8.2.5 onwards to come):
+- **The rules (8.2.1)** are in `shared/data/photos`: `PhotoFormat`, `Orientation`, `RenderPlan` and the `ImageCodec` interface, with `CodecImageProcessor` on top.
+- **Location removal (8.2.2)** is `PhotoMetadata`, and every platform stores photos and photo documents through it. It works on a file's bytes before they are stored. Run on real photos from a Nikon camera and a Nokia phone, HEIF included, it removed the location and changed nothing else, as read back by a different library. No real iPhone HEIC has been through it yet.
+- **The conformance suite (8.2.3)** is `PhotoConformanceTest`, on 23 small fixtures made by `tools/photo_fixtures.py`. CI also reads the cleaned fixtures back with Pillow, which shares no code with the app.
+- **Android (8.2.4)** is `AndroidImageCodec`, and the Photos workflow runs the whole shared data suite on an emulator.
+- **Differences from the plan so far:**
+  - The platform's own reader confirms a location has gone in the tests, not yet each time a photo is stored. At run time the guard is the shared reader's own verdict that a file can't be followed. The run-time check by the platform's reader comes with the Apple codec (8.2.5).
+  - Wide-gamut and very large photos aren't in the suite yet. Android converts to sRGB as it decodes; the fixtures to prove it are still to make.
+  - The iPhone still runs its old image code for decoding, so two checks in the suite are marked as not yet applying there (`rendersBySharedGeometry`).
+
 What was checked for the plan:
 
 - **Libraries.** The published builds of every UI and data library at its pinned version, on Maven Central: Compose Multiplatform 1.12.1, Material 3 1.9.0, Material 3 adaptive 1.3.0, Navigation 3 1.1.2, Lifecycle 2.11.0, Koin 4.2.2, Coil 3.6.3, FileKit 0.16.0, Room 2.8.5, bundled SQLite 2.7.1 and Ksoup 0.2.6. Each one has a desktop build.
