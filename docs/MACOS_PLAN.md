@@ -1,6 +1,6 @@
 # Watches on the Mac: plan
 
-Status: **milestone mac-1 built** (23 Nov 2026, version 0.7.0); mac-2 under way; mac-3 and mac-4 to come. Written against `aa79289` (0.6.0, with iPhone milestone iOS-1 built).
+Status: **milestones mac-1 and mac-2 built** (23 Nov 2026, versions 0.7.0 and 0.8.0); mac-3 and mac-4 to come. Written against `aa79289` (0.6.0, with iPhone milestone iOS-1 built).
 
 **Decided so far** (section 7): the Mac is a current Apple silicon model on macOS 27. Builds come from the GitHub release, beside the APK. Work starts now, with mac-1. The photo component is fixed for Android, iPhone and Mac together, as part of this plan (section 5).
 
@@ -18,7 +18,7 @@ Status: **milestone mac-1 built** (23 Nov 2026, version 0.7.0); mac-2 under way;
 
 **What has and hasn't been checked.** On Linux: every test, the real window opening to the welcome screen, and the packaged app passing its self-test. On an Apple silicon runner (macOS 15): the disk image builds, the app inside it passes the self-test, and its bundle has the right identity, version and a valid ad hoc signature. The app is 157 MB, and the download 93 MB. The iPhone workflow passed with the shared-code changes. Not yet checked anywhere: the app on a real Mac, including macOS 27, the file panels, and a real backup from a phone. That is yours to try, with appendix C's "Install and update" and "Moving a collection".
 
-**mac-2 so far** (8.2.1 to 8.2.10 built; 8.2.11 to come):
+**mac-2 as built** (version 0.8.0). All of 8.2, except what is listed under "Still open" below:
 - **The rules (8.2.1)** are in `shared/data/photos`: `PhotoFormat`, `Orientation`, `RenderPlan` and the `ImageCodec` interface, with `CodecImageProcessor` on top.
 - **Location removal (8.2.2)** is `PhotoMetadata`, and every platform stores photos and photo documents through it. It works on a file's bytes before they are stored. Run on real photos from a Nikon camera and a Nokia phone, HEIF included, it removed the location and changed nothing else, as read back by a different library. No real iPhone HEIC has been through it yet.
 - **The conformance suite (8.2.3)** is `PhotoConformanceTest`, on 31 small fixtures made by `tools/photo_fixtures.py`. CI also reads the cleaned fixtures back with Pillow, which shares no code with the app.
@@ -33,14 +33,22 @@ Status: **milestone mac-1 built** (23 Nov 2026, version 0.7.0); mac-2 under way;
 - **Photos on the Mac (8.2.10)** are on wherever the bridge is loaded, which is every packaged build. Adding from files, cropping, Lookup pictures and photos as documents all work as on the phones. There is no camera button. A build without the bridge still shows photos and says why it can't take new ones in.
 - **Round trips (8.2.11), so far.** The macOS runner's disk ignores capitals in file names, as most Macs' do, and a test there restores a backup with two names that differ only by capitals. Its first run found a fault that was never the Mac's alone: a restore that met an existing file with different contents failed on every platform, from an overflow in the code that names the file put beside it. Fixed, with a test that reaches it everywhere. `ReferenceArchiveMaker` makes a backup with the Mac's image code on each macOS run. One of those is committed (`fixtures/archives/mac.zip`), and `ReferenceArchiveTest` restores it wherever the shared tests run: every row and file, no location anywhere, the Mac's renditions read by each platform's plain decoder, and each photo rendered again there to the same size and picture. That is "Mac to phone" and "crop parity" from 9.5. The other direction, backups made on a real iPhone and a real Android phone, needs the phones: see the fixtures' README.
 - **A second opinion on location, each time a photo is stored.** After the shared code has removed a location, the platform's own reader is asked whether it still finds one: `ExifInterface` on Android, ImageIO on the iPhone and the Mac. If it does, the app keeps a JPEG made from the photo instead. The suite checks that each platform's reader does find a location in an ordinary photo, and finds none afterwards.
-- **Differences from the plan so far:**
+- **Checked in CI**, on the commit before the version change:
+  - every shared test on Linux (plain-Java codec), on an Android emulator (Android 14, Android's decoders), natively on an Apple silicon runner (macOS 15, ImageIO) and again there on Java through the bridge;
+  - the disk image, with the packaged app's self-test storing a HEIC through the bridge;
+  - the iPhone app building, and passing its own tests and its launch check on the simulator, with the new image code.
+- **Not yet checked when this was written:** the iPhone simulator's run of the shared tests with the restore fix and the Mac-made backup in. Its last full run was two commits earlier: 101 of 102 passed, and the one that failed was the capitals test, on the restore fault since fixed (the simulator uses the Mac's disk). The run for this version covers it.
+- **Still open:**
+  - **Yours to do.** Try the app on your Mac, with photos this time: add a few from Finder, a HEIC from your iPhone among them, crop one, back up, and restore that backup on a phone. And one backup from each phone, made from sample watches, for the test fixtures (9.5; the fixtures' README says where they go). No real iPhone HEIC has been through the location removal yet.
+  - **Wide-gamut and very large photos** aren't in the suite (9.4), nor are AVIF and raw fixtures. Android and Apple both convert to sRGB as they decode; the photos to prove it are still to make.
+  - **Notarisation of the bridge** (8.4.3) waits for the first signed build.
+- **Differences from the plan:**
   - Plain Java has no metadata reader of its own, so on Linux the second opinion is the shared reader again. That only affects tests: the Mac asks ImageIO, through the bridge.
   - The bridge is a module of its own (`macBridge`), not a source set of `shared/data`: only what its three functions reach is linked into the library, which keeps the database code out of it.
   - The pass over stored photos keeps its place in a note in the cache folder, not in the marker that finishes a restore's aftercare. The restore only asks for a pass; the app runs it afterwards, so a restore doesn't wait for it.
   - That pass drops a crop when it corrects a photo's size, because the crop was drawn on a picture of another shape. Such a photo shows whole until it is cropped again.
   - A photo's location is still removed in memory, so a photo in a stored format is read whole once, to be cleaned. What streaming saves is the copy the picker made, and all of a file that is converted: a camera's raw file is never in memory. A stored-format photo over 128 MB is re-made as a JPEG instead.
   - The Crop screen has no image-loader decoder of its own, as 8.2.7 proposed. It shows a JPEG the codec made, which needed no per-platform code and goes through the path the suite already tests. The image loader now only ever opens the app's own JPEGs.
-  - Wide-gamut and very large photos aren't in the suite yet. Android converts to sRGB as it decodes; the fixtures to prove it are still to make.
 
 What was checked for the plan:
 

@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.8.0: One photo component, milestone mac-2 (23 Nov 2026)
 
-**One photo component for Android, iPhone and Mac (milestone mac-2, in progress)**
+**One photo component for Android, iPhone and Mac**
 
-The Mac plan's section 5: each platform had its own image code, and nothing tested that they agreed. The rules are moving into shared code.
+The Mac plan's section 5: each platform had its own image code, and nothing tested that they agreed. The rules are now shared code, each platform keeps only a decoder, and one set of tests holds all of them to the same results. The Mac takes photos in as the phones do.
 - **A photo's location is removed by shared code, on every platform.** It finds the GPS data in a file's EXIF and XMP and overwrites it where it lies, in JPEG, PNG, WebP and HEIC. The file keeps its length, and the picture, the capture date and everything else are untouched. Until now Android couldn't remove the location from a HEIC at all, the iPhone probably couldn't from a WebP, and a failure was silent.
 - **An original that can't be cleaned isn't kept.** If a file's metadata can't be followed far enough to be sure, the app keeps a full-size JPEG made from the photo instead, which carries no metadata.
 - **A second opinion, each time.** Once the shared code has removed a location, the platform's own reader is asked whether it still finds one (Android's `ExifInterface`, Apple's ImageIO). If it does, the photo is kept as a JPEG made from it instead.
@@ -21,6 +21,11 @@ The Mac plan's section 5: each platform had its own image code, and nothing test
 - **Fixed: a restore failed when a file it brought was already there with different contents.** The restore puts such a file beside the existing one under a new name, and the code that chose the name asked for a random number from a range too large for it, so it stopped with an error and changed nothing. That can happen on any device, and no test had reached it. A Mac's disk found it: file names there ignore capitals, so two names a phone tells apart can be one file on a Mac. Both cases are now tested, on every platform.
 - **A backup made on a Mac, restored on everything.** The macOS workflow makes a small backup with the Mac's own image code on every run: a HEIC, a cropped JPEG, a PNG, a TIFF, a PDF and a photographed receipt. One of them is in the repository, and the shared tests restore it on the JVM, an Android emulator, the iPhone simulator and a Mac. They check every row and file, that nothing carries a location, and that each photo rendered again on that platform comes out the same size and the same picture as the Mac made it.
 - **Tests with real photos.** Small photos with a known location, rotation and format are compiled into the shared tests, which run on the JVM, on an Android emulator, on the iPhone simulator and natively on a Mac. CI then reads the cleaned photos back with a different library (Pillow) to confirm the location has gone and the picture is unchanged. The same code was run on real photos from a Nikon camera and a Nokia phone, HEIF included, with the same result.
+
+**Not in this version**
+- **Wide-gamut and very large photos aren't in the test suite yet.** Android and Apple both convert to sRGB as they decode, by design; the photos that would prove it (Display P3, 48 megapixels) are still to make, as are AVIF and raw fixtures.
+- **Backups made on a real iPhone and a real Android phone** aren't among the test fixtures. They need the phones.
+- **The camera on the Mac**, and everything in milestones mac-3 and mac-4: menus and shortcuts, Mac wording, PDF pages in the app, reminders, the app lock, and a notarised build.
 
 ## 0.7.0: Mac, milestone mac-1 (23 Nov 2026)
 
