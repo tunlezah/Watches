@@ -55,6 +55,11 @@ class PhotoImporter(private val photos: PhotoRepository) {
 
     fun crop(photoId: String, rect: NormalizedRect): Deferred<Unit> = scope.async { photos.crop(photoId, rect) }
 
+    /** The Crop screen's working pictures, once it has closed. */
+    fun discardCropPreviews() {
+        scope.launch { runCatching { photos.clearCropPreviews() } }
+    }
+
     fun clearFailures(watchId: String) = bump(watchId) { it.copy(failed = 0) }
 
     private fun bump(watchId: String, change: (ImportProgress) -> ImportProgress) =

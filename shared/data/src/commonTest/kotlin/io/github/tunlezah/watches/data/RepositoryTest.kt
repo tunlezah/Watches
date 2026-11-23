@@ -311,6 +311,31 @@ class RepositoryTest {
     }
 
     @Test
+    fun thePictureToCropOnIsTheWholeUprightPictureMadeByTheAppsOwnImageCode() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        // Stored on its side, as a phone writes a portrait photo.
+        val photo = photos.add(w.id, PhotoFixtures.bytes("turned-6.jpg"))
+        // Uncropped, its display image is already the whole picture.
+        assertEquals(photo.displayFile, photos.cropPreview(photo.id))
+
+        photos.crop(photo.id, NormalizedRect(0.5f, 0.5f, 1f, 1f))
+        val preview = photos.cropPreview(photo.id)!!
+        assertTrue(preview.startsWith("${FileStore.CACHE_DIR}/"), "kept where no backup looks: $preview")
+        val shown = decodePixels(files.resolve(preview))
+        assertEquals(64 to 48, shown.width to shown.height, "the whole picture, upright, not the cut")
+        val (r, g, b) = shown.at(8, 8)
+        assertTrue(r > 140 && g < 100 && b < 100, "its top left is still the red corner: $r, $g, $b")
+        // The photo itself is untouched by looking.
+        val before = photos.byId(photo.id)
+        photos.cropPreview(photo.id)
+        assertEquals(before, photos.byId(photo.id))
+
+        photos.clearCropPreviews()
+        assertFalse(files.exists(preview))
+        assertNull(photos.cropPreview("no such photo"))
+    }
+
+    @Test
     fun aPhotoThePlatformStillFindsALocationInIsKeptAsAJpegMadeFromIt() = runBlocking<Unit> {
         val w = watches.create(speedmaster)
         // The shared code says the location has gone. This platform's reader, asked for a second opinion, disagrees.

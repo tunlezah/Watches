@@ -9,6 +9,7 @@ import io.github.tunlezah.watches.data.PhotoRepository
 import io.github.tunlezah.watches.data.WatchRepository
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.vinceglb.filekit.PlatformFile
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -76,6 +77,8 @@ data class CropUiState(
     val height: Int = 1,
     val crop: NormalizedRect = NormalizedRect.Full,
     val saving: Boolean = false,
+    /** The original is in a format this device can't read, or is missing. */
+    val unreadable: Boolean = false,
 )
 
 class CropViewModel(
@@ -90,9 +93,19 @@ class CropViewModel(
     init {
         viewModelScope.launch {
             val photo: Photo = photos.byId(photoId) ?: return@launch
-            _state.value = CropUiState(true, files.absolute(photo.originalFile), photo.width, photo.height, photo.crop ?: NormalizedRect.Full)
+            // The picture to crop on is made by the app's own image code, the same that will make the cut.
+            val preview = try {
+                photos.cropPreview(photoId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            _state.value = CropUiState(true, preview?.let(files::absolute), photo.width, photo.height, photo.crop ?: NormalizedRect.Full, unreadable = preview == null)
         }
     }
+
+    override fun onCleared() = importer.discardCropPreviews()
 
     fun save(rect: NormalizedRect, onDone: () -> Unit) {
         _state.update { it.copy(saving = true) }

@@ -129,6 +129,32 @@ class PhotoRepository(
         watchDao.setCover(watchId, photoId, time.now().toEpochMilliseconds())
     }
 
+    /**
+     * The whole upright picture as a JPEG, for the Crop screen to show, or null if there is no such
+     * photo. Throws if this device can't read the original.
+     *
+     * The Crop screen used to hand the original to the image loader, whose decoders differ from the
+     * app's own: on an iPhone or a Mac they read no HEIC, and none of them obeys a HEIC's own crop
+     * box. The picture a crop is drawn on is now made by the codec that will make the cut, so the
+     * two can't disagree. An uncropped photo's display image is already that picture; otherwise one
+     * is made in the cache folder, which no backup includes.
+     */
+    suspend fun cropPreview(photoId: String): String? {
+        val photo = dao.get(photoId)?.toModel() ?: return null
+        if (photo.crop == null && photo.displayFile != photo.originalFile && files.exists(photo.displayFile)) return photo.displayFile
+        val preview = "$CROP_PREVIEWS/${photo.id}.jpg"
+        try {
+            processor.render(files.resolve(photo.originalFile), null, DISPLAY_EDGE, DISPLAY_QUALITY, files.resolve(preview))
+        } catch (e: Throwable) {
+            withContext(NonCancellable) { files.delete(preview) }
+            throw e
+        }
+        return preview
+    }
+
+    /** Removes what [cropPreview] made. They are quick to make again. */
+    suspend fun clearCropPreviews() = files.deleteTree(CROP_PREVIEWS)
+
     /** Applies a crop (null = full frame) by re-rendering the display image and thumbnail from the original. */
     suspend fun crop(photoId: String, crop: NormalizedRect?) {
         val current = dao.get(photoId)?.toModel() ?: return
@@ -183,6 +209,8 @@ class PhotoRepository(
     }
 
     companion object {
+        private const val CROP_PREVIEWS = "${FileStore.CACHE_DIR}/crop"
+
         const val DISPLAY_EDGE = 2560
         const val THUMB_EDGE = 640
         const val DISPLAY_QUALITY = 88
