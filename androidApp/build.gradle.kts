@@ -5,8 +5,9 @@ plugins {
 }
 
 // Release signing comes from the environment (CI secrets) or ~/.gradle/gradle.properties, never the repo.
-// Without it, release builds are produced unsigned. Blank counts as unset: GitHub Actions passes a
-// secret that doesn't exist as an empty string, and an empty alias would fail the build.
+// Without it, release builds are signed with the debug key instead (see buildTypes). Blank counts as
+// unset: GitHub Actions passes a secret that doesn't exist as an empty string, and an empty alias
+// would fail the build.
 fun signingSetting(env: String, property: String): String? =
     providers.environmentVariable(env).orNull?.takeIf { it.isNotBlank() }
         ?: providers.gradleProperty(property).orNull?.takeIf { it.isNotBlank() }
@@ -50,7 +51,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("release")
+            // Without a release key, the debug key: the APK still installs. Each machine has its own
+            // debug key, and each CI run is a new machine, so those builds don't install over each other.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 

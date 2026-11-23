@@ -40,7 +40,19 @@ WATCHES_LIVE_TESTS=1 ./gradlew :shared:search:jvmTest --tests '*LiveSourcesTest*
 
 ### Release APK and signing
 
-Sideloaded updates must always be signed with the same key, or Android refuses to install them over the existing app. The key is never stored in this repository. Provide it via environment variables (or the matching `watches.*` Gradle properties in `~/.gradle/gradle.properties`):
+Every release APK is signed, so Android installs it. Without a key of your own, it's signed with the debug key of the machine that builds it. Each GitHub Actions run is a new machine with a new debug key, and Android won't install an update signed with a different key over the app. So to move to a newer build: back up your collection (Settings › Backup & restore), uninstall the app, install the new APK, then restore.
+
+```sh
+./gradlew :androidApp:assembleRelease   # -> androidApp/build/outputs/apk/release/androidApp-release.apk
+```
+
+Its version name and code come from `version.xcconfig`, which the iPhone build reads too.
+
+The Android workflow builds the release APK on every push and keeps it for 14 days as the run's `watches-release-apk` artifact, named `Watches-<version>-<build>.apk`. The run's summary says which key signed it, and its certificate's SHA-256.
+
+#### Optional: your own key, so updates install over the top
+
+Signed with your own key, every build matches, so new builds install over the app and keep its data. The key is never stored in this repository. Provide it via environment variables (or the matching `watches.*` Gradle properties in `~/.gradle/gradle.properties`):
 
 | Variable | Meaning |
 | --- | --- |
@@ -49,15 +61,7 @@ Sideloaded updates must always be signed with the same key, or Android refuses t
 | `WATCHES_KEY_ALIAS` | Key alias (default `watches`) |
 | `WATCHES_KEY_PASSWORD` | Key password (defaults to the keystore password) |
 
-```sh
-./gradlew :androidApp:assembleRelease   # -> androidApp/build/outputs/apk/release/androidApp-release.apk
-```
-
-Without these variables the release APK is built unsigned, and Android won't install it. Its version name and code come from `version.xcconfig`, which the iPhone build reads too.
-
-#### The key, for CI
-
-Make the key once, in either of two ways. Both use the alias `watches`, the default above.
+For CI, make the key once, in either of two ways. Both use the alias `watches`, the default above.
 
 **On GitHub, with nothing to install.** GitHub can make the key, but a workflow can't save secrets, so you paste it in yourself:
 
@@ -84,8 +88,6 @@ Then add these repository secrets. Encode the keystore with `base64 -w0 watches-
 
 Keep the `.jks` and its password somewhere private, such as a password manager, and keep a second copy. Without them no later build installs over the app: the only way on is to uninstall it, which deletes its data unless you've saved a backup.
 
-The Android workflow builds the release APK on every push and keeps it for 14 days as the run's `watches-release-apk` artifact, named `Watches-<version>-<build>.apk`. Until the secrets exist it's `Watches-<version>-<build>-unsigned.apk` and the run shows a warning. Once signed, the run's summary shows the certificate's SHA-256, which is the same for every build signed with your key.
-
 #### Releasing
 
 To publish an APK that stays downloadable, tag the commit with its version from `version.xcconfig` and push the tag:
@@ -94,13 +96,13 @@ To publish an APK that stays downloadable, tag the commit with its version from 
 git tag v0.6.0 && git push origin v0.6.0
 ```
 
-The Android workflow then publishes a GitHub release with the signed APK attached and that version's changelog entry as its notes. It refuses an unsigned APK, and a tag that doesn't match `version.xcconfig`. A tag with a suffix, such as `v0.7.0-rc1`, is published as a pre-release. Running the workflow again on the same tag replaces the APK. The same tag also starts the iOS release workflow.
+The Android workflow then publishes a GitHub release with the APK attached and that version's changelog entry as its notes, which start with the uninstall-first steps when it's signed with a debug key. It refuses an unsigned APK, and a tag that doesn't match `version.xcconfig`. A tag with a suffix, such as `v0.7.0-rc1`, is published as a pre-release. Running the workflow again on the same tag replaces the APK. The same tag also starts the iOS release workflow.
 
 ## Sideload on Android
 
-1. On the phone, open the repository's Releases page and download the latest `Watches-….apk`. Or copy a build's APK to the phone.
+1. On the phone, open the repository's Releases page and download the latest `Watches-….apk`. Or download a build's `watches-release-apk` artifact and copy the APK inside it to the phone.
 2. Open it. Android asks once to allow installs from that app (Files, Chrome, etc.). Allow it.
-3. Install. Later builds signed with the same key install over the top and keep your data.
+3. Install. If Android says the app isn't installed because it conflicts with the existing one, the new build is signed with a different key: back up in Settings › Backup & restore, uninstall Watches, install the new APK, then restore. With your own key, later builds install over the top and keep your data.
 
 The app needs Android 11 or newer.
 

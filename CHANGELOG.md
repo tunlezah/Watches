@@ -3,11 +3,12 @@
 ## Unreleased
 
 **Android releases**
+- Every release APK is now signed, so Android installs it, with no setup. Without signing secrets it's signed with the build machine's debug key. Each CI run has a new debug key, and Android won't update an app signed with a different key, so moving to a newer build means: back up (Settings › Backup & restore), uninstall, install, restore. Your own key, which is optional, makes updates install over the top.
 - Pushing a `v*` tag publishes the signed APK as a GitHub release, with that version's changelog entry as its notes, so it stays downloadable after the build's 14-day artifact expires. The release refuses an unsigned APK, and a tag that doesn't match `version.xcconfig`.
-- Every build's APK is named for its version (`Watches-0.6.0-6.apk`). Unsigned ones say so in the name, with a warning on the run, because Android won't install them. Signed ones show the certificate's SHA-256 in the run's summary.
+- Every build's APK is named for its version (`Watches-0.6.0-6.apk`). The run's summary says which key signed it, with the certificate's SHA-256. An unsigned APK would say so in its name, with a warning on the run.
 - GitHub passes a secret that doesn't exist to the build as an empty value. An empty signing setting now counts as unset, so leaving out `WATCHES_KEY_ALIAS` or `WATCHES_KEY_PASSWORD` uses the defaults instead of failing the signed build with "No key with alias ''".
-- A new **Make Android signing key** workflow, run by hand, makes the key on GitHub, so nothing needs installing. A workflow can't save secrets, so it hands the key back as a download, locked with a password you add as a secret first and deleted after a day, for you to paste in and keep. It won't make a second key once one is saved.
-- README › Release APK and signing explains both ways to make the key, on GitHub or with `keytool`, and which secrets to add.
+- A new **Make Android signing key** workflow, optional and run by hand, makes the key on GitHub, so nothing needs installing. A workflow can't save secrets, so it hands the key back as a download, locked with a password you add as a secret first and deleted after a day, for you to paste in and keep. It won't make a second key once one is saved.
+- README › Release APK and signing explains the debug-key default, and, for your own key, both ways to make it and which secrets to add.
 
 ## 0.6.0: iPhone, milestone iOS-1 (21 Nov 2026)
 

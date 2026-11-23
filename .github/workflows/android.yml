@@ -1,7 +1,8 @@
 name: Android
 
-# Checks, tests and the release APK on every push. On a v* tag, the signed APK is also published as
-# a GitHub release. Signing needs the repository secrets in README › Release APK and signing.
+# Checks, tests and a signed release APK on every push. Without the signing secrets (README › Release
+# APK and signing) it's signed with the run's throwaway debug key: it installs, but not over an
+# earlier build. On a v* tag the APK is also published as a GitHub release.
 on:
   push:
   pull_request:
@@ -20,6 +21,7 @@ jobs:
     timeout-minutes: 60
     outputs:
       signed: ${{ steps.apk.outputs.signed }}
+      key: ${{ steps.apk.outputs.key }}
       version: ${{ steps.apk.outputs.version }}
     steps:
       - uses: actions/checkout@v5
@@ -39,7 +41,7 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/watches-release.jks"
             echo "WATCHES_KEYSTORE=$RUNNER_TEMP/watches-release.jks" >> "$GITHUB_ENV"
           else
-            echo "No signing secret: the release APK will be unsigned."
+            echo "No signing secret: the release APK is signed with this run's throwaway debug key."
           fi
 
       - name: Checks, tests and release build
@@ -65,8 +67,8 @@ jobs:
           :androidApp:recordRoborazziDebug
           :androidApp:assembleRelease
 
-      # Without a key Gradle writes androidApp-release-unsigned.apk, which Android won't install. Say so
-      # on the run's page, and give the APK a name that carries its version.
+      # Gives the APK a name that carries its version, checks its signature, and says on the run's page
+      # which key signed it. A throwaway debug key means it won't install over an earlier build.
       - name: Name and check the APK
         id: apk
         shell: bash
@@ -83,11 +85,19 @@ jobs:
             CERT=$(sed -n 's/.*certificate SHA-256 digest: //p' "$RUNNER_TEMP/certs.txt" | head -1)
             cp "$OUT/androidApp-release.apk" "dist/Watches-$VERSION-$BUILD.apk"
             echo "signed=true" >> "$GITHUB_OUTPUT"
-            echo "Signed APK \`Watches-$VERSION-$BUILD.apk\`. Certificate SHA-256: \`$CERT\` (the same for every build signed with your key)." >> "$GITHUB_STEP_SUMMARY"
+            # The decode step sets WATCHES_KEYSTORE only when the signing secret exists.
+            if [ -n "${WATCHES_KEYSTORE:-}" ]; then
+              echo "key=release" >> "$GITHUB_OUTPUT"
+              echo "Signed APK \`Watches-$VERSION-$BUILD.apk\`. Certificate SHA-256: \`$CERT\` (the same for every build signed with your key)." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "key=debug" >> "$GITHUB_OUTPUT"
+              echo "Signed APK \`Watches-$VERSION-$BUILD.apk\`, with this run's throwaway debug key (certificate SHA-256 \`$CERT\`). It installs, but not over an earlier build: in the app, back up (Settings › Backup & restore), uninstall it, install this APK, then restore." >> "$GITHUB_STEP_SUMMARY"
+              echo "::notice::Signed with this run's throwaway debug key: to install it, uninstall the earlier build first (back up your collection in Settings › Backup & restore, then restore it)."
+            fi
           else
             cp "$OUT/androidApp-release-unsigned.apk" "dist/Watches-$VERSION-$BUILD-unsigned.apk"
             echo "signed=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::The APK is unsigned, so Android won't install it. Add the signing secrets: README › Release APK and signing."
+            echo "::warning::The APK is unsigned, so Android won't install it. androidApp/build.gradle.kts should sign release builds with the debug key when there's no release key."
           fi
 
       - name: Upload APK
@@ -127,7 +137,7 @@ jobs:
       - name: Refuse an unsigned APK
         if: needs.build.outputs.signed != 'true'
         run: |
-          echo "::error::The APK is unsigned, so Android wouldn't install it. Add the signing secrets (README › Release APK and signing), then run this workflow again on the tag."
+          echo "::error::The APK is unsigned, so Android wouldn't install it. Fix the build's signing, then run this workflow again on the tag."
           exit 1
 
       - uses: actions/checkout@v5
@@ -156,11 +166,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.build.outputs.version }}
+          KEY: ${{ needs.build.outputs.key }}
         run: |
+          if [ "$KEY" = "debug" ]; then
+            printf '%s\n\n' "Signed with a throwaway debug key, so it won't install over an earlier build. In the app, back up your collection (Settings › Backup & restore), uninstall it, install this APK, then restore." > "$RUNNER_TEMP/notes.md"
+          fi
           awk -v head="## $VERSION" '
             /^## / { inside = ($0 == head || index($0, head ":") == 1 || index($0, head " ") == 1); next }
             inside { print }
-          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          ' CHANGELOG.md >> "$RUNNER_TEMP/notes.md"
           if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" dist/*.apk --clobber
           else
