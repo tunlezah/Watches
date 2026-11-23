@@ -51,6 +51,11 @@ kotlin {
         namespace = "io.github.tunlezah.watches.data"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
+        // The shared tests also run on an Android device or emulator (the Photos workflow), because the
+        // photo conformance suite has to meet Android's real decoders, which no desktop stand-in has.
+        withDeviceTestBuilder { sourceSetTreeName = "test" }.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
     // The JVM target exists for fast database and file tests on any machine.
     jvm()
@@ -73,6 +78,10 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.androidx.exifinterface)
+        }
+        getByName("androidDeviceTest").dependencies {
+            implementation(libs.androidx.test.runner)
+            implementation(libs.androidx.test.ext.junit)
         }
         commonTest {
             kotlin.srcDir(generatePhotoFixtures)

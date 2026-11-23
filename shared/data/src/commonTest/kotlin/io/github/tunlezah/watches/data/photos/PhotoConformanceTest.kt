@@ -125,6 +125,21 @@ class PhotoConformanceTest {
         assertTrue(PhotoFormat.JPEG in decodableFormats && PhotoFormat.PNG in decodableFormats)
     }
 
+    @Test fun aHeicTurnedInItsOwnWayComesOutUprightOnce() = runTest {
+        if (PhotoFormat.HEIC !in decodableFormats) return@runTest
+        // A HEIC records its turning in the container. An iPhone repeats it in EXIF, and obeying both would turn the picture twice.
+        for (name in listOf("turned-6.heic", "turned-6-iphone.heic")) {
+            val source = fixture(name)
+            assertEquals(ImageSize(64, 48), processor.size(source), name)
+            val out = dir / "$name.jpg"
+            assertEquals(ImageSize(64, 48), processor.render(source, null, 2560, 90, out), name)
+            assertTheReferencePicture(decodePixels(out), name)
+            val corner = dir / "$name-corner.jpg"
+            processor.render(source, NormalizedRect(0.5f, 0f, 1f, 0.5f), 2560, 90, corner)
+            assertColour(green, decodePixels(corner).at(16, 12), "$name, its top right corner")
+        }
+    }
+
     @Test fun aRenditionCarriesNoLocationWhateverTheOriginalHad() = runTest {
         // The original still has its location here: this is the rendition's own promise.
         val out = dir / "rendition.jpg"

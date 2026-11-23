@@ -153,6 +153,17 @@ def make():
     stored(1).save(FIXTURES / "gps.webp", "WEBP", lossless=True, exif=exif("<"), xmp=xmp())
     stored(1).save(FIXTURES / "gps.heic", "HEIF", quality=90, exif=exif(">"), xmp=xmp())
 
+    # A HEIC keeps its turning in the container (an "irot" box), not in EXIF. An iPhone writes the box
+    # and repeats the turning in EXIF (orientation 6), which a decoder that obeyed both would apply
+    # twice. This library writes a file the same way. The second file is the first with EXIF's
+    # orientation set to 1, which is the other way writers leave it.
+    stored(6).save(FIXTURES / "turned-6-iphone.heic", "HEIF", quality=90, exif=exif(">", orientation=6, gps=False))
+    plain_exif = bytearray((FIXTURES / "turned-6-iphone.heic").read_bytes())
+    at = plain_exif.find(bytes.fromhex("011200030000000100060000"))
+    assert at > 0 and b"irot" in plain_exif, "expected the container's own rotation, and EXIF orientation 6"
+    plain_exif[at + 9] = 1
+    (FIXTURES / "turned-6.heic").write_bytes(bytes(plain_exif))
+
     # Transparent on the right half: a rendition has no transparency, and shows black there.
     see_through = reference("RGBA")
     see_through.paste((0, 0, 0, 0), (W // 2, 0, W, H))
@@ -212,6 +223,11 @@ def verify_fixtures():
         assert text, f"{name} should carry a location in XMP"
     for name in ("no-gps.jpg", "plain.jpg"):
         assert location_of(FIXTURES / name) == ({}, []), name
+    for name in ("turned-6.heic", "turned-6-iphone.heic"):
+        with Image.open(FIXTURES / name) as image:
+            assert image.size == (W, H), (name, image.size)
+            got = image.convert("RGB").getpixel((8, 8))
+            assert all(abs(a - b) < 40 for a, b in zip(got, (200, 30, 30))), (name, got)
     for orientation in range(1, 9):
         with Image.open(FIXTURES / f"turned-{orientation}.jpg") as image:
             upright = ImageOps.exif_transpose(image)

@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 class LocationRemovalTest {
 
     private val withLocation = listOf("gps-exif-ii.jpg", "gps-exif-mm.jpg", "gps-xmp.jpg", "gps.png", "gps.webp", "gps.heic")
-    private val without = listOf("no-gps.jpg", "plain.jpg", "alpha.png") + (1..8).map { "turned-$it.jpg" }
+    private val without = listOf("no-gps.jpg", "plain.jpg", "alpha.png", "turned-6.heic", "turned-6-iphone.heic") + (1..8).map { "turned-$it.jpg" }
 
     /** Formats that aren't stored as they are: the app keeps a JPEG made from them (RepositoryTest). */
     private val converted = listOf("other.bmp", "other.gif", "other.tiff")

@@ -3,113 +3,108 @@ package io.github.tunlezah.watches.data.files
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.ColorSpace
 import android.graphics.Matrix
+import android.graphics.Paint
 import android.graphics.Rect
 import androidx.exifinterface.media.ExifInterface
-import io.github.tunlezah.watches.core.model.NormalizedRect
+import io.github.tunlezah.watches.data.photos.CodecImageProcessor
+import io.github.tunlezah.watches.data.photos.ImageCodec
+import io.github.tunlezah.watches.data.photos.ImageInfo
+import io.github.tunlezah.watches.data.photos.Orientation
+import io.github.tunlezah.watches.data.photos.RenderPlan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okio.FileSystem
 import okio.Path
 import java.io.FileOutputStream
-import kotlin.math.max
-import kotlin.math.roundToInt
 
-class AndroidImageProcessor : ImageProcessor {
+/**
+ * Android's codec, on the system's decoders. What to cut and how large to write come from the
+ * shared [RenderPlan]; this only reads the file's size and turning, decodes the region, and writes
+ * the JPEG. It decodes just the region it needs, subsampled, so a small crop of a large photo never
+ * loads the whole picture.
+ */
+class AndroidImageCodec : ImageCodec {
 
-    override suspend fun size(file: Path): ImageSize = withContext(Dispatchers.IO) {
-        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.toString(), opts)
-        require(opts.outWidth > 0 && opts.outHeight > 0) { "Not a readable image" }
-        if (swapsAxes(orientation(file))) ImageSize(opts.outHeight, opts.outWidth) else ImageSize(opts.outWidth, opts.outHeight)
+    override suspend fun probe(file: Path): ImageInfo = withContext(Dispatchers.IO) {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.toString(), bounds)
+        require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Not a readable image" }
+        // BitmapFactory hands pixels over as stored, so the turning is read separately. ExifInterface
+        // reports it for every format, a HEIC's own rotation included.
+        val orientation = runCatching {
+            ExifInterface(file.toString()).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+        ImageInfo(bounds.outWidth, bounds.outHeight, Orientation.fromExif(orientation))
     }
 
-    override suspend fun render(source: Path, crop: NormalizedRect?, maxEdge: Int, quality: Int, dest: Path): ImageSize =
-        withContext(Dispatchers.Default) {
-            val path = source.toString()
-            val orientation = orientation(source)
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(path, bounds)
-            val rawW = bounds.outWidth
-            val rawH = bounds.outHeight
-            require(rawW > 0 && rawH > 0) { "Not a readable image" }
-
-            val rawCrop = toRaw(crop ?: NormalizedRect.Full, orientation)
-            val region = Rect(
-                (rawCrop.left * rawW).roundToInt().coerceIn(0, rawW - 1),
-                (rawCrop.top * rawH).roundToInt().coerceIn(0, rawH - 1),
-                (rawCrop.right * rawW).roundToInt().coerceIn(1, rawW),
-                (rawCrop.bottom * rawH).roundToInt().coerceIn(1, rawH),
-            )
-            val regionLong = max(region.width(), region.height())
-            // Largest power-of-two subsample that still leaves at least maxEdge pixels.
-            var sample = 1
-            while (regionLong / (sample * 2) >= maxEdge) sample *= 2
-            val opts = BitmapFactory.Options().apply {
-                inSampleSize = sample
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-            }
-
-            val decoded = decodeRegion(path, region, opts)
-                ?: BitmapFactory.decodeFile(path, opts)?.let { full ->
-                    // Region decoding isn't available for every format: decode subsampled, then cut.
-                    val r = Rect(region.left / sample, region.top / sample, region.right / sample, region.bottom / sample)
-                    Bitmap.createBitmap(full, r.left, r.top, r.width().coerceAtMost(full.width - r.left), r.height().coerceAtMost(full.height - r.top))
-                        .also { if (it !== full) full.recycle() }
-                }
-                ?: error("Could not decode image")
-
-            val scale = minOf(1f, maxEdge.toFloat() / max(decoded.width, decoded.height))
-            val matrix = orientationMatrix(orientation).apply { postScale(scale, scale) }
-            val out = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
-            if (out !== decoded) decoded.recycle()
-
-            dest.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
-            FileOutputStream(dest.toString()).use { out.compress(Bitmap.CompressFormat.JPEG, quality, it) }
-            val result = ImageSize(out.width, out.height)
-            out.recycle()
-            result
+    override suspend fun render(source: Path, plan: RenderPlan, quality: Int, dest: Path) = withContext(Dispatchers.Default) {
+        val path = source.toString()
+        val stored = plan.storedRegion
+        val region = Rect(stored.left, stored.top, stored.right, stored.bottom)
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = plan.sampleSize
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+            // A wide-gamut photo (an iPhone's are Display P3) is converted as it's decoded, so a rendition is always sRGB.
+            inPreferredColorSpace = ColorSpace.get(ColorSpace.Named.SRGB)
         }
+        val decoded = decodeRegion(path, region, options)
+            ?: BitmapFactory.decodeFile(path, options)?.let { full ->
+                // Region decoding isn't available for every format: decode subsampled, then cut.
+                val sample = options.inSampleSize
+                val left = (region.left / sample).coerceIn(0, full.width - 1)
+                val top = (region.top / sample).coerceIn(0, full.height - 1)
+                val width = (region.width() / sample).coerceIn(1, full.width - left)
+                val height = (region.height() / sample).coerceIn(1, full.height - top)
+                Bitmap.createBitmap(full, left, top, width, height).also { if (it !== full) full.recycle() }
+            }
+            ?: error("Could not decode image")
+
+        // Drawn into a bitmap of exactly the planned size, turned upright on the way. Black shows wherever the picture is transparent.
+        val out = Bitmap.createBitmap(plan.outWidth, plan.outHeight, Bitmap.Config.ARGB_8888)
+        Canvas(out).apply {
+            drawColor(Color.BLACK)
+            drawBitmap(decoded, upright(plan.orientation, decoded.width.toFloat(), decoded.height.toFloat(), plan.outWidth.toFloat(), plan.outHeight.toFloat()), Paint(Paint.FILTER_BITMAP_FLAG))
+        }
+        decoded.recycle()
+        try {
+            FileOutputStream(dest.toString()).use { check(out.compress(Bitmap.CompressFormat.JPEG, quality, it)) { "JPEG encoding failed" } }
+        } finally {
+            out.recycle()
+        }
+    }
 
     @Suppress("DEPRECATION")
-    private fun decodeRegion(path: String, region: Rect, opts: BitmapFactory.Options): Bitmap? = runCatching {
+    private fun decodeRegion(path: String, region: Rect, options: BitmapFactory.Options): Bitmap? = runCatching {
         val decoder = BitmapRegionDecoder.newInstance(path, false) ?: return null
         try {
-            decoder.decodeRegion(region, opts)
+            decoder.decodeRegion(region, options)
         } finally {
             decoder.recycle()
         }
     }.getOrNull()
 
-    private fun orientation(file: Path): Int = runCatching {
-        ExifInterface(file.toString()).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
-
-    private fun swapsAxes(orientation: Int) = orientation in 5..8
-
-    private fun orientationMatrix(orientation: Int) = Matrix().apply {
-        when (orientation) {
-            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> setScale(-1f, 1f)
-            ExifInterface.ORIENTATION_ROTATE_180 -> setRotate(180f)
-            ExifInterface.ORIENTATION_FLIP_VERTICAL -> { setRotate(180f); postScale(-1f, 1f) }
-            ExifInterface.ORIENTATION_TRANSPOSE -> { setRotate(90f); postScale(-1f, 1f) }
-            ExifInterface.ORIENTATION_ROTATE_90 -> setRotate(90f)
-            ExifInterface.ORIENTATION_TRANSVERSE -> { setRotate(-90f); postScale(-1f, 1f) }
-            ExifInterface.ORIENTATION_ROTATE_270 -> setRotate(-90f)
+    /**
+     * Takes the decoded part, [w] by [h] and as stored, onto the output, [ow] by [oh] and upright.
+     * Three corners are enough to fix it: the stored part's top left, top right and bottom left, and
+     * where each belongs in the upright picture.
+     */
+    private fun upright(orientation: Orientation, w: Float, h: Float, ow: Float, oh: Float): Matrix {
+        val to = when (orientation) {
+            Orientation.NORMAL -> floatArrayOf(0f, 0f, ow, 0f, 0f, oh)
+            Orientation.FLIP_HORIZONTAL -> floatArrayOf(ow, 0f, 0f, 0f, ow, oh)
+            Orientation.ROTATE_180 -> floatArrayOf(ow, oh, 0f, oh, ow, 0f)
+            Orientation.FLIP_VERTICAL -> floatArrayOf(0f, oh, ow, oh, 0f, 0f)
+            Orientation.TRANSPOSE -> floatArrayOf(0f, 0f, 0f, oh, ow, 0f)
+            Orientation.ROTATE_90 -> floatArrayOf(ow, 0f, ow, oh, 0f, 0f)
+            Orientation.TRANSVERSE -> floatArrayOf(ow, oh, ow, 0f, 0f, oh)
+            Orientation.ROTATE_270 -> floatArrayOf(0f, oh, 0f, 0f, ow, oh)
         }
-    }
-
-    companion object {
-        /** Maps a crop in display orientation to the raw (stored) pixel grid. */
-        fun toRaw(r: NormalizedRect, orientation: Int): NormalizedRect = when (orientation) {
-            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> NormalizedRect(1 - r.right, r.top, 1 - r.left, r.bottom)
-            ExifInterface.ORIENTATION_ROTATE_180 -> NormalizedRect(1 - r.right, 1 - r.bottom, 1 - r.left, 1 - r.top)
-            ExifInterface.ORIENTATION_FLIP_VERTICAL -> NormalizedRect(r.left, 1 - r.bottom, r.right, 1 - r.top)
-            ExifInterface.ORIENTATION_TRANSPOSE -> NormalizedRect(r.top, r.left, r.bottom, r.right)
-            ExifInterface.ORIENTATION_ROTATE_90 -> NormalizedRect(r.top, 1 - r.right, r.bottom, 1 - r.left)
-            ExifInterface.ORIENTATION_TRANSVERSE -> NormalizedRect(1 - r.bottom, 1 - r.right, 1 - r.top, 1 - r.left)
-            ExifInterface.ORIENTATION_ROTATE_270 -> NormalizedRect(1 - r.bottom, r.left, 1 - r.top, r.right)
-            else -> r
-        }
+        return Matrix().apply { setPolyToPoly(floatArrayOf(0f, 0f, w, 0f, 0f, h), 0, to, 0, 3) }
     }
 }
+
+/** The shared photo rules on Android's codec. */
+class AndroidImageProcessor : CodecImageProcessor(AndroidImageCodec())
