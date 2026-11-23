@@ -3,6 +3,10 @@ name: Android
 # Checks, tests and a signed release APK on every push. Without the signing secrets (README › Release
 # APK and signing) it's signed with the run's throwaway debug key: it installs, but not over an
 # earlier build. On a v* tag the APK is also published as a GitHub release.
+#
+# The Mac app is checked here too, because its code runs on Linux: it is compiled, tested, drawn in
+# every design and packaged with a trimmed Java runtime, which then runs the app's self-test. Only
+# the Mac disk image itself needs a Mac (the macOS workflow).
 on:
   push:
   pull_request:
@@ -59,6 +63,9 @@ jobs:
           :shared:data:jvmTest
           :shared:search:jvmTest
           :shared:ui:testAndroidHostTest
+          :shared:ui:jvmTest
+          :desktopApp:test
+          :desktopApp:createDistributable
           :shared:ui:compileKotlinIosSimulatorArm64
           :shared:core:compileTestKotlinIosSimulatorArm64
           :shared:data:compileTestKotlinIosSimulatorArm64
@@ -100,6 +107,12 @@ jobs:
             echo "::warning::The APK is unsigned, so Android won't install it. androidApp/build.gradle.kts should sign release builds with the debug key when there's no release key."
           fi
 
+      # The packaged desktop app carries its own Java runtime, cut down to the modules it's thought to
+      # need. A missing one shows only when the app runs, so the app is run: it starts its wiring, makes
+      # a collection, backs it up and restores it, and draws a frame.
+      - name: Self-test of the packaged desktop app
+        run: desktopApp/build/compose/binaries/main/app/Watches/bin/Watches --self-test "$RUNNER_TEMP/desktop-self-test"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -114,6 +127,14 @@ jobs:
         with:
           name: screenshots
           path: androidApp/build/outputs/roborazzi/*.png
+          retention-days: 14
+
+      - name: Upload desktop screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-screenshots
+          path: desktopApp/build/outputs/screenshots/*.png
           retention-days: 14
 
       - name: Upload test reports

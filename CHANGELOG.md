@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+**Mac, milestone mac-1**
+
+The first step of the Mac plan (`docs/MACOS_PLAN.md`): Watches as a Mac app, from the same shared code as the phones. It needs an Apple silicon Mac on macOS 13 or later. README › Mac has how to install it.
+- **A Mac app.** A new `desktopApp` module is the Mac's shell, as `androidApp` and `iosApp` are the phones'. Every screen, the three designs, the database and the backup engine are the shared code, unchanged.
+- **Backups both ways.** Backup, restore and CSV export work as on the phones, through the Mac's own open and save panels. A backup's manifest names the Mac version that made it.
+- **The collection** lives in `~/Library/Application Support/Watches/`. It stays when the app is updated or dragged to the Bin.
+- **One copy at a time.** A second copy says Watches is already open, rather than opening the same database.
+- **A collection from a newer build** is refused with a message and left untouched. A phone can't meet this, because the system won't install an older build over a newer one; a Mac can.
+- **Quitting during a backup or restore** asks first. Stopping removes a half-written backup, as Cancel does.
+- **What the Mac leaves out for now**, each with a sentence on the screen where it would be:
+  - adding and cropping photos, saving a Lookup picture, and photos as documents. Photos from a backup show as usual. The desktop's image code doesn't yet follow the phones' rules for rotation, location removal and HEIC, so the Mac writes no photos until the shared photo component is done (plan, section 5);
+  - reminders and the app lock;
+  - PDF pages inside the app. "Open with another app" opens the PDF in Preview.
+- **Not yet Mac-like:** no menus or shortcuts beyond About and Quit, and screens still say "this phone". Both are milestone mac-3.
+- **The disk image isn't notarised yet**, so macOS needs one extra step to open each build (README › Mac › Installing).
+
+**Mac: tests and CI**
+- The Mac app is tested on Linux, on every push, because its code runs there. The Android workflow now compiles it, runs its tests, and keeps 18 screenshots: every design, light and dark, at phone, rail and two-pane widths.
+- `Watches --self-test` checks a build without opening a window: wiring, a collection, a backup restored into itself, a CSV and a drawn frame. CI runs it inside the packaged app, on Linux and inside the Mac disk image, because the bundled Java runtime is trimmed and a missing piece shows only when the app runs.
+- A new **macOS** workflow builds the disk image on an Apple silicon runner, runs the self-test inside it, and checks the bundle's identity, version and signature. On a `v*` tag it adds the disk image to the GitHub release, beside the APK.
+- `checkNetworkIsolation` now covers the Mac shell, and looks for Java's own networking as well as the libraries and Apple's APIs.
+- The Mac icon is the same watch at 10:10, drawn by `tools/RenderIosAppIcon.java` into the Mac's rounded-square shape.
+
+**Shared code, for all three platforms**
+- The camera button is asked for through one small function with a version per platform, because the camera launcher exists only on phones. Where there's no camera, the buttons aren't shown.
+- A platform can say what it leaves out for now (`PlatformLimits`), and the screens show its sentence in place of the buttons. The phones leave nothing out.
+- The schema version has one home, `AppDatabase.VERSION`, which the backup engine and the Mac's newer-collection check both read.
+
+**Plans**
+- `docs/MACOS_PLAN.md`: the Mac plan, and in its section 5 one photo component for Android, iPhone and Mac. Each platform has its own image code today and nothing tests that they agree; the plan moves the rules into shared code, with one test suite every platform must pass. It takes over the iPhone plan's photo items.
+
 **Android releases**
 - Every release APK is now signed, so Android installs it, with no setup. Without signing secrets it's signed with the build machine's debug key. Each CI run has a new debug key, and Android won't update an app signed with a different key, so moving to a newer build means: back up (Settings › Backup & restore), uninstall, install, restore. Your own key, which is optional, makes updates install over the top.
 - Pushing a `v*` tag publishes the signed APK as a GitHub release, with that version's changelog entry as its notes, so it stays downloadable after the build's 14-day artifact expires. The release refuses an unsigned APK, and a tag that doesn't match `version.xcconfig`.

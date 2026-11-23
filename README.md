@@ -1,6 +1,6 @@
 # Watches
 
-A private, offline-first watch collection app for one collector. Kotlin Multiplatform with Compose Multiplatform: Android first, iOS from the same code.
+A private, offline-first watch collection app for one collector. Kotlin Multiplatform with Compose Multiplatform: Android first, iPhone and Mac from the same code.
 
 - Everything lives on the phone. No accounts, servers, analytics, ads or crash reporting.
 - The network is used by Lookup only, and only when you press Search, open a result or save a picture. Every request is listed in Settings › Request log.
@@ -8,7 +8,7 @@ A private, offline-first watch collection app for one collector. Kotlin Multipla
 - Backup to one .zip you save wherever you like, restore by merging or replacing, CSV export for spreadsheets, and an optional app lock.
 - Designed for 500+ watches with photos.
 
-Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md). Data sources: [`docs/SOURCES.md`](docs/SOURCES.md). Changes: [`CHANGELOG.md`](CHANGELOG.md).
+Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md), with the iPhone in [`docs/IOS_PLAN.md`](docs/IOS_PLAN.md) and the Mac in [`docs/MACOS_PLAN.md`](docs/MACOS_PLAN.md). Data sources: [`docs/SOURCES.md`](docs/SOURCES.md). Changes: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Project layout
 
@@ -20,8 +20,9 @@ Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md). Data sources: [`docs/SOURCES
 | `shared/ui` | Design system (three designs: Atelier, Instrument, Gallery; see [`docs/DESIGN.md`](docs/DESIGN.md)), screens, view models, navigation. Produces the iOS framework `WatchApp`. |
 | `androidApp` | Android shell: activity, manifest, signing, screenshot tests. |
 | `iosApp` | SwiftUI shell, generated with XcodeGen, with its app-hosted and UI tests. |
+| `desktopApp` | Mac shell on Compose's desktop target: one window, packaging, the self-test, desktop tests and screenshots. |
 
-Shared tests live in `commonTest`, so the same tests run on the JVM (as Android host tests in `shared/ui`) and on the iOS simulator. The shared modules' JVM target exists only for those fast tests. The app's version, for both phones, is in [`version.xcconfig`](version.xcconfig).
+Shared tests live in `commonTest`, so the same tests run on the JVM (as Android host tests in `shared/ui`) and on the iOS simulator. The shared modules' JVM target runs those fast tests, and it is also what the Mac app runs on. The app's version, for both phones, is in [`version.xcconfig`](version.xcconfig).
 
 ## Build
 
@@ -32,10 +33,11 @@ Requirements: JDK 21 and the Android SDK (compile SDK 37). Gradle is provided by
 ./gradlew :shared:core:jvmTest :shared:data:jvmTest :shared:search:jvmTest :shared:ui:testAndroidHostTest   # shared tests
 WATCHES_LIVE_TESTS=1 ./gradlew :shared:search:jvmTest --tests '*LiveSourcesTest*'   # one real lookup per source
 ./gradlew :androidApp:recordRoborazziDebug   # screenshots of every design -> androidApp/build/outputs/roborazzi
-./gradlew checkNetworkIsolation              # fails if core, data or ui can reach the network, by library or Apple's APIs
+./gradlew checkNetworkIsolation              # fails if core, data, ui or the Mac shell can reach the network, by library or Apple's or Java's APIs
 ./gradlew checkIosProject                    # checks the iOS project spec, version, icon and privacy manifest (works on Linux)
 ./gradlew :shared:ui:compileTestKotlinIosSimulatorArm64   # checks shared code and its tests compile for iOS (works on Linux)
 ./gradlew :shared:ui:iosSimulatorArm64Test   # the shared tests on an iOS simulator (macOS only; CI runs every module)
+./gradlew :desktopApp:run :desktopApp:test   # the Mac app on this computer, and its tests (see Mac, below)
 ```
 
 ### Release APK and signing
@@ -178,6 +180,53 @@ Each TestFlight build stops opening 90 days after it was uploaded, so release at
 - iOS asks for the camera when you first take a photo, for notifications when you first switch on a reminder, and for Face ID when you turn on the app lock. The photo picker needs no permission: it hands over only the photos you pick.
 - `iosApp/iosApp/PrivacyInfo.xcprivacy` declares that nothing is tracked or collected, and explains the system APIs Apple asks about. `tools/check-privacy-symbols.py` compares it with the built app in CI.
 - App data lives in the app's Application Support folder, which iCloud and computer backups skip: your backups are the files you save.
+
+## Mac
+
+The same app runs on a Mac: the shared Kotlin code, every screen included, in a small desktop shell (`desktopApp`) on Compose's desktop target. It needs an Apple silicon Mac on macOS 13 or later. The plan is [`docs/MACOS_PLAN.md`](docs/MACOS_PLAN.md); milestone mac-1 is built.
+
+What the Mac build does today:
+- The collection, search, Lookup, service history, box & papers, PDF documents, and the three designs.
+- Backup, restore and CSV export. A backup made on a phone restores on the Mac, and one made on the Mac restores on a phone.
+
+What it leaves out for now, and says so on the screen:
+- **Adding and cropping photos**, saving a Lookup picture, and photos as documents. Photos from a backup show as usual. The desktop's image code doesn't yet follow the phones' rules for rotation, location removal and HEIC, so the Mac writes no photos until the shared photo component is done (plan, section 5).
+- **Reminders and the app lock.**
+- **PDF pages inside the app.** A PDF opens in Preview instead.
+- **Menus, shortcuts and Mac wording.** Screens still say "this phone".
+
+### Installing
+
+1. Download `Watches-<version>-<build>-not-notarised.dmg`. A tagged version has it on its GitHub release, beside the APK. Any other build has it on its run of the **macOS** workflow (Actions › macOS › the run › Artifacts), for 14 days.
+2. Open it and drag Watches to Applications.
+3. The build isn't notarised by Apple yet, so the first time macOS refuses to open it. Go to System Settings › Privacy & Security, find the message about Watches, and choose Open Anyway. That is needed once for each build.
+
+Where things are, and how updating works:
+- The collection is in `~/Library/Application Support/Watches/`.
+- To update, drag a newer Watches over the old one. The collection stays.
+- Dragging the app to the Bin leaves the collection where it is. Delete that folder to remove it.
+- Only one copy of the app runs at a time.
+- A build won't open a collection made by a newer build. It says so and changes nothing.
+
+### Building and testing
+
+The desktop target also runs on Linux and Windows, which is how CI tests the Mac app without a Mac:
+
+```sh
+./gradlew :desktopApp:run                              # the app, on this computer
+WATCHES_DATA_DIR=/tmp/try ./gradlew :desktopApp:run    # the same, with its collection in another folder
+./gradlew :desktopApp:test                             # wiring, the shell's rules, the self-test, and screenshots
+./gradlew :desktopApp:createDistributable              # the app with its own Java runtime, for this computer
+./gradlew :desktopApp:packageDmg                       # the Mac disk image (on a Mac only)
+```
+
+- **Screenshots.** `:desktopApp:test` draws the app in every design, light and dark, at three window widths, into `desktopApp/build/outputs/screenshots`. It needs no display.
+- **Self-test.** `Watches --self-test [folder]` checks a build without opening a window: it starts the app's wiring in a temporary folder, makes sample watches, backs them up and restores the backup, exports a CSV and draws a frame. CI runs it inside the packaged app, because the bundled Java runtime is trimmed to the modules the app needs, and a missing one shows only when the app runs.
+- **Icon.** `java tools/RenderIosAppIcon.java` also writes `desktopApp/icons/Watches.icns`.
+
+Two workflows cover it:
+- **Android**, on Linux and on every push, compiles the Mac app, runs its tests, keeps the screenshots, packages it and runs the packaged app's self-test.
+- **macOS** builds the disk image on an Apple silicon runner, runs the self-test inside it, and checks the bundle's identity and signature. It runs when the Mac shell or the build changes, on `v*` tags, and on demand. On a tag it adds the disk image to the GitHub release.
 
 ## Performance checks on the phone
 

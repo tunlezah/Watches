@@ -1,9 +1,11 @@
-// Renders the iOS app icon from the Android launcher icon, so both phones show the same artwork.
+// Renders the iOS and Mac app icons from the Android launcher icon, so every device shows the same artwork.
 //
 //   java tools/RenderIosAppIcon.java        (from the repository root, with JDK 21)
 //
 // Reads androidApp/src/main/res/drawable/ic_launcher_foreground.xml and the icon_background colour,
-// and writes iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png: 1024 px square, opaque.
+// and writes:
+//   iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png   1024 px square, opaque
+//   desktopApp/icons/Watches.icns                                  the Mac icon, at every size macOS asks for
 
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -13,7 +15,10 @@ import java.awt.Shape;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Arc2D;
 import java.awt.geom.Path2D;
+import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -41,15 +46,35 @@ public class RenderIosAppIcon {
 
         // No alpha channel: App Store Connect refuses icons with transparency.
         BufferedImage image = new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = image.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
-        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        Graphics2D g = graphics(image);
         g.setColor(background);
         g.fillRect(0, 0, SIZE, SIZE);
         g.scale(SIZE / VIEW, SIZE / VIEW);
         g.translate(-OFFSET, -OFFSET);
+        paint(g, vector);
+        g.dispose();
 
+        Path out = Path.of("iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png");
+        Files.createDirectories(out.getParent());
+        ImageIO.write(image, "png", out.toFile());
+        System.out.println("Wrote " + out);
+
+        Path mac = Path.of("desktopApp/icons/Watches.icns");
+        Files.createDirectories(mac.getParent());
+        Files.write(mac, icns(vector, background));
+        System.out.println("Wrote " + mac);
+    }
+
+    static Graphics2D graphics(BufferedImage image) {
+        Graphics2D g = image.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        return g;
+    }
+
+    /** Draws the launcher artwork, in the Android vector's own units. */
+    static void paint(Graphics2D g, Document vector) {
         NodeList paths = vector.getElementsByTagName("path");
         for (int i = 0; i < paths.getLength(); i++) {
             Element p = (Element) paths.item(i);
@@ -71,12 +96,50 @@ public class RenderIosAppIcon {
                 g.draw(shape);
             }
         }
-        g.dispose();
+    }
 
-        Path out = Path.of("iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png");
-        Files.createDirectories(out.getParent());
-        ImageIO.write(image, "png", out.toFile());
-        System.out.println("Wrote " + out);
+    // A Mac icon isn't masked by the system the way a phone's is: the file carries its own shape. Apple's
+    // grid puts a rounded square of 824 px, with corners of about 185 px, in a 1024 px canvas, and the
+    // rest is transparent. The artwork is drawn afresh at each size rather than scaled down from one.
+    static final double MAC_PLATE = 824.0 / 1024.0;
+    static final double MAC_CORNER = 185.4 / 1024.0;
+
+    static BufferedImage macIcon(Document vector, Color background, int size) {
+        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = graphics(image);
+        double plate = size * MAC_PLATE;
+        double inset = (size - plate) / 2;
+        Shape shape = new RoundRectangle2D.Double(inset, inset, plate, plate, size * MAC_CORNER * 2, size * MAC_CORNER * 2);
+        g.setColor(background);
+        g.fill(shape);
+        g.clip(shape);
+        g.translate(inset, inset);
+        g.scale(plate / VIEW, plate / VIEW);
+        g.translate(-OFFSET, -OFFSET);
+        paint(g, vector);
+        g.dispose();
+        return image;
+    }
+
+    /** An .icns file: a header, then each size as a PNG under the four-letter name macOS knows it by. */
+    static byte[] icns(Document vector, Color background) throws Exception {
+        String[] types = {"icp4", "icp5", "ic11", "ic12", "ic07", "ic13", "ic08", "ic14", "ic09", "ic10"};
+        int[] sizes = {16, 32, 32, 64, 128, 256, 256, 512, 512, 1024};
+        ByteArrayOutputStream entries = new ByteArrayOutputStream();
+        DataOutputStream data = new DataOutputStream(entries);
+        for (int i = 0; i < types.length; i++) {
+            ByteArrayOutputStream png = new ByteArrayOutputStream();
+            ImageIO.write(macIcon(vector, background, sizes[i]), "png", png);
+            data.writeBytes(types[i]);
+            data.writeInt(png.size() + 8);
+            png.writeTo(data);
+        }
+        ByteArrayOutputStream file = new ByteArrayOutputStream();
+        DataOutputStream header = new DataOutputStream(file);
+        header.writeBytes("icns");
+        header.writeInt(entries.size() + 8);
+        entries.writeTo(header);
+        return file.toByteArray();
     }
 
     static Document parse(Path file) throws Exception {
