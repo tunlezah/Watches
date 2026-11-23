@@ -5,15 +5,16 @@ plugins {
 }
 
 // Release signing comes from the environment (CI secrets) or ~/.gradle/gradle.properties, never the repo.
-// Without it, release builds are produced unsigned.
-val keystorePath: String? = providers.environmentVariable("WATCHES_KEYSTORE").orNull
-    ?: providers.gradleProperty("watches.keystore").orNull
-val keystorePassword: String? = providers.environmentVariable("WATCHES_KEYSTORE_PASSWORD").orNull
-    ?: providers.gradleProperty("watches.keystorePassword").orNull
-val keyAliasName: String = providers.environmentVariable("WATCHES_KEY_ALIAS").orNull
-    ?: providers.gradleProperty("watches.keyAlias").orNull ?: "watches"
-val keyPasswordValue: String? = providers.environmentVariable("WATCHES_KEY_PASSWORD").orNull
-    ?: providers.gradleProperty("watches.keyPassword").orNull ?: keystorePassword
+// Without it, release builds are produced unsigned. Blank counts as unset: GitHub Actions passes a
+// secret that doesn't exist as an empty string, and an empty alias would fail the build.
+fun signingSetting(env: String, property: String): String? =
+    providers.environmentVariable(env).orNull?.takeIf { it.isNotBlank() }
+        ?: providers.gradleProperty(property).orNull?.takeIf { it.isNotBlank() }
+
+val keystorePath: String? = signingSetting("WATCHES_KEYSTORE", "watches.keystore")
+val keystorePassword: String? = signingSetting("WATCHES_KEYSTORE_PASSWORD", "watches.keystorePassword")
+val keyAliasName: String = signingSetting("WATCHES_KEY_ALIAS", "watches.keyAlias") ?: "watches"
+val keyPasswordValue: String? = signingSetting("WATCHES_KEY_PASSWORD", "watches.keyPassword") ?: keystorePassword
 
 // One version for both phones: Xcode reads the same file (iosApp/project.yml).
 val appVersion: Map<String, String> = providers.fileContents(rootProject.layout.projectDirectory.file("version.xcconfig")).asText.get()

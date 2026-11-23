@@ -53,13 +53,52 @@ Sideloaded updates must always be signed with the same key, or Android refuses t
 ./gradlew :androidApp:assembleRelease   # -> androidApp/build/outputs/apk/release/androidApp-release.apk
 ```
 
-Without these variables the release APK is built unsigned. Its version name and code come from `version.xcconfig`, which the iPhone build reads too.
+Without these variables the release APK is built unsigned, and Android won't install it. Its version name and code come from `version.xcconfig`, which the iPhone build reads too.
 
-For CI, add these repository secrets: `WATCHES_KEYSTORE_BASE64` (the keystore, base64-encoded), `WATCHES_KEYSTORE_PASSWORD`, `WATCHES_KEY_ALIAS` and `WATCHES_KEY_PASSWORD`. The Android workflow then uploads a signed APK as an artifact.
+#### The key, for CI
+
+Make the key once, in either of two ways. Both use the alias `watches`, the default above.
+
+**On GitHub, with nothing to install.** GitHub can make the key, but a workflow can't save secrets, so you paste it in yourself:
+
+1. Add a repository secret (Settings › Secrets and variables › Actions) named `WATCHES_KEYSTORE_PASSWORD`: a password of at least 16 characters that you make up and save in a password manager. It locks the key.
+2. Run Actions › Make Android signing key › Run workflow.
+3. Download `watches-signing-key` from the run's page and follow its `README.txt`: paste the contents of `WATCHES_KEYSTORE_BASE64.txt` into a new secret of that name, keep `watches-release.jks` with the password, then delete the download.
+
+The download is deleted after a day anyway. While this repository is public, anyone signed in to GitHub can fetch a run's downloads, so until then only the password protects the key. The workflow won't make another key once `WATCHES_KEYSTORE_BASE64` exists.
+
+**On your own computer**, with a JDK or Android Studio (both include `keytool`). It asks for a password and a name:
+
+```sh
+keytool -genkeypair -v -keystore watches-release.jks -alias watches -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Then add these repository secrets. Encode the keystore with `base64 -w0 watches-release.jks` on Linux, or `base64 -i watches-release.jks` on a Mac.
+
+| Secret | Value |
+| --- | --- |
+| `WATCHES_KEYSTORE_BASE64` | `watches-release.jks`, base64-encoded |
+| `WATCHES_KEYSTORE_PASSWORD` | Its password |
+| `WATCHES_KEY_ALIAS` | Optional: the alias, if not `watches` |
+| `WATCHES_KEY_PASSWORD` | Optional: the key's password, if not the keystore's (`keytool` uses one password for both) |
+
+Keep the `.jks` and its password somewhere private, such as a password manager, and keep a second copy. Without them no later build installs over the app: the only way on is to uninstall it, which deletes its data unless you've saved a backup.
+
+The Android workflow builds the release APK on every push and keeps it for 14 days as the run's `watches-release-apk` artifact, named `Watches-<version>-<build>.apk`. Until the secrets exist it's `Watches-<version>-<build>-unsigned.apk` and the run shows a warning. Once signed, the run's summary shows the certificate's SHA-256, which is the same for every build signed with your key.
+
+#### Releasing
+
+To publish an APK that stays downloadable, tag the commit with its version from `version.xcconfig` and push the tag:
+
+```sh
+git tag v0.6.0 && git push origin v0.6.0
+```
+
+The Android workflow then publishes a GitHub release with the signed APK attached and that version's changelog entry as its notes. It refuses an unsigned APK, and a tag that doesn't match `version.xcconfig`. A tag with a suffix, such as `v0.7.0-rc1`, is published as a pre-release. Running the workflow again on the same tag replaces the APK. The same tag also starts the iOS release workflow.
 
 ## Sideload on Android
 
-1. Copy `androidApp-release.apk` to the phone, or download it there.
+1. On the phone, open the repository's Releases page and download the latest `Watches-….apk`. Or copy a build's APK to the phone.
 2. Open it. Android asks once to allow installs from that app (Files, Chrome, etc.). Allow it.
 3. Install. Later builds signed with the same key install over the top and keep your data.
 
