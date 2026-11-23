@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.7.0: Mac, milestone mac-1 (23 Nov 2026)
 
-**Mac, milestone mac-1**
+**The Mac app**
 
 The first step of the Mac plan (`docs/MACOS_PLAN.md`): Watches as a Mac app, from the same shared code as the phones. It needs an Apple silicon Mac on macOS 13 or later. README › Mac has how to install it.
 - **A Mac app.** A new `desktopApp` module is the Mac's shell, as `androidApp` and `iosApp` are the phones'. Every screen, the three designs, the database and the backup engine are the shared code, unchanged.
@@ -17,6 +17,7 @@ The first step of the Mac plan (`docs/MACOS_PLAN.md`): Watches as a Mac app, fro
   - PDF pages inside the app. "Open with another app" opens the PDF in Preview.
 - **Not yet Mac-like:** no menus or shortcuts beyond About and Quit, and screens still say "this phone". Both are milestone mac-3.
 - **The disk image isn't notarised yet**, so macOS needs one extra step to open each build (README › Mac › Installing).
+- **One version for every platform.** `version.xcconfig` is now 0.7.0 (build 7) for Android, iPhone and Mac. The Mac's packaging tool refuses a bundle version that starts with 0, so until 1.0.0 Finder's Get Info shows 1.0.7 instead. About, the disk image's name and every backup carry 0.7.0.
 
 **Mac: tests and CI**
 - The Mac app is tested on Linux, on every push, because its code runs there. The Android workflow now compiles it, runs its tests, and keeps 18 screenshots: every design, light and dark, at phone, rail and two-pane widths.

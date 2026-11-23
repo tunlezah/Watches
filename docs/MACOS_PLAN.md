@@ -1,6 +1,6 @@
 # Watches on the Mac: plan
 
-Status: **milestone mac-1 built** (23 Nov 2026), with its Mac disk image still to be confirmed by CI; mac-2 to mac-4 to come. Written against `aa79289` (0.6.0, with iPhone milestone iOS-1 built).
+Status: **milestone mac-1 built** (23 Nov 2026, version 0.7.0); mac-2 under way; mac-3 and mac-4 to come. Written against `aa79289` (0.6.0, with iPhone milestone iOS-1 built).
 
 **Decided so far** (section 7): the Mac is a current Apple silicon model on macOS 27. Builds come from the GitHub release, beside the APK. Work starts now, with mac-1. The photo component is fixed for Android, iPhone and Mac together, as part of this plan (section 5).
 
@@ -16,7 +16,7 @@ Status: **milestone mac-1 built** (23 Nov 2026), with its Mac disk image still t
 - **Sleep (8.1.1).** `KeepScreenOn` holds idle sleep off with macOS's own `caffeinate`, tied to the app's process, so it needs no bridge.
 - **Wording.** The Mac build still says "this phone" throughout (8.3.8).
 
-**What has and hasn't been checked.** On Linux: every test, the real window opening to the welcome screen, and the packaged app passing its self-test. On an Apple silicon runner: the app compiles and its Java runtime is built, and the first packaging run stopped on the version rule above. The run with that fixed, which builds the disk image and runs the self-test inside it, hadn't finished when this was written. Not yet checked anywhere: the app on a real Mac, including macOS 27, the file panels, and a real backup from a phone. That is yours to try, with appendix C's "Install and update" and "Moving a collection".
+**What has and hasn't been checked.** On Linux: every test, the real window opening to the welcome screen, and the packaged app passing its self-test. On an Apple silicon runner (macOS 15): the disk image builds, the app inside it passes the self-test, and its bundle has the right identity, version and a valid ad hoc signature. The app is 157 MB, and the download 93 MB. The iPhone workflow passed with the shared-code changes. Not yet checked anywhere: the app on a real Mac, including macOS 27, the file panels, and a real backup from a phone. That is yours to try, with appendix C's "Install and update" and "Moving a collection".
 
 What was checked for the plan:
 

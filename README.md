@@ -95,10 +95,10 @@ Keep the `.jks` and its password somewhere private, such as a password manager, 
 To publish an APK that stays downloadable, tag the commit with its version from `version.xcconfig` and push the tag:
 
 ```sh
-git tag v0.6.0 && git push origin v0.6.0
+git tag v0.7.0 && git push origin v0.7.0
 ```
 
-The Android workflow then publishes a GitHub release with the APK attached and that version's changelog entry as its notes, which start with the uninstall-first steps when it's signed with a debug key. It refuses an unsigned APK, and a tag that doesn't match `version.xcconfig`. A tag with a suffix, such as `v0.7.0-rc1`, is published as a pre-release. Running the workflow again on the same tag replaces the APK. The same tag also starts the iOS release workflow.
+The Android workflow then publishes a GitHub release with the APK attached and that version's changelog entry as its notes, which start with the uninstall-first steps when it's signed with a debug key. It refuses an unsigned APK, and a tag that doesn't match `version.xcconfig`. A tag with a suffix, such as `v0.7.0-rc1`, is published as a pre-release. Running the workflow again on the same tag replaces the APK. The same tag also starts the iOS release workflow, and the macOS workflow adds the Mac disk image to the release.
 
 ## Sideload on Android
 

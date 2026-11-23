@@ -2,7 +2,7 @@
 
 Version 1 · written by Watches 0.4.0 and later · read by every platform build of the app.
 
-A backup is one ordinary ZIP file holding everything in the collection: every table of the database as JSON, and every photo, document and saved source page as the original file. Any unzip tool can open it, and the JSON reads in a text editor. Restoring it brings the collection back exactly, on Android or iOS.
+A backup is one ordinary ZIP file holding everything in the collection: every table of the database as JSON, and every photo, document and saved source page as the original file. Any unzip tool can open it, and the JSON reads in a text editor. Restoring it brings the collection back exactly, on Android, iPhone or Mac.
 
 ## Layout
 
