@@ -1,6 +1,7 @@
 package io.github.tunlezah.watches.data.files
 
 import io.github.tunlezah.watches.core.model.NormalizedRect
+import io.github.tunlezah.watches.data.photos.PhotoFormat
 import okio.Path
 
 data class ImageSize(val width: Int, val height: Int)
@@ -25,17 +26,11 @@ interface ImageProcessor {
 }
 
 object ImageFormats {
-    /** Guesses a file extension from magic bytes. Unknown formats are kept as `.img`. */
-    fun extension(bytes: ByteArray): String {
-        fun at(i: Int) = if (i < bytes.size) bytes[i].toInt() and 0xFF else -1
-        return when {
-            at(0) == 0xFF && at(1) == 0xD8 -> "jpg"
-            at(0) == 0x89 && at(1) == 0x50 && at(2) == 0x4E && at(3) == 0x47 -> "png"
-            at(0) == 0x52 && at(1) == 0x49 && at(2) == 0x46 && at(3) == 0x46 && at(8) == 0x57 && at(9) == 0x45 -> "webp"
-            bytes.size > 12 && bytes.decodeToString(4, 12).let { it.startsWith("ftyphei") || it.startsWith("ftypmif") || it.startsWith("ftyphe") } -> "heic"
-            else -> "img"
-        }
-    }
+    /**
+     * The extension an original is kept under: its format's, for the formats every device can show
+     * (see [PhotoFormat]), and `.img` for anything else.
+     */
+    fun extension(bytes: ByteArray): String = PhotoFormat.detect(bytes)?.takeIf { it.stored }?.extension ?: "img"
 }
 
 object DocumentFormats {
