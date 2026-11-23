@@ -9,6 +9,7 @@ Small real photos for the shared photo tests (`shared/data/src/commonTest/.../ph
 | `gps.png`, `gps.webp`, `gps.heic` | A location in both EXIF and XMP, in the other three stored formats |
 | `no-gps.jpg`, `plain.jpg` | Nothing to remove: EXIF without a location, and no metadata at all |
 | `turned-1.jpg` to `turned-8.jpg` | The eight EXIF orientations. Each file's stored pixels are turned so that the upright picture is the same. |
+| `alpha.png` | Transparent on its right half, which a rendition shows as black |
 | `other.gif`, `other.bmp`, `other.tiff` | Formats only some systems open, which the app keeps as a JPEG made from them |
 
 The location in them is the Royal Observatory at Greenwich.

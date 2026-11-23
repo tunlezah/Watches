@@ -26,3 +26,28 @@ expect fun testJpeg(width: Int, height: Int, red: Int = 30, green: Int = 30, blu
  * build/outputs/<folder>, which tools/photo_fixtures.py then checks with an unrelated reader.
  */
 expect fun keepForInspection(folder: String, name: String, bytes: ByteArray)
+
+/** A decoded picture for a test to look at. */
+class TestPixels(val width: Int, val height: Int, private val rgb: IntArray) {
+    /** Red, green and blue, 0 to 255, of the pixel at ([x], [y]). */
+    fun at(x: Int, y: Int): Triple<Int, Int, Int> {
+        val v = rgb[y * width + x]
+        return Triple((v shr 16) and 0xFF, (v shr 8) and 0xFF, v and 0xFF)
+    }
+}
+
+/**
+ * Decodes a JPEG the app wrote, with the platform's plain decoder rather than the app's own code,
+ * so a test can see what a rendition really shows.
+ */
+expect fun decodePixels(file: Path): TestPixels
+
+/** The stored formats this platform's image code can decode. The plain-Java one can't read WebP or HEIC. */
+expect val decodableFormats: Set<io.github.tunlezah.watches.data.photos.PhotoFormat>
+
+/**
+ * True where renditions are cut and sized by the shared geometry (RenderPlan), to the pixel. The
+ * iPhone's present image code works in fractions and can be a pixel out; it joins when the Apple
+ * codec replaces it (docs/MACOS_PLAN.md, 8.2.5).
+ */
+expect val rendersBySharedGeometry: Boolean

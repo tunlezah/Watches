@@ -28,3 +28,13 @@ actual fun testJpeg(width: Int, height: Int, red: Int, green: Int, blue: Int): B
 actual fun keepForInspection(folder: String, name: String, bytes: ByteArray) {
     java.io.File("build/outputs/$folder").apply { mkdirs() }.resolve(name).writeBytes(bytes)
 }
+
+actual fun decodePixels(file: Path): TestPixels {
+    val image = ImageIO.read(file.toFile()) ?: error("Not a readable image: $file")
+    return TestPixels(image.width, image.height, IntArray(image.width * image.height) { image.getRGB(it % image.width, it / image.width) })
+}
+
+actual val decodableFormats: Set<io.github.tunlezah.watches.data.photos.PhotoFormat> =
+    setOf(io.github.tunlezah.watches.data.photos.PhotoFormat.JPEG, io.github.tunlezah.watches.data.photos.PhotoFormat.PNG)
+
+actual val rendersBySharedGeometry: Boolean = true

@@ -153,6 +153,11 @@ def make():
     stored(1).save(FIXTURES / "gps.webp", "WEBP", lossless=True, exif=exif("<"), xmp=xmp())
     stored(1).save(FIXTURES / "gps.heic", "HEIF", quality=90, exif=exif(">"), xmp=xmp())
 
+    # Transparent on the right half: a rendition has no transparency, and shows black there.
+    see_through = reference("RGBA")
+    see_through.paste((0, 0, 0, 0), (W // 2, 0, W, H))
+    see_through.save(FIXTURES / "alpha.png", "PNG")
+
     # Formats only some systems open: the app keeps a JPEG made from them instead.
     stored(1).save(FIXTURES / "other.gif", "GIF")
     stored(1).save(FIXTURES / "other.bmp", "BMP")
