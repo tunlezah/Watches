@@ -39,7 +39,29 @@ data class RenderPlan(
             return sample
         }
 
+    /**
+     * The plan as plain numbers, which is how it crosses into the Mac's native library
+     * (docs/MACOS_PLAN.md, 8.2.6). [fromInts] reads them back.
+     */
+    fun toInts(): IntArray = intArrayOf(
+        storedWidth, storedHeight, orientation.exif, displayWidth, displayHeight,
+        region.left, region.top, region.right, region.bottom,
+        storedRegion.left, storedRegion.top, storedRegion.right, storedRegion.bottom,
+        outWidth, outHeight,
+    )
+
     companion object {
+        /** How many numbers [toInts] gives. */
+        const val INTS = 15
+
+        fun fromInts(v: IntArray): RenderPlan {
+            require(v.size == INTS) { "A plan is $INTS numbers, not ${v.size}" }
+            return RenderPlan(
+                v[0], v[1], Orientation.fromExif(v[2]), v[3], v[4],
+                PixelRect(v[5], v[6], v[7], v[8]), PixelRect(v[9], v[10], v[11], v[12]), v[13], v[14],
+            )
+        }
+
         /**
          * @param crop the part to keep, as fractions of the upright picture; null for all of it
          * @param maxEdge the longest the output's long edge may be

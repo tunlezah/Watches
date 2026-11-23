@@ -30,6 +30,30 @@ enum class Orientation(val exif: Int, val swapsAxes: Boolean) {
     }
 }
 
+/** The matrix a, b, c, d that takes a stored direction (x, y) to its upright one (ax + by, cx + dy), with y downwards. */
+private val Orientation.matrix: IntArray
+    get() = when (this) {
+        Orientation.NORMAL -> intArrayOf(1, 0, 0, 1)
+        Orientation.FLIP_HORIZONTAL -> intArrayOf(-1, 0, 0, 1)
+        Orientation.ROTATE_180 -> intArrayOf(-1, 0, 0, -1)
+        Orientation.FLIP_VERTICAL -> intArrayOf(1, 0, 0, -1)
+        Orientation.TRANSPOSE -> intArrayOf(0, 1, 1, 0)
+        Orientation.ROTATE_90 -> intArrayOf(0, -1, 1, 0)
+        Orientation.TRANSVERSE -> intArrayOf(0, -1, -1, 0)
+        Orientation.ROTATE_270 -> intArrayOf(0, 1, -1, 0)
+    }
+
+/**
+ * The one turning that does what this one and then [next] do together. A HEIC lists its turns and
+ * mirrorings one after another; this folds them into one of the eight.
+ */
+fun Orientation.then(next: Orientation): Orientation {
+    val m = matrix
+    val n = next.matrix
+    val both = intArrayOf(n[0] * m[0] + n[1] * m[2], n[0] * m[1] + n[1] * m[3], n[2] * m[0] + n[3] * m[2], n[2] * m[1] + n[3] * m[3])
+    return Orientation.entries.first { it.matrix.contentEquals(both) }
+}
+
 /** A rectangle of whole pixels. [right] and [bottom] are just past the last column and row. */
 data class PixelRect(val left: Int, val top: Int, val right: Int, val bottom: Int) {
     init {

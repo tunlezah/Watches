@@ -5,7 +5,6 @@ import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.configure
 import io.github.tunlezah.watches.data.files.AppleImageProcessor
 import io.github.tunlezah.watches.data.files.ImageProcessor
-import io.github.tunlezah.watches.data.photos.PhotoFormat
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.UByteVar
 import kotlinx.cinterop.addressOf
@@ -138,5 +137,3 @@ actual fun decodePixels(file: Path): TestPixels {
         CGImageRelease(image)
     }
 }
-
-actual val decodableFormats: Set<PhotoFormat> = setOf(PhotoFormat.JPEG, PhotoFormat.PNG, PhotoFormat.WEBP, PhotoFormat.HEIC)

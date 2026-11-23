@@ -12,6 +12,7 @@ on:
     tags: ["v*"]
     paths:
       - "desktopApp/**"
+      - "macBridge/**"
       - "shared/*/src/jvmMain/**"
       - "shared/*/src/appleMain/**"
       - "shared/*/src/appleTest/**"
@@ -26,6 +27,7 @@ on:
   pull_request:
     paths:
       - "desktopApp/**"
+      - "macBridge/**"
       - "shared/*/src/jvmMain/**"
       - "shared/*/src/appleMain/**"
       - "shared/*/src/appleTest/**"
@@ -77,6 +79,30 @@ jobs:
       - name: Shared data tests on the Mac
         run: ./gradlew --stacktrace :shared:data:macosArm64Test
 
+      # The bridge (docs/MACOS_PLAN.md, 8.2.6): that same image code as a native library, which is how
+      # the Mac app, running on Java, reaches it.
+      - name: Build the Mac bridge
+        run: ./gradlew --stacktrace :macBridge:linkReleaseSharedMacosArm64
+
+      - name: Check the bridge
+        run: |
+          LIB="$PWD/macBridge/build/bin/macosArm64/releaseShared/libwatchesbridge.dylib"
+          ls -la "$LIB"
+          file "$LIB" | grep -q arm64 || { echo "::error::The bridge isn't built for Apple silicon"; exit 1; }
+          # Its whole surface is these C functions.
+          nm -gU "$LIB" | grep " _watches_" || { echo "::error::The bridge exports none of its functions"; exit 1; }
+          otool -L "$LIB"
+          echo "WATCHES_BRIDGE=$LIB" >> "$GITHUB_ENV"
+
+      # The shared data tests once more, this time on Java with the bridge loaded, which is exactly how
+      # the Mac app handles a photo: the conformance suite, HEIC included, through JNA into the library.
+      # MacBridgeTest fails if they ran on the plain-Java codec instead.
+      - name: Shared data tests through the bridge
+        run: |
+          ./gradlew --stacktrace :shared:data:jvmTest
+          grep -h -o "MacBridgeTest: the tests ran on Apple's codec[^<]*" shared/data/build/test-results/jvmTest/*.xml \
+            || { echo "::error::The JVM tests didn't run through the bridge"; exit 1; }
+
       - name: Save the Kotlin/Native cache
         if: always() && steps.konan.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -109,7 +135,11 @@ jobs:
 
       - name: Self-test of the packaged app
         run: |
-          "$APP/Contents/MacOS/Watches" --self-test "$RUNNER_TEMP/self-test"
+          "$APP/Contents/MacOS/Watches" --self-test "$RUNNER_TEMP/self-test" > "$RUNNER_TEMP/self-test.txt" 2>&1 || { cat "$RUNNER_TEMP/self-test.txt"; exit 1; }
+          cat "$RUNNER_TEMP/self-test.txt"
+          # The packaged app must have found its bridge and put a HEIC through it.
+          grep -q "photos ok (the Mac's own image code, through the bridge; .*located.heic" "$RUNNER_TEMP/self-test.txt" \
+            || { echo "::error::The packaged app didn't handle photos through the Mac bridge"; exit 1; }
 
       - name: Check the bundle
         run: |
@@ -127,6 +157,8 @@ jobs:
           expect "Build" "$(plist CFBundleVersion)" "$BUILD"
           expect "Minimum macOS" "$(plist LSMinimumSystemVersion)" "13.0"
           file "$APP/Contents/MacOS/Watches" | grep -q arm64 || { echo "::error::The launcher isn't built for Apple silicon"; FAIL=1; }
+          BRIDGE=$(find "$APP" -name libwatchesbridge.dylib)
+          [ -n "$BRIDGE" ] && echo "Bridge: ${BRIDGE#$APP/} ($(du -h "$BRIDGE" | cut -f1))" || { echo "::error::The app carries no Mac bridge"; FAIL=1; }
           # An Apple silicon Mac runs nothing unsigned. Without a Developer ID the bundle is signed ad hoc.
           codesign --verify --deep --strict --verbose=2 "$APP" || { echo "::error::The app's signature doesn't verify"; FAIL=1; }
           codesign --display --verbose=2 "$APP" 2>&1 | tee "$RUNNER_TEMP/signature.txt"

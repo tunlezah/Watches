@@ -41,6 +41,3 @@ class TestPixels(val width: Int, val height: Int, private val rgb: IntArray) {
  * so a test can see what a rendition really shows.
  */
 expect fun decodePixels(file: Path): TestPixels
-
-/** The stored formats this platform's image code can decode. The plain-Java one can't read WebP or HEIC. */
-expect val decodableFormats: Set<io.github.tunlezah.watches.data.photos.PhotoFormat>

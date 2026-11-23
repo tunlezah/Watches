@@ -7,7 +7,7 @@ import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.configure
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.data.files.ImageProcessor
-import io.github.tunlezah.watches.data.files.JvmImageProcessor
+import io.github.tunlezah.watches.data.files.MacBridge
 import okio.Path.Companion.toPath
 import org.koin.dsl.module
 import java.io.File
@@ -16,7 +16,8 @@ import java.io.File
 fun jvmDataModule(root: String, app: AppInfo) = module {
     single { Room.databaseBuilder<AppDatabase>(name = databaseFile(root)).configure() }
     single { FileStore("$root/files".toPath()) }
-    single<ImageProcessor> { JvmImageProcessor() }
+    // Apple's image code on a Mac, through the bridge; the plain-Java codec where there is none.
+    single<ImageProcessor> { MacBridge.imageProcessor() }
     single { app }
 }
 

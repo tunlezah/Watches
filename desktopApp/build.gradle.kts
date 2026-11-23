@@ -44,6 +44,22 @@ val generateBuildInfo = tasks.register("generateBuildInfo") {
     }
 }
 
+// The Mac bridge (the macBridge module): Apple's image code as a native library, carried inside the
+// app. Only a Mac can link it, so anywhere else the app is built without one and uses its plain-Java
+// image code, which is what the tests and screenshots on Linux run.
+val onMac = System.getProperty("os.name").startsWith("Mac")
+val bridgeResources = tasks.register<Sync>("bridgeResources") {
+    into(layout.buildDirectory.dir("bridgeResources"))
+    if (onMac) {
+        dependsOn(":macBridge:linkReleaseSharedMacosArm64")
+        // The folder's name is the plugin's own for "an Apple silicon Mac".
+        from(rootProject.layout.projectDirectory.dir("macBridge/build/bin/macosArm64/releaseShared")) {
+            include("libwatchesbridge.dylib")
+            into("macos-arm64")
+        }
+    }
+}
+
 kotlin {
     sourceSets.main { kotlin.srcDir(generateBuildInfo) }
     compilerOptions {
@@ -98,6 +114,9 @@ compose.desktop {
             // (java.base, java.desktop, java.logging and jdk.crypto.ec are the plugin's own defaults; the rest is
             // what :desktopApp:suggestRuntimeModules finds in the app and its libraries.)
             modules("java.instrument", "java.management", "jdk.security.auth", "jdk.unsupported")
+            // Files the app carries beside its code: the Mac bridge. At run time the plugin names their
+            // folder in the system property compose.application.resources.dir.
+            appResourcesRootDir.set(layout.buildDirectory.dir("bridgeResources"))
 
             macOS {
                 // The app's identity on the Mac, for good: the notification permission and the Dock hang off it.
@@ -111,3 +130,6 @@ compose.desktop {
         }
     }
 }
+
+// The plugin copies the app's resources in a task of its own, which has to wait for the bridge.
+tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(bridgeResources) }

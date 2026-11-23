@@ -4,6 +4,7 @@ import io.github.tunlezah.watches.data.photos.CodecImageProcessor
 import io.github.tunlezah.watches.data.photos.ImageCodec
 import io.github.tunlezah.watches.data.photos.ImageInfo
 import io.github.tunlezah.watches.data.photos.Orientation
+import io.github.tunlezah.watches.data.photos.PhotoFormat
 import io.github.tunlezah.watches.data.photos.PhotoMetadata
 import io.github.tunlezah.watches.data.photos.RenderPlan
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,17 @@ import javax.imageio.ImageWriteParam
  * the whole picture at once, which is why the Mac doesn't take photos in yet.
  */
 class JvmImageCodec : ImageCodec {
+
+    override val formats: Set<PhotoFormat> by lazy {
+        val names = ImageIO.getReaderFormatNames().map { it.lowercase() }.toSet()
+        buildSet {
+            if ("jpeg" in names || "jpg" in names) add(PhotoFormat.JPEG)
+            if ("png" in names) add(PhotoFormat.PNG)
+            if ("gif" in names) add(PhotoFormat.GIF)
+            if ("bmp" in names) add(PhotoFormat.BMP)
+            if ("tiff" in names || "tif" in names) add(PhotoFormat.TIFF)
+        }
+    }
 
     override suspend fun probe(file: Path): ImageInfo = withContext(Dispatchers.IO) {
         val stream = ImageIO.createImageInputStream(File(file.toString())) ?: error("Not a readable image")

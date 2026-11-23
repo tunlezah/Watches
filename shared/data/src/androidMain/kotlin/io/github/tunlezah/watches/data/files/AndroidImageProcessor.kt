@@ -9,15 +9,21 @@ import android.graphics.ColorSpace
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Rect
+import android.os.Build
 import androidx.exifinterface.media.ExifInterface
 import io.github.tunlezah.watches.data.photos.CodecImageProcessor
+import io.github.tunlezah.watches.data.photos.HeicLayout
 import io.github.tunlezah.watches.data.photos.ImageCodec
 import io.github.tunlezah.watches.data.photos.ImageInfo
 import io.github.tunlezah.watches.data.photos.Orientation
+import io.github.tunlezah.watches.data.photos.PhotoFormat
+import io.github.tunlezah.watches.data.photos.PhotoMetadata
 import io.github.tunlezah.watches.data.photos.RenderPlan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okio.Path
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.FileOutputStream
 
 /**
@@ -28,21 +34,59 @@ import java.io.FileOutputStream
  */
 class AndroidImageCodec : ImageCodec {
 
-    override suspend fun probe(file: Path): ImageInfo = withContext(Dispatchers.IO) {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.toString(), bounds)
-        require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Not a readable image" }
-        // BitmapFactory hands pixels over as stored, so the turning is read separately. ExifInterface
-        // reports it for every format, a HEIC's own rotation included.
-        val exif = runCatching { ExifInterface(file.toString()) }.getOrNull()
-        val orientation = exif?.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) ?: ExifInterface.ORIENTATION_NORMAL
-        ImageInfo(bounds.outWidth, bounds.outHeight, Orientation.fromExif(orientation), hasLocation = exif?.latLong != null)
+    // Android has no TIFF decoder, and read AVIF from version 12.
+    override val formats: Set<PhotoFormat> = buildSet {
+        addAll(listOf(PhotoFormat.JPEG, PhotoFormat.PNG, PhotoFormat.WEBP, PhotoFormat.HEIC, PhotoFormat.GIF, PhotoFormat.BMP))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add(PhotoFormat.AVIF)
     }
+
+    /** A file's picture as the app sees it, and where that lies in what the decoder hands over. */
+    private class Frame(val info: ImageInfo, val left: Int, val top: Int)
+
+    private fun frame(path: String): Frame {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Not a readable image" }
+        // BitmapFactory hands pixels over as stored, so the turning is read separately.
+        val exif = runCatching { ExifInterface(path) }.getOrNull()
+        val located = exif?.latLong != null
+        val layout = heicLayout(path)
+        if (layout == null) {
+            val orientation = exif?.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) ?: ExifInterface.ORIENTATION_NORMAL
+            return Frame(ImageInfo(bounds.outWidth, bounds.outHeight, Orientation.fromExif(orientation), located), 0, 0)
+        }
+        // A HEIC says how it is turned in its container, and EXIF may repeat it, leave it out or disagree.
+        // The container is the one that counts, so it is read by the shared code and not through EXIF.
+        // It can also say that only part of the coded picture is the picture, which Android's decoder
+        // ignores: where the decoder has handed over the whole coded picture, the part is cut here.
+        val crop = layout.crop?.takeIf { bounds.outWidth == layout.codedWidth && bounds.outHeight == layout.codedHeight }
+        return Frame(ImageInfo(crop?.width ?: bounds.outWidth, crop?.height ?: bounds.outHeight, layout.orientation, located), crop?.left ?: 0, crop?.top ?: 0)
+    }
+
+    private fun heicLayout(path: String): HeicLayout? = runCatching {
+        if (PhotoFormat.detect(start(path, PhotoFormat.HEAD_BYTES)) != PhotoFormat.HEIC) return null
+        PhotoMetadata.heicLayout(start(path, PhotoMetadata.HEIC_HEAD_BYTES))
+    }.getOrNull()
+
+    /** The first [limit] bytes of a file, or all of it if it is shorter. */
+    private fun start(path: String, limit: Int): ByteArray = File(path).inputStream().use { stream ->
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(64 * 1024)
+        while (out.size() < limit) {
+            val read = stream.read(buffer, 0, minOf(buffer.size, limit - out.size()))
+            if (read < 0) break
+            out.write(buffer, 0, read)
+        }
+        out.toByteArray()
+    }
+
+    override suspend fun probe(file: Path): ImageInfo = withContext(Dispatchers.IO) { frame(file.toString()).info }
 
     override suspend fun render(source: Path, plan: RenderPlan, quality: Int, dest: Path) = withContext(Dispatchers.Default) {
         val path = source.toString()
+        val frame = frame(path)
         val stored = plan.storedRegion
-        val region = Rect(stored.left, stored.top, stored.right, stored.bottom)
+        val region = Rect(frame.left + stored.left, frame.top + stored.top, frame.left + stored.right, frame.top + stored.bottom)
         val options = BitmapFactory.Options().apply {
             inSampleSize = plan.sampleSize
             inPreferredConfig = Bitmap.Config.ARGB_8888

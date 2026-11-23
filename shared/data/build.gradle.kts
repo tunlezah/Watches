@@ -83,6 +83,10 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.exifinterface)
         }
+        jvmMain.dependencies {
+            // Loads the Mac's native library (the macBridge module) into the desktop app.
+            implementation(libs.jna)
+        }
         getByName("androidDeviceTest").dependencies {
             implementation(libs.androidx.test.runner)
             implementation(libs.androidx.test.ext.junit)
@@ -106,4 +110,13 @@ dependencies {
     listOf("kspAndroid", "kspJvm", "kspIosArm64", "kspIosSimulatorArm64", "kspMacosArm64").forEach {
         add(it, libs.room.compiler)
     }
+}
+
+// On a Mac, the JVM tests can run against Apple's image code through the bridge, as the Mac app does:
+// WATCHES_BRIDGE names the library that :macBridge:linkReleaseSharedMacosArm64 built. Without it
+// they use the plain-Java codec, as on Linux.
+tasks.withType<Test>().configureEach {
+    val bridge = providers.environmentVariable("WATCHES_BRIDGE").orNull?.takeIf { it.isNotBlank() }
+    inputs.property("watches.bridge", bridge ?: "")
+    if (bridge != null) systemProperty("watches.bridge", bridge)
 }

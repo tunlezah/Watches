@@ -18,6 +18,24 @@ enum class LocationRemoval {
 }
 
 /**
+ * How a HEIC's own container says its picture is to be shown. A HEIC keeps this in boxes of its
+ * own (`ispe`, `clap`, `irot`, `imir`), and by its standard EXIF's orientation doesn't count.
+ */
+data class HeicLayout(
+    /** The size of the picture as it is coded, before anything below is applied. */
+    val codedWidth: Int,
+    val codedHeight: Int,
+    /**
+     * The part of the coded picture that is the picture (its "clean aperture"), or null when all
+     * of it is. A coded picture can't be smaller than its codec's smallest block, so a small or
+     * odd-sized picture is coded larger and cut down by this. Not every decoder obeys it.
+     */
+    val crop: PixelRect?,
+    /** How what is left has to be turned to be upright. */
+    val orientation: Orientation,
+)
+
+/**
  * Reads and cleans the metadata inside a photo file: where a location hides, and which way up the
  * picture is. It is shared code, so every platform removes exactly the same things in exactly the
  * same way, instead of each trusting its own system's library (which on Android can't rewrite a
@@ -32,11 +50,27 @@ enum class LocationRemoval {
  */
 object PhotoMetadata {
 
-    /** The picture's turning from its EXIF block. Upright if there is none or it can't be read. */
+    /**
+     * The picture's turning: from the container's own boxes for a HEIC, from the EXIF block for
+     * everything else. Upright if there is none or it can't be read.
+     */
     fun orientation(bytes: ByteArray): Orientation = guarded(Orientation.NORMAL) {
+        if (PhotoFormat.detect(bytes) == PhotoFormat.HEIC) return@guarded Containers.heicLayout(bytes)?.orientation ?: Orientation.NORMAL
         val exif = blocks(bytes).orEmpty().firstOrNull { it.kind == Kind.EXIF } ?: return@guarded Orientation.NORMAL
         Orientation.fromExif(Tiff.open(bytes, exif)?.orientation())
     }
+
+    /**
+     * A HEIC's layout, or null for any other file and for one whose boxes can't be followed.
+     * [head] is the start of the file, as far as the end of its `meta` box at least: [HEIC_HEAD_BYTES]
+     * is far more than a phone's photo needs. The whole file is fine too.
+     */
+    fun heicLayout(head: ByteArray): HeicLayout? = guarded(null) {
+        if (PhotoFormat.detect(head) == PhotoFormat.HEIC) Containers.heicLayout(head) else null
+    }
+
+    /** How much of a HEIC to read for [heicLayout]. Its tables come first and run to a few thousand bytes. */
+    const val HEIC_HEAD_BYTES = 1 shl 20
 
     /** True if the file holds a location, or its metadata can't be followed far enough to rule one out. */
     fun hasLocation(bytes: ByteArray): Boolean = guarded(true) { scan(bytes, erase = false) != LocationRemoval.NONE }
@@ -257,22 +291,150 @@ private object Containers {
      * (iloc) says where its bytes are, either in the file or in a data box inside the table's own
      * box. An EXIF item starts with a four-byte offset to its TIFF block.
      */
-    fun heic(b: ByteArray): List<Block>? {
-        var meta: Box? = null
+    private fun meta(b: ByteArray): Box? {
         var p = 0
         while (p < b.size) {
             val box = box(b, p, b.size) ?: return null
-            if (box.type == "meta") {
-                meta = box
-                break
+            if (box.type == "meta") return box
+            p = box.end
+        }
+        return null
+    }
+
+    /**
+     * What the container says about the main picture. Each picture in a HEIC is an item too; `pitm`
+     * names the main one. `iprp` holds every property any item has (`ipco`, numbered from one) and
+     * which of them each item has, in the order they apply (`ipma`).
+     */
+    fun heicLayout(b: ByteArray): HeicLayout? {
+        val table = meta(b) ?: return null
+        var primary: Long? = null
+        var properties: Box? = null
+        var p = table.payload + 4 // the box's version and flags
+        while (p < table.end) {
+            val box = box(b, p, table.end) ?: return null
+            when (box.type) {
+                "pitm" -> primary = if (u8(b, box.payload) == 0) u16be(b, box.payload + 4).toLong() else u32be(b, box.payload + 4)
+                "iprp" -> properties = box
             }
             p = box.end
         }
-        val table = meta ?: return null
+        val item = primary ?: return null
+        val all = ArrayList<Box>()
+        val mine = ArrayList<Int>()
+        p = (properties ?: return null).payload
+        while (p < properties.end) {
+            val box = box(b, p, properties.end) ?: return null
+            when (box.type) {
+                "ipco" -> {
+                    var q = box.payload
+                    while (q < box.end) {
+                        val property = box(b, q, box.end) ?: return null
+                        all += property
+                        q = property.end
+                    }
+                }
+                "ipma" -> readAssociations(b, box, item, mine) ?: return null
+            }
+            p = box.end
+        }
+
+        var coded: Pair<Int, Int>? = null
+        // The picture as it stands after the steps so far.
+        var width = 0
+        var height = 0
+        var crop: PixelRect? = null
+        var orientation = Orientation.NORMAL
+        for (index in mine) {
+            val property = all.getOrNull(index - 1) ?: return null
+            val at = property.payload
+            when (property.type) {
+                "ispe" -> if (coded == null) {
+                    if (property.end - at < 12) return null
+                    width = inside(u32be(b, at + 4), Int.MAX_VALUE)
+                    height = inside(u32be(b, at + 8), Int.MAX_VALUE)
+                    if (width < 1 || height < 1) return null
+                    coded = width to height
+                }
+                "clap" -> {
+                    // One cut is all a writer makes. It is given in the picture as it stands, so it is
+                    // taken back to the coded grid: a decoder that ignores it can then be corrected.
+                    if (coded == null || crop != null || property.end - at < 32) return null
+                    val cut = cleanAperture(b, at, width, height) ?: return null
+                    crop = orientation.toStored(cut, width, height)
+                    width = cut.width
+                    height = cut.height
+                }
+                "irot" -> {
+                    if (coded == null || property.end - at < 1) return null
+                    // Quarter turns anticlockwise.
+                    val turn = when (u8(b, at) and 3) {
+                        1 -> Orientation.ROTATE_270
+                        2 -> Orientation.ROTATE_180
+                        3 -> Orientation.ROTATE_90
+                        else -> Orientation.NORMAL
+                    }
+                    orientation = orientation.then(turn)
+                    if (turn.swapsAxes) width = height.also { height = width }
+                }
+                "imir" -> {
+                    if (coded == null || property.end - at < 1) return null
+                    // 0 exchanges top and bottom, 1 left and right.
+                    orientation = orientation.then(if (u8(b, at) and 1 == 0) Orientation.FLIP_VERTICAL else Orientation.FLIP_HORIZONTAL)
+                }
+            }
+        }
+        val (codedWidth, codedHeight) = coded ?: return null
+        return HeicLayout(codedWidth, codedHeight, crop, orientation)
+    }
+
+    private fun readAssociations(b: ByteArray, box: Box, item: Long, into: MutableList<Int>): Unit? {
+        val version = u8(b, box.payload)
+        val wide = u8(b, box.payload + 3) and 1 != 0
+        var p = box.payload + 4
+        val entries = u32be(b, p)
+        p += 4
+        repeat(inside(entries, box.end - p)) {
+            val id = if (version < 1) u16be(b, p).toLong().also { p += 2 } else u32be(b, p).also { p += 4 }
+            val count = u8(b, p)
+            p += 1
+            repeat(count) {
+                // The top bit says whether a reader may ignore the property; the rest is its number.
+                val index = if (wide) (u16be(b, p) and 0x7FFF).also { p += 2 } else (u8(b, p) and 0x7F).also { p += 1 }
+                if (id == item) into += index
+            }
+            if (p > box.end) return null
+        }
+        return Unit
+    }
+
+    /**
+     * A clean aperture is written as fractions: a width, a height, and how far its centre is from
+     * the picture's. Null unless that comes to whole pixels inside a picture of [width] by [height].
+     */
+    private fun cleanAperture(b: ByteArray, at: Int, width: Int, height: Int): PixelRect? {
+        fun size(n: Long, d: Long): Long? = if (d == 0L || n % d != 0L) null else n / d
+        // start = offset + (whole - part) / 2, over the common denominator 2d
+        fun start(n: Long, d: Long, whole: Int, part: Long): Long? {
+            if (d == 0L) return null
+            val twice = 2 * n + (whole - part) * d
+            return if (twice % (2 * d) != 0L) null else twice / (2 * d)
+        }
+        val w = size(u32be(b, at), u32be(b, at + 4)) ?: return null
+        val h = size(u32be(b, at + 8), u32be(b, at + 12)) ?: return null
+        // The offsets are signed.
+        val left = start(u32be(b, at + 16).toInt().toLong(), u32be(b, at + 20), width, w) ?: return null
+        val top = start(u32be(b, at + 24).toInt().toLong(), u32be(b, at + 28), height, h) ?: return null
+        if (w < 1 || h < 1 || left < 0 || top < 0 || left + w > width || top + h > height) return null
+        return PixelRect(left.toInt(), top.toInt(), (left + w).toInt(), (top + h).toInt())
+    }
+
+    fun heic(b: ByteArray): List<Block>? {
+        val table = meta(b) ?: return null
         val items = HashMap<Long, Item>()
         val places = HashMap<Long, Place>()
         var dataAt: Int? = null
-        p = table.payload + 4 // the box's version and flags
+        var p = table.payload + 4 // the box's version and flags
         while (p < table.end) {
             val box = box(b, p, table.end) ?: return null
             when (box.type) {

@@ -18,7 +18,7 @@ plugins {
 // need no library at all, so the scan also looks for them by name. The same goes for Java's own
 // networking, which the Mac app (desktopApp) could otherwise reach without any of the libraries.
 val networkLibraries = listOf("io.ktor", "com.squareup.okhttp3", "io.coil-kt.coil3:coil-network")
-val networkFreeModules = setOf(":shared:core", ":shared:data", ":shared:ui", ":desktopApp")
+val networkFreeModules = setOf(":shared:core", ":shared:data", ":shared:ui", ":desktopApp", ":macBridge")
 val appleNetworking = Regex("""\b(NSURLSession|NSURLConnection|NSURLRequest|NSMutableURLRequest|nw_connection|nw_endpoint|CFNetwork|CFHTTP)\w*|ContentsOfURL\b|\bcontentsOfURL\b""")
 // java.net.URI, URLEncoder and URLDecoder only handle text, so they stay allowed.
 val javaNetworking = Regex("""\bjava\.net\.(URL\b|URLConnection|HttpURLConnection|JarURLConnection|Socket|ServerSocket|DatagramSocket|MulticastSocket|InetAddress|NetworkInterface|http\b|\*)|\bjavax\.net\b|\bHttpURLConnection\b|\bjava\.nio\.channels\.(SocketChannel|ServerSocketChannel|DatagramChannel|AsynchronousSocketChannel)""")
@@ -54,10 +54,13 @@ subprojects {
 }
 
 // iOS simulator tests run on the simulator CI picks (-PiosSimulator=<udid>), not a hard-coded model.
-// Each test is named as it starts, so a slow or stuck one shows in CI's log.
+// Each native test is named as it starts, on the simulator and on the Mac itself, so a slow or stuck
+// one shows in CI's log, and so does the fact that it ran.
 subprojects {
     tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeSimulatorTest>().configureEach {
         providers.gradleProperty("iosSimulator").orNull?.let { device.set(it) }
+    }
+    tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach {
         testLogging {
             events("started", "failed", "skipped")
             exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

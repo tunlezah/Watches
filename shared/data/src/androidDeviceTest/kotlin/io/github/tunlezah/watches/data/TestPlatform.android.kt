@@ -10,7 +10,6 @@ import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.configure
 import io.github.tunlezah.watches.data.files.AndroidImageProcessor
 import io.github.tunlezah.watches.data.files.ImageProcessor
-import io.github.tunlezah.watches.data.photos.PhotoFormat
 import okio.Path
 import okio.Path.Companion.toOkioPath
 import java.io.ByteArrayOutputStream
@@ -39,5 +38,3 @@ actual fun decodePixels(file: Path): TestPixels {
     bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
     return TestPixels(bitmap.width, bitmap.height, pixels).also { bitmap.recycle() }
 }
-
-actual val decodableFormats: Set<PhotoFormat> = setOf(PhotoFormat.JPEG, PhotoFormat.PNG, PhotoFormat.WEBP, PhotoFormat.HEIC)

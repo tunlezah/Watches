@@ -43,6 +43,8 @@ fun main(args: Array<String>) {
     System.setProperty("apple.awt.application.name", "Watches")
     if (System.getProperty("apple.awt.application.appearance") == null) System.setProperty("apple.awt.application.appearance", "system")
 
+    Bridge.locate()
+
     if (args.firstOrNull() == "--self-test") exitProcess(SelfTest.run(args.getOrNull(1)?.let(::File)))
 
     showUnexpectedErrors()

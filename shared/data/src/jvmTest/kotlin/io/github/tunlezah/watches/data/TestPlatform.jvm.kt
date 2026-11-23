@@ -5,6 +5,8 @@ import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.configure
 import io.github.tunlezah.watches.data.files.ImageProcessor
 import io.github.tunlezah.watches.data.files.JvmImageProcessor
+import io.github.tunlezah.watches.data.files.MacBridge
+import io.github.tunlezah.watches.data.photos.CodecImageProcessor
 import okio.Path
 import okio.Path.Companion.toOkioPath
 import java.awt.Color
@@ -17,7 +19,9 @@ actual fun newTestDir(): Path = Files.createTempDirectory("watches-test").toOkio
 
 actual fun openTestDatabase(file: Path): AppDatabase = Room.databaseBuilder<AppDatabase>(name = file.toString()).configure()
 
-actual fun testImageProcessor(): ImageProcessor = JvmImageProcessor()
+// On a Mac that was given the bridge, these tests run against Apple's codec through it, exactly as the
+// Mac app does. A bridge that was named but can't be used fails them, rather than quietly falling back.
+actual fun testImageProcessor(): ImageProcessor = MacBridge.imageCodec()?.let(::CodecImageProcessor) ?: JvmImageProcessor()
 
 actual fun testJpeg(width: Int, height: Int, red: Int, green: Int, blue: Int): ByteArray {
     val img = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
@@ -33,6 +37,3 @@ actual fun decodePixels(file: Path): TestPixels {
     val image = ImageIO.read(file.toFile()) ?: error("Not a readable image: $file")
     return TestPixels(image.width, image.height, IntArray(image.width * image.height) { image.getRGB(it % image.width, it / image.width) })
 }
-
-actual val decodableFormats: Set<io.github.tunlezah.watches.data.photos.PhotoFormat> =
-    setOf(io.github.tunlezah.watches.data.photos.PhotoFormat.JPEG, io.github.tunlezah.watches.data.photos.PhotoFormat.PNG)

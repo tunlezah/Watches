@@ -164,6 +164,25 @@ def make():
     plain_exif[at + 9] = 1
     (FIXTURES / "turned-6.heic").write_bytes(bytes(plain_exif))
 
+    # A HEIC can't be smaller than 64 pixels a side. The three above are, so the encoder stored a 64
+    # by 64 picture and a "clap" box saying which part of it is the picture. Android's decoder
+    # ignores that box, which makes those files a test of it. A phone's photos have no such box, so
+    # here is the ordinary case too: the same picture at twice the size, in each of the eight
+    # turnings, with the turning in the container alone ("irot" and "imir" boxes) and EXIF saying
+    # the picture is upright.
+    for orientation in range(1, 9):
+        image = stored(orientation)
+        image = image.resize((image.width * 2, image.height * 2), Image.NEAREST)
+        path = FIXTURES / f"large-turned-{orientation}.heic"
+        image.save(path, "HEIF", quality=90, exif=exif(">", orientation=orientation, gps=False))
+        data = bytearray(path.read_bytes())
+        assert b"clap" not in data, f"{path.name} should need no clap box"
+        if orientation != 1:
+            at = data.find(bytes.fromhex("0112000300000001000%d0000" % orientation))
+            assert at > 0 and (b"irot" in data or b"imir" in data), f"{path.name}: expected the container's own turning"
+            data[at + 9] = 1
+            path.write_bytes(bytes(data))
+
     # Transparent on the right half: a rendition has no transparency, and shows black there.
     see_through = reference("RGBA")
     see_through.paste((0, 0, 0, 0), (W // 2, 0, W, H))
@@ -228,6 +247,14 @@ def verify_fixtures():
             assert image.size == (W, H), (name, image.size)
             got = image.convert("RGB").getpixel((8, 8))
             assert all(abs(a - b) < 40 for a, b in zip(got, (200, 30, 30))), (name, got)
+    for orientation in range(1, 9):
+        name = f"large-turned-{orientation}.heic"
+        with Image.open(FIXTURES / name) as image:
+            assert image.size == (2 * W, 2 * H), (name, image.size)
+            assert (image.getexif().get(0x0112) or 1) == 1, f"{name}: EXIF should say upright"
+            for (x, y), want in {(16, 16): (200, 30, 30), (112, 16): (30, 160, 60), (16, 80): (40, 60, 200), (112, 80): (220, 200, 40)}.items():
+                got = image.convert("RGB").getpixel((x, y))
+                assert all(abs(a - b) < 40 for a, b in zip(got, want)), (name, (x, y), got, want)
     for orientation in range(1, 9):
         with Image.open(FIXTURES / f"turned-{orientation}.jpg") as image:
             upright = ImageOps.exif_transpose(image)

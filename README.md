@@ -21,6 +21,7 @@ Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md), with the iPhone in [`docs/IO
 | `androidApp` | Android shell: activity, manifest, signing, screenshot tests. |
 | `iosApp` | SwiftUI shell, generated with XcodeGen, with its app-hosted and UI tests. |
 | `desktopApp` | Mac shell on Compose's desktop target: one window, packaging, the self-test, desktop tests and screenshots. |
+| `macBridge` | The Mac bridge: the iPhone's image code (`shared/data`'s `appleMain`) built as a small native library, which the Mac app loads because Java can't call the Mac's own frameworks. |
 
 Shared tests live in `commonTest`, so the same tests run on the JVM (as Android host tests in `shared/ui`) and on the iOS simulator. The shared modules' JVM target runs those fast tests, and it is also what the Mac app runs on. The app's version, for both phones, is in [`version.xcconfig`](version.xcconfig).
 

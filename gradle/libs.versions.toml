@@ -19,6 +19,8 @@ coil = "3.6.3"
 okio = "3.18.2"
 koin = "4.2.2"
 filekit = "0.16.0"
+# The version FileKit brings to the desktop app, named here because the Mac bridge loads its library with it too.
+jna = "5.19.1"
 androidx-activity = "1.13.0"
 androidx-core = "1.19.1"
 androidx-exifinterface = "1.4.2"
@@ -82,6 +84,7 @@ koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
 koin-compose-viewmodel = { module = "io.insert-koin:koin-compose-viewmodel", version.ref = "koin" }
 koin-test = { module = "io.insert-koin:koin-test", version.ref = "koin" }
 
+jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 filekit-core = { module = "io.github.vinceglb:filekit-core", version.ref = "filekit" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
 filekit-coil = { module = "io.github.vinceglb:filekit-coil", version.ref = "filekit" }

@@ -27,6 +27,12 @@ data class ImageInfo(
  */
 interface ImageCodec {
 
+    /**
+     * The formats this platform's decoders read. No system reads them all: Android has no TIFF
+     * decoder, plain Java none for WebP or HEIC, and AVIF depends on the system's version.
+     */
+    val formats: Set<PhotoFormat>
+
     /** Throws if [file] isn't a picture this platform can decode. */
     suspend fun probe(file: Path): ImageInfo
 
@@ -42,6 +48,8 @@ open class CodecImageProcessor(
     private val codec: ImageCodec,
     private val fileSystem: FileSystem = FileSystem.SYSTEM,
 ) : ImageProcessor {
+
+    override val readableFormats: Set<PhotoFormat> get() = codec.formats
 
     override suspend fun size(file: Path): ImageSize {
         val info = codec.probe(file)

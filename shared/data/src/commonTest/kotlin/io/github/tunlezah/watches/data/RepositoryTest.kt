@@ -32,6 +32,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -333,14 +334,21 @@ class RepositoryTest {
     @Test
     fun aFormatOnlySomeDevicesShowIsKeptAsAJpeg() = runBlocking<Unit> {
         val w = watches.create(speedmaster)
-        for (name in listOf("other.gif", "other.bmp", "other.tiff")) {
+        // No system reads all three: Android has no TIFF decoder. What this one doesn't read it refuses.
+        val all = listOf("other.gif" to PhotoFormat.GIF, "other.bmp" to PhotoFormat.BMP, "other.tiff" to PhotoFormat.TIFF)
+        val (taken, refused) = all.partition { it.second in processor.readableFormats }
+        for ((name, _) in taken) {
             val photo = photos.add(w.id, PhotoFixtures.bytes(name))
             assertTrue(photo.originalFile.endsWith("-original.jpg"), "$name: ${photo.originalFile}")
             assertEquals(PhotoFormat.JPEG, PhotoFormat.detect(files.read(photo.originalFile)), name)
             assertEquals(64 to 48, photo.width to photo.height, name)
         }
-        val stored = FileSystem.SYSTEM.list(files.resolve(FileStore.photoDir(w.id))).map { it.name }
-        assertEquals(9, stored.size, "an original and two renditions each, and nothing left over: $stored")
+        for ((name, _) in refused) assertFails(name) { photos.add(w.id, PhotoFixtures.bytes(name)) }
+        assertTrue(taken.size >= 2, "GIF and BMP are read everywhere: ${processor.readableFormats}")
+        assertEquals(taken.size, photos.forWatch(w.id).size)
+        val dir = files.resolve(FileStore.photoDir(w.id))
+        val stored = if (FileSystem.SYSTEM.exists(dir)) FileSystem.SYSTEM.list(dir).map { it.name } else emptyList()
+        assertEquals(3 * taken.size, stored.size, "an original and two renditions each, and nothing left over: $stored")
         assertTrue(stored.none { "incoming" in it })
     }
 

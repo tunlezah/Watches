@@ -1,9 +1,14 @@
 package io.github.tunlezah.watches.desktop
 
+import io.github.tunlezah.watches.core.model.Watch
+import io.github.tunlezah.watches.data.PhotoRepository
 import io.github.tunlezah.watches.data.WatchRepository
 import io.github.tunlezah.watches.data.backup.BackupRepository
 import io.github.tunlezah.watches.data.backup.CsvExporter
 import io.github.tunlezah.watches.data.backup.RestoreMode
+import io.github.tunlezah.watches.data.files.FileStore
+import io.github.tunlezah.watches.data.files.MacBridge
+import io.github.tunlezah.watches.data.photos.PhotoMetadata
 import io.github.tunlezah.watches.search.describeSecureConnections
 import io.github.tunlezah.watches.ui.diagnostics.SampleGenerator
 import kotlinx.coroutines.delay
@@ -61,6 +66,36 @@ internal object SelfTest {
                 require(samples.status.value?.startsWith("Added") == true) { "Samples: ${samples.status.value}" }
                 runBlocking { watches.ensureSearchIndex() }
                 samples.status.value.orEmpty()
+            }
+            step("photos") {
+                if (Bridge.expected()) {
+                    MacBridge.problem?.let { throw IllegalStateException("The Mac bridge didn't load", it) }
+                    require(MacBridge.isLoaded) { "This app has no Mac bridge among its resources" }
+                }
+                val photos = koin.get<PhotoRepository>()
+                val files = koin.get<FileStore>()
+                val now = kotlin.time.Clock.System.now()
+                val watch = runBlocking { watches.create(Watch(id = "", brand = "Self-test", createdAt = now, updatedAt = now)) }
+                // A portrait photo with a location, stored on its side as a phone's camera writes it. And a HEIC
+                // with a location, which only the Mac's own image code can read.
+                val added = listOfNotNull("located-turned.jpg", "located.heic".takeIf { MacBridge.isLoaded }).map { name ->
+                    val arrived = javaClass.getResourceAsStream("/self-test/$name")?.use { it.readBytes() } ?: error("The app is missing /self-test/$name")
+                    require(PhotoMetadata.hasLocation(arrived)) { "$name should carry a location" }
+                    val photo = runBlocking { photos.add(watch.id, arrived.copyOf()) }
+                    val kept = runBlocking { files.read(photo.originalFile) }
+                    require(!PhotoMetadata.hasLocation(kept)) { "$name was stored with its location" }
+                    require(photo.width == 64 && photo.height == 48) { "$name is 64 by 48 upright, not ${photo.width} by ${photo.height}" }
+                    val thumb = ImageIO.read(File(files.absolute(photo.thumbFile))) ?: error("$name: its thumbnail isn't a readable JPEG")
+                    require(thumb.width == 64 && thumb.height == 48) { "$name: its thumbnail is ${thumb.width} by ${thumb.height}" }
+                    // The reference picture has a red top left corner and a yellow bottom right one.
+                    val (red, yellow) = thumb.getRGB(8, 8) to thumb.getRGB(56, 40)
+                    require((red shr 16 and 0xFF) > 140 && (red and 0xFF) < 100) { "$name: its top left isn't red (%06x)".format(red and 0xFFFFFF) }
+                    require((yellow shr 16 and 0xFF) > 150 && (yellow shr 8 and 0xFF) > 140 && (yellow and 0xFF) < 110) { "$name: its bottom right isn't yellow (%06x)".format(yellow and 0xFFFFFF) }
+                    name
+                }
+                runBlocking { watches.delete(watch.id) }
+                val codec = if (MacBridge.isLoaded) "the Mac's own image code, through the bridge" else "plain-Java image code: no Mac bridge in this build"
+                "$codec; ${added.joinToString(" and ")} stored upright without a location"
             }
             step("backup and restore") {
                 val archive = File(dir, "self-test-backup.zip").toOkioPath()

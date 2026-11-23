@@ -72,6 +72,7 @@ jobs:
           :shared:search:compileTestKotlinIosSimulatorArm64
           :shared:ui:compileTestKotlinIosSimulatorArm64
           :shared:data:compileTestKotlinMacosArm64
+          :macBridge:compileKotlinMacosArm64
           :androidApp:recordRoborazziDebug
           :androidApp:assembleRelease
 

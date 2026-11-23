@@ -2,7 +2,6 @@ package io.github.tunlezah.watches.data.photos
 
 import io.github.tunlezah.watches.core.model.NormalizedRect
 import io.github.tunlezah.watches.data.TestPixels
-import io.github.tunlezah.watches.data.decodableFormats
 import io.github.tunlezah.watches.data.decodePixels
 import io.github.tunlezah.watches.data.files.ImageSize
 import io.github.tunlezah.watches.data.newTestDir
@@ -26,7 +25,10 @@ import kotlin.test.assertTrue
  * result is read back with that platform's plain decoder, not the app's own code.
  *
  * Every fixture shows one picture, 64 by 48: red top left, green top right, blue bottom left and
- * yellow bottom right.
+ * yellow bottom right. (The `large-` ones show it at twice the size.)
+ *
+ * No system reads every format, so each codec says which it reads ([readableFormats]) and is held
+ * to it: those it names must come out right, and the rest must be refused cleanly.
  */
 class PhotoConformanceTest {
 
@@ -41,6 +43,14 @@ class PhotoConformanceTest {
     private val blue = Triple(40, 60, 200)
     private val yellow = Triple(220, 200, 40)
     private val black = Triple(0, 0, 0)
+
+    private val readable = processor.readableFormats
+
+    /** One fixture in each format there is one for. */
+    private val oneOfEach = listOf(
+        "gps-exif-ii.jpg" to PhotoFormat.JPEG, "gps.png" to PhotoFormat.PNG, "gps.webp" to PhotoFormat.WEBP, "gps.heic" to PhotoFormat.HEIC,
+        "other.gif" to PhotoFormat.GIF, "other.bmp" to PhotoFormat.BMP, "other.tiff" to PhotoFormat.TIFF,
+    )
 
     private fun fixture(name: String): Path = (dir / name).also { path -> FileSystem.SYSTEM.write(path) { write(PhotoFixtures.bytes(name)) } }
 
@@ -110,10 +120,9 @@ class PhotoConformanceTest {
         assertEquals(ImageSize(16, 12), processor.render(fixture("plain.jpg"), NormalizedRect(0.25f, 0.25f, 0.5f, 0.5f), 4000, 90, out))
     }
 
-    @Test fun everyStoredFormatShowsTheSamePicture() = runTest {
-        val fixtures = listOf("gps-exif-ii.jpg" to PhotoFormat.JPEG, "gps.png" to PhotoFormat.PNG, "gps.webp" to PhotoFormat.WEBP, "gps.heic" to PhotoFormat.HEIC)
-        for ((name, format) in fixtures) {
-            if (format !in decodableFormats) continue
+    @Test fun everyFormatThisPlatformReadsShowsTheSamePicture() = runTest {
+        for ((name, format) in oneOfEach) {
+            if (format !in readable) continue
             val source = fixture(name)
             assertEquals(ImageSize(64, 48), processor.size(source), name)
             val out = dir / "$name.jpg"
@@ -121,11 +130,41 @@ class PhotoConformanceTest {
             assertTheReferencePicture(decodePixels(out), name)
             assertEquals(PhotoFormat.JPEG, PhotoFormat.detect(FileSystem.SYSTEM.read(out) { readByteArray() }), "$name: a rendition is a JPEG")
         }
-        assertTrue(PhotoFormat.JPEG in decodableFormats && PhotoFormat.PNG in decodableFormats)
+        assertTrue(PhotoFormat.JPEG in readable && PhotoFormat.PNG in readable, "every platform reads JPEG and PNG: $readable")
     }
 
-    @Test fun aHeicTurnedInItsOwnWayComesOutUprightOnce() = runTest {
-        if (PhotoFormat.HEIC !in decodableFormats) return@runTest
+    @Test fun aFormatThisPlatformDoesNotReadIsRefusedAndLeavesNothingBehind() = runTest {
+        for ((name, format) in oneOfEach) {
+            if (format in readable) continue
+            val source = fixture(name)
+            val out = dir / "never-$name.jpg"
+            assertFails("$name: its size") { processor.size(source) }
+            assertFails("$name: a rendition") { processor.render(source, null, 640, 85, out) }
+            assertFalse(FileSystem.SYSTEM.exists(out), "$name: nothing was written")
+        }
+    }
+
+    @Test fun aHeicsOwnTurningIsObeyedWhateverExifSays() = runTest {
+        if (PhotoFormat.HEIC !in readable) return@runTest
+        // The ordinary HEIC: the picture at twice the size, turned each of the eight ways by the container's own
+        // boxes, with EXIF saying it is upright. EXIF's word doesn't count in a HEIC.
+        for (n in 1..8) {
+            val name = "large-turned-$n.heic"
+            val source = fixture(name)
+            assertEquals(ImageSize(128, 96), processor.size(source), name)
+            val out = dir / "$name.jpg"
+            assertEquals(ImageSize(64, 48), processor.render(source, null, 64, 90, out), name)
+            assertTheReferencePicture(decodePixels(out), name)
+            val corner = dir / "$name-corner.jpg"
+            assertEquals(ImageSize(64, 48), processor.render(source, NormalizedRect(0f, 0.5f, 0.5f, 1f), 2560, 90, corner), name)
+            for ((x, y) in listOf(6 to 6, 57 to 6, 6 to 41, 57 to 41, 32 to 24)) assertColour(blue, decodePixels(corner).at(x, y), "$name, its bottom left corner at $x,$y")
+        }
+    }
+
+    @Test fun aHeicCodedLargerThanItsPictureComesOutUprightOnce() = runTest {
+        if (PhotoFormat.HEIC !in readable) return@runTest
+        // These are coded 64 by 64, with a box that says the picture is the 64 by 48 part of that: a decoder
+        // that ignores the box shows sixteen rows too many.
         // A HEIC records its turning in the container. An iPhone repeats it in EXIF, and obeying both would turn the picture twice.
         for (name in listOf("turned-6.heic", "turned-6-iphone.heic")) {
             val source = fixture(name)
@@ -160,7 +199,7 @@ class PhotoConformanceTest {
             "gps.png" to PhotoFormat.PNG, "gps.webp" to PhotoFormat.WEBP, "gps.heic" to PhotoFormat.HEIC,
         )
         for ((name, format) in located) {
-            if (format !in decodableFormats) continue
+            if (format !in readable) continue
             val bytes = PhotoFixtures.bytes(name)
             assertEquals(LocationRemoval.REMOVED, PhotoMetadata.removeLocation(bytes), name)
             val cleaned = dir / "cleaned-$name"

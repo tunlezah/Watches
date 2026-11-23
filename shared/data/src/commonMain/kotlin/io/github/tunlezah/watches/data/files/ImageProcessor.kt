@@ -16,6 +16,13 @@ data class ImageSize(val width: Int, val height: Int)
  */
 interface ImageProcessor {
 
+    /**
+     * The formats this device can take a photo in from. The four that are stored as they arrive
+     * (see [PhotoFormat]) are read everywhere the app runs; which of the others can be converted
+     * depends on the system.
+     */
+    val readableFormats: Set<PhotoFormat>
+
     /** Pixel size after orientation is applied. */
     suspend fun size(file: Path): ImageSize
 

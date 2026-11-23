@@ -4,7 +4,9 @@ import io.github.tunlezah.watches.data.photos.CodecImageProcessor
 import io.github.tunlezah.watches.data.photos.ImageCodec
 import io.github.tunlezah.watches.data.photos.ImageInfo
 import io.github.tunlezah.watches.data.photos.Orientation
+import io.github.tunlezah.watches.data.photos.PhotoFormat
 import io.github.tunlezah.watches.data.photos.RenderPlan
+import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.DoubleVar
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.IntVar
@@ -59,7 +61,9 @@ import platform.CoreGraphics.kCGInterpolationHigh
 import platform.ImageIO.CGImageDestinationAddImage
 import platform.ImageIO.CGImageDestinationCreateWithURL
 import platform.ImageIO.CGImageDestinationFinalize
+import platform.Foundation.CFBridgingRelease
 import platform.ImageIO.CGImageSourceCopyPropertiesAtIndex
+import platform.ImageIO.CGImageSourceCopyTypeIdentifiers
 import platform.ImageIO.CGImageSourceCreateThumbnailAtIndex
 import platform.ImageIO.CGImageSourceCreateWithURL
 import platform.ImageIO.CGImageSourceRef
@@ -84,8 +88,14 @@ import platform.ImageIO.kCGImageSourceThumbnailMaxPixelSize
  * crop really needs every pixel: a 48-megapixel photo's thumbnail costs a few megabytes, where
  * decoding it whole costs about 190.
  */
-@OptIn(ExperimentalForeignApi::class)
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 class AppleImageCodec : ImageCodec {
+
+    // Asked of ImageIO itself rather than assumed: AVIF and WebP arrived in different system versions.
+    override val formats: Set<PhotoFormat> by lazy {
+        val known = (CFBridgingRelease(CGImageSourceCopyTypeIdentifiers()) as? List<*>).orEmpty().toSet()
+        TYPE_NAMES.filterValues { it in known }.keys
+    }
 
     override suspend fun probe(file: Path): ImageInfo = withContext(Dispatchers.IO) {
         withSource(file) { source ->
@@ -242,6 +252,13 @@ class AppleImageCodec : ImageCodec {
         if (CFNumberGetValue(number.reinterpret(), kCFNumberIntType, out.ptr)) out.value else null
     }
 }
+
+/** Apple's names for the formats the app knows. */
+private val TYPE_NAMES = mapOf(
+    PhotoFormat.JPEG to "public.jpeg", PhotoFormat.PNG to "public.png", PhotoFormat.WEBP to "org.webmproject.webp",
+    PhotoFormat.HEIC to "public.heic", PhotoFormat.AVIF to "public.avif", PhotoFormat.TIFF to "public.tiff",
+    PhotoFormat.GIF to "com.compuserve.gif", PhotoFormat.BMP to "com.microsoft.bmp",
+)
 
 /** The shared photo rules on Apple's codec. */
 class AppleImageProcessor : CodecImageProcessor(AppleImageCodec())

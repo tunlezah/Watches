@@ -90,6 +90,15 @@ class RenderPlanTest {
         assertEquals(602 to 640, thumb.outWidth to thumb.outHeight)
     }
 
+    @Test fun aPlanSurvivesTheTripThroughTheMacBridge() {
+        for (orientation in Orientation.entries) {
+            val plan = RenderPlan.of(4032, 3024, orientation, NormalizedRect(0.123f, 0.2f, 0.9f, 0.777f), 640)
+            val numbers = plan.toInts()
+            assertEquals(RenderPlan.INTS, numbers.size)
+            assertEquals(plan, RenderPlan.fromInts(numbers), "$orientation")
+        }
+    }
+
     @Test fun exifNumbersMapToTheEightTurnings() {
         assertEquals(Orientation.entries, (1..8).map { Orientation.fromExif(it) })
         assertEquals(Orientation.NORMAL, Orientation.fromExif(null))
