@@ -1,8 +1,22 @@
 # Watches on the Mac: plan
 
-Status: **agreed on 23 Nov 2026; mac-1 under way.** Written against `aa79289` (0.6.0, with iPhone milestone iOS-1 built).
+Status: **milestone mac-1 built** (23 Nov 2026), with its Mac disk image still to be confirmed by CI; mac-2 to mac-4 to come. Written against `aa79289` (0.6.0, with iPhone milestone iOS-1 built).
 
 **Decided so far** (section 7): the Mac is a current Apple silicon model on macOS 27. Builds come from the GitHub release, beside the APK. Work starts now, with mac-1. The photo component is fixed for Android, iPhone and Mac together, as part of this plan (section 5).
+
+**mac-1 as built.** All of 8.1, with these differences:
+- **A second copy (8.1.4)** is told "Watches is already open" and closes. It doesn't bring the first to the front itself. macOS already does that when the app is opened twice the usual way, so the lock only matters for a copy started some other way.
+- **The limits (8.1.7)** are one small declaration for each platform (`PlatformLimits`), and the screens show its sentence where the buttons would be. A photo offered as a document is turned away by its content, so one renamed to `.pdf` is caught too.
+- **One gap in "no Mac-made backup is ever wrong" (4.2).** A hand-edited backup that leaves out a photo's renditions has them rebuilt on restore, and until mac-2 the Mac does that with the test-grade image code. A rotated photo restored that way gets a sideways rendition. Backups the app makes always carry their renditions, so this doesn't arise between your own devices.
+- **Sharing (8.1.3).** Share, and "Open with another app" on a PDF, open the file in its usual app, which is Preview for a PDF. The copy named after the document and the Finder actions are still 8.3.12.
+- **The version (8.1.6).** The packaging tool does refuse a version that starts with 0: the first macOS run stopped on it. Until 1.0.0 the bundle is `1.0.<build>`, as planned. Only Finder's Get Info shows that number.
+- **The Java runtime (8.1.9)** carries four modules beyond the plugin's defaults, found by its `suggestRuntimeModules` task. The self-test asks the runtime about TLS directly.
+- **Tests (9.2).** `ShellTest` holds the data-folder, single-copy, newer-collection and version checks. The 18 screenshots are at 420, 760 and 1280 dp wide.
+- **CI (8.1.10).** As planned. The disk image is named `…-not-notarised.dmg` until 8.4.3.
+- **Sleep (8.1.1).** `KeepScreenOn` holds idle sleep off with macOS's own `caffeinate`, tied to the app's process, so it needs no bridge.
+- **Wording.** The Mac build still says "this phone" throughout (8.3.8).
+
+**What has and hasn't been checked.** On Linux: every test, the real window opening to the welcome screen, and the packaged app passing its self-test. On an Apple silicon runner: the app compiles and its Java runtime is built, and the first packaging run stopped on the version rule above. The run with that fixed, which builds the disk image and runs the self-test inside it, hadn't finished when this was written. Not yet checked anywhere: the app on a real Mac, including macOS 27, the file panels, and a real backup from a phone. That is yours to try, with appendix C's "Install and update" and "Moving a collection".
 
 What was checked for the plan:
 
