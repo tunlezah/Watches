@@ -1,8 +1,46 @@
 # Watches on a home server (TrueNAS): plan
 
-Status: **proposal, nothing built.** Written against `b74a5d8` (0.8.0, Mac milestones mac-1 and mac-2 built). A throwaway trial (section 3) ran the current Linux build in a container. Nothing from that trial is in the repository.
+Status: **milestones srv-1 and srv-2 built** (24 Nov 2026, version 0.9.0); srv-3 dropped. Written against `b74a5d8` (0.8.0). How to install and use it is in [`SELF_HOSTING.md`](SELF_HOSTING.md).
 
-**Decisions needed before work starts** are in section 9.
+**Decided** (section 9):
+1. **The approach:** the desktop build in a browser, as long as it stays lightweight.
+2. **No copy is home.** The phones, the Mac and the server are used equally, so all of them must work fully, photos included. That made srv-2 part of the first release.
+3. **Access:** the home network only.
+4. **Backups:** by hand. The collection changes rarely and isn't critical, so srv-3 (scheduled backups) is dropped. TrueNAS snapshots are suggested instead, which need no code.
+5. **The image:** whichever registry is free. That's GHCR, with a public package: the repository is public.
+
+**As built**, with these differences from the plan below:
+- **Photos come from libheif and libwebp, not libvips** (6.2). libvips and its dependencies added 72 MB to the image; libheif with its HEVC plugin and libwebp add 6 MB. They decode HEIC and WebP, and the JDK's own readers do the rest. The decoders (`SystemImageLibraries`, through JNA) plug into the plain-Java codec, which now:
+  - averages a large picture down as it leaves the decoder;
+  - shrinks in halving steps rather than one bilinear step.
+
+  The whole conformance suite passes on them. CI installs the libraries and makes them required, then runs the photo suite again with them off.
+- **The image is lighter than planned** (appendix B):
+  - Debian 13 rather than Ubuntu;
+  - only the OpenGL dispatch library, not Mesa's drivers (about 200 MB), since Skia only has to load it.
+
+  So it's a 220 MB download, 505 MB on disk, and about 300 MB of memory and 0.2% of a processor when idle. The Java runtime must be self-contained (Temurin), as found in the trial; the Dockerfile fails if any native library is missing.
+- **Phones resize by default.** The plan said to bookmark `?resize=remote` (6.1, item 4). Instead the image changes the base page's default with the base's own `sed-patch`, which fails the build if the page changes. Two more fixes were needed for phones:
+  - The Mac's minimum window size (420 × 600) applies on the Mac only. On the server it pushed the app's right edge off a 390-wide phone.
+  - **Choosing photos on a desktop now lists every readable format.** FileKit's image type means PNG, JPEG, GIF and BMP in a desktop file dialog, which hid HEIC photos on the server and on the Mac alike.
+- **The GTK file dialog** opens where the backups are and lists Backups and Import, through GTK's bookmarks file and GLib's keyfile settings.
+- **Publishing:** `latest` comes from the repository's default branch (there is no `main`), and the version from `v*` tags.
+- **Wording (6.1, item 7):** only the platform notes changed, to "this computer" off a Mac. The screens' "this phone" stays for the Mac's 8.3.8.
+- **Not done:** srv-3, and the health check that went with it.
+
+**What has and hasn't been checked.** On Linux, in Docker, with the image CI builds:
+- the self-test inside it, a HEIC included;
+- a start like TrueNAS's: login and HTTPS, `no-new-privileges`, run as 568, mounted folders.
+
+In Chromium, as a 1280-wide desktop and as an emulated iPhone 13:
+- logging in and adding a watch;
+- adding a 4032 × 3024 HEIC and a sideways JPEG from Import, both upright and without their locations;
+- uploading through the file manager;
+- the phone layout and the phone's keyboard button.
+
+Not yet checked: a real TrueNAS, a real phone, Lookup from inside the container, and CI itself.
+
+The plan as written before the decisions follows, unchanged.
 
 ## 1. Summary
 

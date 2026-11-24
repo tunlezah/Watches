@@ -1,6 +1,6 @@
 # Watches
 
-A private, offline-first watch collection app for one collector. Kotlin Multiplatform with Compose Multiplatform: Android first, iPhone and Mac from the same code.
+A private, offline-first watch collection app for one collector. Kotlin Multiplatform with Compose Multiplatform: Android first, iPhone and Mac from the same code, and a home server (such as TrueNAS) that shows it in a browser.
 
 - Everything lives on the phone. No accounts, servers, analytics, ads or crash reporting.
 - The network is used by Lookup only, and only when you press Search, open a result or save a picture. Every request is listed in Settings › Request log.
@@ -8,7 +8,7 @@ A private, offline-first watch collection app for one collector. Kotlin Multipla
 - Backup to one .zip you save wherever you like, restore by merging or replacing, CSV export for spreadsheets, and an optional app lock.
 - Designed for 500+ watches with photos.
 
-Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md), with the iPhone in [`docs/IOS_PLAN.md`](docs/IOS_PLAN.md) and the Mac in [`docs/MACOS_PLAN.md`](docs/MACOS_PLAN.md). Data sources: [`docs/SOURCES.md`](docs/SOURCES.md). Changes: [`CHANGELOG.md`](CHANGELOG.md).
+Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md), with the iPhone in [`docs/IOS_PLAN.md`](docs/IOS_PLAN.md), the Mac in [`docs/MACOS_PLAN.md`](docs/MACOS_PLAN.md) and the home server in [`docs/SELF_HOSTING_PLAN.md`](docs/SELF_HOSTING_PLAN.md). Data sources: [`docs/SOURCES.md`](docs/SOURCES.md). Changes: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Project layout
 
@@ -22,6 +22,7 @@ Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md), with the iPhone in [`docs/IO
 | `iosApp` | SwiftUI shell, generated with XcodeGen, with its app-hosted and UI tests. |
 | `desktopApp` | Mac shell on Compose's desktop target: one window, packaging, the self-test, desktop tests and screenshots. |
 | `macBridge` | The Mac bridge: the iPhone's image code (`shared/data`'s `appleMain`) built as a small native library, which the Mac app loads because Java can't call the Mac's own frameworks. |
+| `docker` | The home server image: the desktop app's Linux build in a container that shows it in a web page, and a compose file for TrueNAS. |
 
 Shared tests live in `commonTest`, so the same tests run on the JVM (as Android host tests in `shared/ui`) and on the iOS simulator. The shared modules' JVM target runs those fast tests, and it is also what the Mac app runs on. The app's version, for both phones, is in [`version.xcconfig`](version.xcconfig).
 
@@ -223,7 +224,7 @@ WATCHES_DATA_DIR=/tmp/try ./gradlew :desktopApp:run    # the same, with its coll
 ./gradlew :macBridge:linkReleaseSharedMacosArm64       # the Mac bridge on its own (on a Mac only)
 ```
 
-Photos need the Mac bridge, which only a Mac can build, and which the disk image carries. `:desktopApp:run` and a build on Linux have plain-Java image code instead: they show photos but don't take new ones in, and say so. To run the shared tests on a Mac through the bridge, as the macOS workflow does, give them the library: `WATCHES_BRIDGE=$PWD/macBridge/build/bin/macosArm64/releaseShared/libwatchesbridge.dylib ./gradlew :shared:data:jvmTest`.
+Photos need the Mac bridge, which only a Mac can build, and which the disk image carries. `:desktopApp:run` and a build on Linux have plain-Java image code instead. On Linux it reads HEIC and WebP through the system's libheif and libwebp where they're installed, as in the server image, and then takes photos in. Without them it shows photos but doesn't take new ones in, and says so. `WATCHES_SYSTEM_IMAGE_LIBS=off` checks that case on a machine that has them. To run the shared tests on a Mac through the bridge, as the macOS workflow does, give them the library: `WATCHES_BRIDGE=$PWD/macBridge/build/bin/macosArm64/releaseShared/libwatchesbridge.dylib ./gradlew :shared:data:jvmTest`.
 
 - **Screenshots.** `:desktopApp:test` draws the app in every design, light and dark, at three window widths, into `desktopApp/build/outputs/screenshots`. It needs no display.
 - **Self-test.** `Watches --self-test [folder]` checks a build without opening a window: it starts the app's wiring in a temporary folder, makes sample watches, backs them up and restores the backup, exports a CSV and draws a frame. CI runs it inside the packaged app, because the bundled Java runtime is trimmed to the modules the app needs, and a missing one shows only when the app runs.
@@ -232,6 +233,20 @@ Photos need the Mac bridge, which only a Mac can build, and which the disk image
 Two workflows cover it:
 - **Android**, on Linux and on every push, compiles the Mac app, runs its tests, keeps the screenshots, packages it and runs the packaged app's self-test.
 - **macOS** builds the disk image on an Apple silicon runner, runs the self-test inside it, and checks the bundle's identity and signature. It runs when the Mac shell or the build changes, on `v*` tags, and on demand. On a tag it adds the disk image to the GitHub release.
+
+## Home server (TrueNAS)
+
+The Mac app's Linux build also runs on a home server and is used from a browser: [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) has the steps for TrueNAS. It is a container (`docker/`) that shows the app's window in a web page, behind a login. A phone's browser gets the phone layout, and a laptop's the wide one. Backups made on it restore on the phones and the Mac, and theirs restore on it. It's a 220 MB download and uses about 300 MB of memory.
+
+- **Photos** in HEIC and WebP come from the system's libheif and libwebp, which the image carries, through the same shared photo rules and conformance suite as every other platform.
+- **Not there yet**, as on the Mac: the camera, reminders and the app lock (the page's login stands in for it), and PDF pages in the app.
+- **CI** (the Android workflow) builds the image from the Linux package, checks every library it loads is present, runs the self-test inside it and starts it. Pushes to the default branch publish `ghcr.io/tunlezah/watches:latest`, and `v*` tags the version.
+
+```sh
+./gradlew :desktopApp:createDistributable
+docker build -f docker/Dockerfile --build-arg VERSION=0.9.0 -t watches .
+docker run --rm --entrypoint /opt/watches/bin/Watches watches --self-test /tmp/self-test   # checks the image without a window
+```
 
 ## Performance checks on the phone
 
