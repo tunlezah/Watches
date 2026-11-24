@@ -122,8 +122,15 @@ dependencies {
 // On a Mac, the JVM tests can run against Apple's image code through the bridge, as the Mac app does:
 // WATCHES_BRIDGE names the library that :macBridge:linkReleaseSharedMacosArm64 built. Without it
 // they use the plain-Java codec, as on Linux.
+// On Linux, WATCHES_SYSTEM_IMAGE_LIBS (required, off, or unset) says whether the plain-Java codec takes
+// HEIC and WebP from the system's libheif and libwebp (SystemImageLibraries), so it is an input too:
+// a result from one setting is never reused for another.
 tasks.withType<Test>().configureEach {
     val bridge = providers.environmentVariable("WATCHES_BRIDGE").orNull?.takeIf { it.isNotBlank() }
     inputs.property("watches.bridge", bridge ?: "")
     if (bridge != null) systemProperty("watches.bridge", bridge)
+    inputs.property("watches.systemImageLibs", providers.environmentVariable("WATCHES_SYSTEM_IMAGE_LIBS").orElse(""))
+    // The photos LocationRemovalTest cleaned, which CI reads back with Pillow. Declared, so that a test
+    // run restored from the build cache brings them back too, rather than leaving the check nothing to read.
+    outputs.dir(layout.projectDirectory.dir("build/outputs/cleaned-photos")).optional()
 }
