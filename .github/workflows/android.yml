@@ -7,6 +7,10 @@ name: Android
 # The Mac app is checked here too, because its code runs on Linux: it is compiled, tested, drawn in
 # every design and packaged with a trimmed Java runtime, which then runs the app's self-test. Only
 # the Mac disk image itself needs a Mac (the macOS workflow).
+#
+# The same Linux package is the server image (docs/SELF_HOSTING.md): the container job builds it,
+# runs the self-test inside it and starts it. Pushes to the default branch publish it to GitHub's
+# container registry as `latest`, and a v* tag as that version.
 on:
   push:
   pull_request:
@@ -48,11 +52,19 @@ jobs:
             echo "No signing secret: the release APK is signed with this run's throwaway debug key."
           fi
 
+      # HEIC and WebP for the JVM tests, from the same libraries the server image carries. The tests
+      # are told they're required, so the photo suite can't quietly run on less.
+      - name: The server's image libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libheif1 libheif-plugin-libde265 libwebp7
+
       - name: Checks, tests and release build
         env:
           WATCHES_KEYSTORE_PASSWORD: ${{ secrets.WATCHES_KEYSTORE_PASSWORD }}
           WATCHES_KEY_ALIAS: ${{ secrets.WATCHES_KEY_ALIAS }}
           WATCHES_KEY_PASSWORD: ${{ secrets.WATCHES_KEY_PASSWORD }}
+          WATCHES_SYSTEM_IMAGE_LIBS: required
         # The shared tests run here on the JVM; their iOS builds are compiled too, so an iOS-only
         # mistake shows up without waiting for the iOS workflow (which runs them on the simulator).
         run: >
@@ -124,6 +136,25 @@ jobs:
       - name: Self-test of the packaged desktop app
         run: desktopApp/build/compose/binaries/main/app/Watches/bin/Watches --self-test "$RUNNER_TEMP/desktop-self-test"
 
+      # Without the system's libraries the plain-Java codec reads only what the JDK does, and must
+      # refuse HEIC and WebP cleanly. That is a Linux desktop run from the source tree.
+      - name: The photo suite without the system's image libraries
+        env:
+          WATCHES_SYSTEM_IMAGE_LIBS: "off"
+        run: ./gradlew :shared:data:jvmTest --rerun --tests '*PhotoConformanceTest' --tests '*MacBridgeTest' --tests '*JvmImageCodecTest'
+
+      # For the container job. A tar file, because an artifact doesn't keep the launcher's execute bit.
+      - name: Pack the Linux app
+        run: tar -cf "$RUNNER_TEMP/watches-linux-app.tar" -C desktopApp/build/compose/binaries/main/app Watches
+
+      - name: Upload the Linux app
+        uses: actions/upload-artifact@v4
+        with:
+          name: watches-linux-app
+          path: ${{ runner.temp }}/watches-linux-app.tar
+          retention-days: 3
+          if-no-files-found: error
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -155,6 +186,70 @@ jobs:
           name: test-reports
           path: "**/build/reports/tests/"
           retention-days: 14
+
+  # The server image: the Linux app from the build job, in a container that shows it in a web page
+  # (docker/Dockerfile). It is checked on every run and published only from the default branch
+  # (`latest`) and v* tags (the version). A job of its own, so only it can write packages.
+  container:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: watches-linux-app
+          path: ${{ runner.temp }}
+
+      - name: Unpack the Linux app
+        run: |
+          mkdir -p desktopApp/build/compose/binaries/main/app
+          tar -xf "$RUNNER_TEMP/watches-linux-app.tar" -C desktopApp/build/compose/binaries/main/app
+
+      # The build fails if any native library the app loads is missing (the Dockerfile checks).
+      - name: Build the image
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: docker build -f docker/Dockerfile --build-arg VERSION="$VERSION" -t watches:ci .
+
+      # Inside the image, as on the server: photos in HEIC through the system's libheif included.
+      - name: Self-test inside the image
+        run: |
+          docker run --rm --entrypoint /opt/watches/bin/Watches watches:ci --self-test /tmp/self-test | tee "$RUNNER_TEMP/self-test.txt"
+          grep -q "located.heic stored upright" "$RUNNER_TEMP/self-test.txt"
+
+      # Started the usual way: the web page answers, and the app is still running a while later.
+      - name: The image starts and serves its page
+        run: |
+          docker run -d --name watches -p 5800:5800 -e USER_ID=568 -e GROUP_ID=568 watches:ci
+          for i in $(seq 1 60); do curl -fsS -o /dev/null http://localhost:5800/ && break; sleep 2; done
+          curl -fsS -o /dev/null http://localhost:5800/
+          sleep 20
+          # (The bracket keeps this search from finding its own command line.)
+          docker exec watches sh -c 'grep -l "[/]opt/watches/bin/Watches" /proc/[0-9]*/cmdline' > /dev/null
+          docker logs watches 2>&1 | tail -30
+          echo "Image size: $(docker image inspect watches:ci --format '{{.Size}}' | awk '{printf "%.0f MB", $1/1e6}')" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish to GitHub's container registry
+        if: >
+          github.event_name == 'push' &&
+          (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          case "$GITHUB_REF" in
+            refs/tags/v*) TAG="${GITHUB_REF_NAME#v}" ;;
+            *) TAG=latest ;;
+          esac
+          docker tag watches:ci "$IMAGE:$TAG"
+          docker push "$IMAGE:$TAG"
+          echo "Published \`$IMAGE:$TAG\`." >> "$GITHUB_STEP_SUMMARY"
 
   # Publishes the signed APK on a v* tag, with that version's changelog entry as the notes. A job of
   # its own, so only these steps, not the build, can write to the repository.
