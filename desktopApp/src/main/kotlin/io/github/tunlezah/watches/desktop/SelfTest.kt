@@ -8,6 +8,7 @@ import io.github.tunlezah.watches.data.backup.CsvExporter
 import io.github.tunlezah.watches.data.backup.RestoreMode
 import io.github.tunlezah.watches.data.files.FileStore
 import io.github.tunlezah.watches.data.files.MacBridge
+import io.github.tunlezah.watches.data.files.SystemImageLibraries
 import io.github.tunlezah.watches.data.photos.PhotoMetadata
 import io.github.tunlezah.watches.search.describeSecureConnections
 import io.github.tunlezah.watches.ui.diagnostics.SampleGenerator
@@ -75,13 +76,19 @@ internal object SelfTest {
                     // With the bridge, the screens offer photos as they do on the phones.
                     require(platformLimits.photos == null) { "Photos are still switched off: ${platformLimits.photos}" }
                 }
+                if (SystemImageLibraries.required) {
+                    // The server image: HEIC and WebP come from the system's libraries, and photos are switched on.
+                    require(SystemImageLibraries.heic != null && SystemImageLibraries.webp != null) { "The system's image libraries didn't load: ${SystemImageLibraries.problems}" }
+                    require(platformLimits.photos == null) { "Photos are still switched off: ${platformLimits.photos}" }
+                }
+                val readsHeic = MacBridge.isLoaded || SystemImageLibraries.heic != null
                 val photos = koin.get<PhotoRepository>()
                 val files = koin.get<FileStore>()
                 val now = kotlin.time.Clock.System.now()
                 val watch = runBlocking { watches.create(Watch(id = "", brand = "Self-test", createdAt = now, updatedAt = now)) }
                 // A portrait photo with a location, stored on its side as a phone's camera writes it. And a HEIC
-                // with a location, which only the Mac's own image code can read.
-                val added = listOfNotNull("located-turned.jpg", "located.heic".takeIf { MacBridge.isLoaded }).map { name ->
+                // with a location, which needs the Mac's own image code or the system's libheif.
+                val added = listOfNotNull("located-turned.jpg", "located.heic".takeIf { readsHeic }).map { name ->
                     val arrived = javaClass.getResourceAsStream("/self-test/$name")?.use { it.readBytes() } ?: error("The app is missing /self-test/$name")
                     require(PhotoMetadata.hasLocation(arrived)) { "$name should carry a location" }
                     val photo = runBlocking { photos.add(watch.id, arrived.copyOf()) }
@@ -97,7 +104,11 @@ internal object SelfTest {
                     name
                 }
                 runBlocking { watches.delete(watch.id) }
-                val codec = if (MacBridge.isLoaded) "the Mac's own image code, through the bridge" else "plain-Java image code: no Mac bridge in this build"
+                val codec = when {
+                    MacBridge.isLoaded -> "the Mac's own image code, through the bridge"
+                    readsHeic -> "plain-Java image code with the system's " + listOfNotNull("libheif", "libwebp".takeIf { SystemImageLibraries.webp != null }).joinToString(" and ")
+                    else -> "plain-Java image code: no Mac bridge or HEIC library in this build"
+                }
                 "$codec; ${added.joinToString(" and ")} stored upright without a location"
             }
             step("backup and restore") {
