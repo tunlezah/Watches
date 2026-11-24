@@ -19,6 +19,8 @@ import kotlin.test.assertTrue
 /**
  * Restores a backup made outside the app the way the app does, on a new install and onto one that
  * already has watches, and checks everything came through. Runs only when WATCHES_BACKUP_CHECK names a file.
+ * With WATCHES_BACKUP_PREVIOUS naming an earlier version of the same backup, it also checks that
+ * restoring this one over that one with Merge leaves exactly this one's collection.
  */
 class PersonalBackupCheck {
 
@@ -91,5 +93,25 @@ class PersonalBackupCheck {
         assertEquals(preview.counts.watches, merged.watchesAdded)
         assertEquals(seeded.size + preview.counts.watches, existing.everything().watch.size)
         println("PersonalBackupCheck: merge added ${merged.watchesAdded} watches, ${merged.photosAdded} photos, ${merged.documentsAdded} documents")
+
+        // A phone that restored an earlier version of this backup, restoring this one with Merge: it should
+        // end up with exactly this backup's collection, with nothing of the earlier one left beside it.
+        val previous = System.getenv("WATCHES_BACKUP_PREVIOUS")?.takeIf { it.isNotBlank() }?.toPath() ?: return@runBlocking
+        val upgraded = phones.new()
+        val p4 = upgraded.backup.inspect { FileSystem.SYSTEM.source(previous) }
+        upgraded.backup.restore({ FileSystem.SYSTEM.source(previous) }, p4, RestoreMode.REPLACE)
+        val p5 = upgraded.backup.inspect(open)
+        assertTrue(p5.warnings.isEmpty(), "upgrade warnings: ${p5.warnings}")
+        val upgrade = upgraded.backup.restore(open, p5, RestoreMode.MERGE)
+        assertTrue(upgrade.kept.isEmpty(), "watches the earlier backup kept: ${upgrade.kept}")
+        val after = upgraded.everything()
+        fun <T, K> ids(rows: List<T>, key: (T) -> K) = rows.map(key).toSet()
+        assertEquals(ids(all.watch) { it.id }, ids(after.watch) { it.id }, "watches after the upgrade")
+        assertEquals(ids(all.photo) { it.id }, ids(after.photo) { it.id }, "photos after the upgrade")
+        assertEquals(ids(all.document) { it.id }, ids(after.document) { it.id }, "documents after the upgrade")
+        assertEquals(all.watch.associate { it.id to it.coverPhotoId }, after.watch.associate { it.id to it.coverPhotoId }, "covers after the upgrade")
+        assertEquals(fresh.mediaFiles().values.toSet(), upgraded.mediaFiles().values.toSet(), "files after the upgrade")
+        println("PersonalBackupCheck: upgrade from $previous: ${upgrade.updated.size} watches updated, ${upgrade.watchesAdded} added, " +
+            "${p4.counts.photos} -> ${after.photo.size} photos, ${p4.counts.documents} -> ${after.document.size} documents, nothing left over")
     }
 }

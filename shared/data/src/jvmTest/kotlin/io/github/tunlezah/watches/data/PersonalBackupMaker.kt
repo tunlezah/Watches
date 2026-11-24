@@ -1,9 +1,11 @@
 package io.github.tunlezah.watches.data
 
+import io.github.tunlezah.watches.core.Ids
 import io.github.tunlezah.watches.core.TimeSource
 import io.github.tunlezah.watches.core.model.DocumentKind
 import io.github.tunlezah.watches.core.model.MovementType
 import io.github.tunlezah.watches.core.model.OtherSpec
+import io.github.tunlezah.watches.core.model.PhotoKind
 import io.github.tunlezah.watches.core.model.Provenance
 import io.github.tunlezah.watches.core.model.Watch
 import io.github.tunlezah.watches.core.model.WatchStatus
@@ -28,6 +30,9 @@ import kotlin.test.Test
  * Builds a collection from a catalogue file through the app's own repositories (watches, photos,
  * documents) and writes it out with the app's own backup exporter, so the archive is exactly what
  * the app would write. Runs only when WATCHES_CATALOGUE and WATCHES_BACKUP_OUT are set.
+ *
+ * Watches, photos and documents can carry the IDs an earlier backup gave them, so a corrected
+ * backup restored with Merge replaces the earlier rows instead of adding to them.
  */
 class PersonalBackupMaker {
 
@@ -81,13 +86,30 @@ class PersonalBackupMaker {
                 val id = entry.getValue("id").jsonPrimitive.content
                 val created = watches.create(watch, id = id, sourced = sourced, otherSpecs = other.mapIndexed { n, o -> o.copy(id = "$id-spec-$n") })
 
+                // A photo is a path, or an object with its kind, credit, ID and whether it is the cover. Giving the
+                // IDs an earlier backup used makes a Merge replace those photos instead of adding beside them.
                 for (photo in entry["photos"]?.jsonArray.orEmpty()) {
-                    photos.add(created.id, FileSystem.SYSTEM.read(photo.jsonPrimitive.content.toPath()) { readByteArray() })
+                    val p = photo as? JsonObject
+                    fun str(k: String) = p?.get(k)?.jsonPrimitive?.content
+                    val file = p?.getValue("file")?.jsonPrimitive?.content ?: photo.jsonPrimitive.content
+                    val kind = str("kind")?.let { k -> keyedOf<PhotoKind>(k) ?: error("unknown photo kind $k") } ?: PhotoKind.USER
+                    val bytes = FileSystem.SYSTEM.read(file.toPath()) { readByteArray() }
+                    val added = photos.add(created.id, bytes, kind, str("credit"), str("credit_url"), str("id") ?: Ids.new())
+                    if (p?.get("cover")?.jsonPrimitive?.booleanOrNull == true) photos.setCover(created.id, added.id)
                 }
+                // Documents can be given IDs too, for the same reason. The repository picks its own, so the row is
+                // moved to the given ID afterwards; its file stays where the repository put it.
+                val documentDao = db.documentDao()
                 for (doc in entry["documents"]?.jsonArray.orEmpty().map { it.jsonObject }) {
                     val kind = keyedOf<DocumentKind>(doc.getValue("kind").jsonPrimitive.content) ?: error("unknown document kind")
                     val bytes = FileSystem.SYSTEM.read(doc.getValue("file").jsonPrimitive.content.toPath()) { readByteArray() }
-                    documents.add(created.id, bytes, kind, doc.getValue("title").jsonPrimitive.content)
+                    val added = documents.add(created.id, bytes, kind, doc.getValue("title").jsonPrimitive.content)
+                    val wanted = doc["id"]?.jsonPrimitive?.content
+                    if (wanted != null && wanted != added.id) {
+                        val row = checkNotNull(documentDao.get(added.id))
+                        documentDao.upsert(row.copy(id = wanted))
+                        documentDao.delete(added.id)
+                    }
                 }
                 println("PersonalBackupMaker: ${entry["key"]} ${created.title}")
             }
