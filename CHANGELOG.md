@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.9.0: Home server, milestones srv-1 and srv-2 (24 Nov 2026)
+
+**Watches on a home server**
+
+The self-hosting plan (`docs/SELF_HOSTING_PLAN.md`): the Mac app's Linux build in a container that shows it in a web page, for a TrueNAS box or any Linux machine with Docker. `docs/SELF_HOSTING.md` has the steps.
+- **An image** (`docker/`), on jlesage's GUI base. It gives a login over HTTPS, a file manager limited to the backups and import folders, and runs the app as TrueNAS's apps user. It's a 220 MB download, about 500 MB on disk, and uses about 300 MB of memory and almost no processor while idle.
+  - Mesa's OpenGL drivers, about 200 MB, are left out: the app draws in software and needs only the small library that would load them.
+- **A phone gets the phone layout.** The page resizes the app's screen to fit the browser; the base's own default scales a desktop down on a touch device, which is unreadable.
+  - The window keeps the Mac's minimum size on the Mac only. On the server it pushed the app's edge off a phone's screen.
+- **Photos on the server.** The plain-Java codec reads HEIC and WebP through the system's libheif and libwebp, where they're installed, as they are in the image. Those photos go through the same shared rules and conformance suite as every other platform, so the server takes photos in as the phones do.
+  - **HEIC:** libheif applies the container's own turning and cut, and ignores EXIF's.
+  - **Large photos:** a big one is averaged down as it leaves the decoder, and every large reduction is made in halving steps. A thumbnail of a 12-megapixel photo keeps fine detail such as a minute track smooth, where one large step skipped most of the pixels.
+- **Choosing photos on a desktop offers every format the device reads.** FileKit's image type means PNG, JPEG, GIF and BMP in a desktop file dialog, so the Mac's open panel hid HEIC photos too.
+- **File dialogs on the server** are GTK's. They open where the backups are, and list Backups and Import.
+- **CI** builds the image from the Linux package, checks that every native library it loads is there, runs the self-test inside it (a HEIC included) and starts it. It publishes `ghcr.io/tunlezah/watches`: `latest` from the default branch, the version from `v*` tags. The JVM tests now run on the system's image libraries, and the photo suite once more without them.
+- **Wording:** the reminders and app lock notes say "this computer" rather than "this Mac" on Linux.
+
+**Not in this version**
+- **Sync between devices.** Each keeps its own collection, and backups carry changes between them (Merge).
+- **Scheduled backups** (srv-3) were dropped: backups stay by hand, with TrueNAS snapshots suggested.
+- **The camera, reminders, the app lock and PDF pages** on the server.
+- **Not yet tried on a real TrueNAS or a real phone:** in a container on Linux, and in desktop and iPhone browsers emulated by Chromium.
+
 ## 0.8.0: One photo component, milestone mac-2 (23 Nov 2026)
 
 **One photo component for Android, iPhone and Mac**
