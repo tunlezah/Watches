@@ -1,5 +1,5 @@
-// The app's version, for both phones: androidApp/build.gradle.kts reads this file, and Xcode
+// The app's version, for every platform: androidApp/build.gradle.kts reads this file, and Xcode
 // includes it (iosApp/project.yml). MARKETING_VERSION is the version people see, and must be
 // numbers only (x.y.z). CURRENT_PROJECT_VERSION is the build number and Android's versionCode.
-MARKETING_VERSION = 0.6.0
-CURRENT_PROJECT_VERSION = 6
+MARKETING_VERSION = 0.8.0
+CURRENT_PROJECT_VERSION = 8

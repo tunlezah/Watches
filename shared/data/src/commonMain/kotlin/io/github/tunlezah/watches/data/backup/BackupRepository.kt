@@ -3,6 +3,7 @@ package io.github.tunlezah.watches.data.backup
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
 import io.github.tunlezah.watches.core.TimeSource
+import io.github.tunlezah.watches.data.photos.StoredPhotoCheck
 import io.github.tunlezah.watches.data.PhotoRepository
 import io.github.tunlezah.watches.data.WatchRepository
 import io.github.tunlezah.watches.data.db.AppDatabase
@@ -106,6 +107,8 @@ class BackupRepository(
     private val photos: PhotoRepository,
     private val app: AppInfo,
     private val time: TimeSource = TimeSource.System,
+    /** Told after each restore that there are files from somewhere else to go through. */
+    private val storedPhotos: StoredPhotoCheck? = null,
 ) {
     private val dao = db.backupDao()
     private val busy = Mutex()
@@ -344,6 +347,8 @@ class BackupRepository(
      * them. Each step is tried once; a photo that can't be rendered keeps showing its original.
      */
     private suspend fun aftercare() {
+        // The photos a restore brings may be from a version that left a location in. The app goes through them next.
+        runCatching { storedPhotos?.request() }
         runCatching { watches.rebuildSearchIndex() }
         runCatching {
             for (p in dao.photos()) {
@@ -536,9 +541,11 @@ class BackupRepository(
         )
     }
 
+    /** A name beside [relative] that nothing has: six letters or digits are added. */
     private suspend fun uniqueVariant(relative: String): String {
         while (true) {
-            val candidate = ArchivePaths.variant(relative, Random.nextInt(0, 36 * 36 * 36 * 36 * 36 * 36).toString(36).padStart(6, '0'))
+            // Six base-36 digits is more than an Int holds, so the range is a Long's.
+            val candidate = ArchivePaths.variant(relative, Random.nextLong(0, VARIANTS).toString(36).padStart(6, '0'))
             if (!files.exists(candidate)) return candidate
         }
     }
@@ -571,13 +578,15 @@ class BackupRepository(
     }
 
     private companion object {
-        /** The database schema version (AppDatabase). Bump with it. */
-        const val SCHEMA_VERSION = 1
+        /** The database schema version. */
+        const val SCHEMA_VERSION = AppDatabase.VERSION
         const val JOURNAL = "restore-journal.txt"
         /** Present while a committed restore's search index and renditions still need redoing. */
         const val AFTERCARE = "restore-aftercare"
         /** Settings that belong to one phone (app lock, last backup) and never travel. */
         const val DEVICE_SETTING = "device."
+        /** How many six-character names there are: 36 to the sixth. */
+        const val VARIANTS = 36L * 36 * 36 * 36 * 36 * 36
         const val MAX_MANIFEST = 32L * 1024 * 1024
         const val MAX_COLLECTION = 512L * 1024 * 1024
         const val SPACE_MARGIN = 64L * 1024 * 1024

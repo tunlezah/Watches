@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import okio.FileSystem
+import okio.ByteString.Companion.toByteString
 import okio.Path
 import okio.buffer
 import okio.use
@@ -195,6 +196,61 @@ class BackupRepositoryTest {
         assertTrue(phone.everything().photo.none { it.displayFile !in files || it.thumbFile !in files })
         assertEquals(phone.everything().referencedFiles + importing, files, "the crop the restore replaced is gone")
         assertTrue(!phone.files.exists("restore-journal.txt") && !phone.files.exists("restore-aftercare"))
+    }
+
+    @Test fun aFileThatDiffersFromTheBackupsIsRestoredBesideItAndThenReplacesIt() = runBlocking<Unit> {
+        val phone = phones.new()
+        phone.seed()
+        val archive = phone.archive()
+        val photo = phone.everything().photo.first()
+        val inBackup = phone.files.read(photo.originalFile)
+        // The same path now holds something else on the phone. The backup's file can't be written over
+        // it before the restore is saved, so it goes in beside it under another name.
+        phone.files.write(photo.originalFile, jpeg(9))
+        val preview = phone.backup.inspect { source(archive) }
+        phone.backup.restore({ source(archive) }, preview, RestoreMode.REPLACE)
+
+        val restored = phone.everything().photo.first { it.id == photo.id }
+        assertTrue(restored.originalFile != photo.originalFile, "kept under a name of its own: ${restored.originalFile}")
+        assertTrue(restored.originalFile.substringBeforeLast('/') == photo.originalFile.substringBeforeLast('/'), "in the same folder")
+        assertTrue(phone.files.read(restored.originalFile).contentEquals(inBackup), "and it is the backup's file")
+        assertTrue(!phone.files.exists(photo.originalFile), "the file it replaced is gone once the restore is saved")
+        assertEquals(phone.everything().referencedFiles, phone.mediaFiles().keys, "and nothing else is left over")
+    }
+
+    @Test fun twoFilesWhoseNamesDifferOnlyByCaseBothSurviveARestore() = runBlocking<Unit> {
+        // A phone's disk tells "a.jpg" from "A.JPG". A Mac's usually doesn't, so a backup that holds
+        // both must not have one overwrite the other there (docs/MACOS_PLAN.md, 9.5). The app never
+        // names files that way itself, so the archive is made by hand: one photo's original is
+        // renamed to another's name in capitals, in the archive, its manifest and its rows.
+        val source = phones.new()
+        source.seed()
+        val (first, second) = source.everything().photo
+        val clash = first.originalFile.substringBeforeLast('/') + "/" + first.originalFile.substringAfterLast('/').uppercase()
+        assertTrue(clash != first.originalFile && clash.equals(first.originalFile, ignoreCase = true))
+        val before = entries(source.archive())
+        val oldRows = before.first { it.first == "collection.json" }.second
+        val newRows = oldRows.decodeToString().replace(second.originalFile, clash).encodeToByteArray()
+        val handMade = source.dir / "case.zip"
+        writeZip(handMade, before.map { (name, data) ->
+            when (name) {
+                "manifest.json" -> name to data.decodeToString().replace(second.originalFile, clash)
+                    .replace(oldRows.toByteString().sha256().hex(), newRows.toByteString().sha256().hex()).encodeToByteArray()
+                "collection.json" -> name to newRows
+                else -> name.replace(second.originalFile, clash) to data
+            }
+        })
+
+        val target = phones.new()
+        val preview = target.backup.inspect { source(handMade) }
+        assertTrue(preview.warnings.isEmpty(), preview.warnings.toString())
+        target.backup.restore({ source(handMade) }, preview, RestoreMode.REPLACE)
+
+        val restored = target.everything().photo.associateBy { it.id }
+        val one = restored.getValue(first.id).originalFile
+        val other = restored.getValue(second.id).originalFile
+        assertTrue(target.files.read(one).contentEquals(source.files.read(first.originalFile)), "the first photo is still its own picture")
+        assertTrue(target.files.read(other).contentEquals(source.files.read(second.originalFile)), "and so is the one whose name clashed with it")
     }
 
     @Test fun aRestoreStoppedAfterSavingIsFinishedAtNextLaunch() = runBlocking<Unit> {

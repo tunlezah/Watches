@@ -351,6 +351,7 @@ class ServiceEditViewModel(
      * leaves the stored paperwork exactly as it was.
      */
     override fun attach(bytes: ByteArray, name: String) {
+        photoDocumentLimit(bytes)?.let { limit -> return edit { it.copy(error = limit) } }
         val title = name.substringBeforeLast('.').ifBlank { "Invoice" }
         edit { it.copy(pending = it.pending + PendingAttachment(Ids.new(), title, bytes, DocumentKind.INVOICE)) }
     }
@@ -553,6 +554,7 @@ class DocumentsViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DocumentsUiState())
 
     fun add(bytes: ByteArray, name: String, kind: DocumentKind) {
+        photoDocumentLimit(bytes)?.let { limit -> transient.value = false to limit; return }
         transient.value = true to null
         viewModelScope.launch {
             val message = try {

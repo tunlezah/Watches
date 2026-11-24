@@ -5,6 +5,13 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import io.github.tunlezah.watches.data.files.ImageProcessor
+import io.github.tunlezah.watches.data.photos.StoredPhotoCheck
+import io.github.tunlezah.watches.ui.backup.BackupState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import io.github.tunlezah.watches.ui.care.LocalReadableFormats
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -116,6 +123,12 @@ fun WatchesApp() {
         runCatching { backup.recoverInterruptedRestore() }
         watches.ensureSearchIndex()
     }
+    // Photos stored by an older version, or brought in by a restore, are gone through once in the
+    // background: any location still in one is removed (StoredPhotoCheck). It is due at the first
+    // launch after the update and after each restore, and picks up where it stopped.
+    val storedPhotos = koinInject<StoredPhotoCheck>()
+    val restored = koinInject<BackupCoordinator>().state.collectAsStateWithLifecycle().value is BackupState.Restored
+    LaunchedEffect(restored) { withContext(Dispatchers.Default) { runCatching { storedPhotos.runIfDue() } } }
     // Keeps scheduled service reminders in step with the collection while the app runs.
     LaunchedEffect(Unit) { reminders.start(this) }
 
@@ -133,11 +146,15 @@ fun WatchesApp() {
     val scope = rememberCoroutineScope()
     LifecycleEventEffect(Lifecycle.Event.ON_START) { scope.launch { lock.onForeground() } }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { scope.launch { lock.onBackground() } }
+    // What this device's image code reads, for the pickers that offer files by extension.
+    val readable = koinInject<ImageProcessor>().readableFormats
     WatchTheme(loaded) {
-        Box(Modifier.fillMaxSize()) {
-            // While locked the app stays composed underneath (it keeps its place), hidden from screen readers.
-            Box(Modifier.fillMaxSize().then(if (locked) Modifier.clearAndSetSemantics { } else Modifier)) { AppShell() }
-            if (locked) LockCover(onUnlock = { scope.launch { lock.unlock() } })
+        CompositionLocalProvider(LocalReadableFormats provides readable) {
+            Box(Modifier.fillMaxSize()) {
+                // While locked the app stays composed underneath (it keeps its place), hidden from screen readers.
+                Box(Modifier.fillMaxSize().then(if (locked) Modifier.clearAndSetSemantics { } else Modifier)) { AppShell() }
+                if (locked) LockCover(onUnlock = { scope.launch { lock.unlock() } })
+            }
         }
     }
 }

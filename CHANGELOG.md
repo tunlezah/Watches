@@ -1,6 +1,65 @@
 # Changelog
 
-## Unreleased
+## 0.8.0: One photo component, milestone mac-2 (23 Nov 2026)
+
+**One photo component for Android, iPhone and Mac**
+
+The Mac plan's section 5: each platform had its own image code, and nothing tested that they agreed. The rules are now shared code, each platform keeps only a decoder, and one set of tests holds all of them to the same results. The Mac takes photos in as the phones do.
+- **A photo's location is removed by shared code, on every platform.** It finds the GPS data in a file's EXIF and XMP and overwrites it where it lies, in JPEG, PNG, WebP and HEIC. The file keeps its length, and the picture, the capture date and everything else are untouched. Until now Android couldn't remove the location from a HEIC at all, the iPhone probably couldn't from a WebP, and a failure was silent.
+- **An original that can't be cleaned isn't kept.** If a file's metadata can't be followed far enough to be sure, the app keeps a full-size JPEG made from the photo instead, which carries no metadata.
+- **A second opinion, each time.** Once the shared code has removed a location, the platform's own reader is asked whether it still finds one (Android's `ExifInterface`, Apple's ImageIO). If it does, the photo is kept as a JPEG made from it instead.
+- **One Apple image codec, for the iPhone and the Mac.** `AppleImageCodec` replaces the iPhone's image code. It reads a photo's size and rotation without decoding it and decodes straight to the size needed, where the old code decoded every photo at full size: a 48-megapixel photo's thumbnail now costs a few megabytes of memory, not about 190. Its crop and size come from the shared arithmetic, so an iPhone's renditions match Android's to the pixel. The Mac will reach the same code through a small native library.
+- **Formats only some devices show are kept as JPEG.** A TIFF, GIF, BMP or camera raw file added as a photo is stored as a full-size JPEG made from it, so a restored copy shows on every device. Formats are told from a file's bytes by one shared function: JPEG, PNG, WebP and HEIC are stored as they are.
+- **What a crop means in pixels is shared arithmetic** (`RenderPlan`): the rectangle to cut and the size to write come out the same on every platform. Android's rotation maths moved there, with tests for all eight orientations.
+- **The Mac reaches that code through a bridge.** A new `macBridge` module builds it as a small native library, which the Mac app carries and loads, because Java can't call the Mac's own frameworks. Where there is none (Linux, where the tests and screenshots run) plain-Java image code stands in. Photos stay switched off on the Mac until the Crop screen and the way in use it too.
+- **The Crop screen shows what will be cut.** It drew on the original as the image loader decoded it, and the loader's decoders aren't the app's: on an iPhone they read no HEIC, so the screen stayed black. It now draws on a picture made by the same code that makes the cut. An original a device can't read says so.
+- **One way in for every photo.** A watch's photos and a document's photos now come in through the same steps (`PhotoIntake`), which were written twice before. A picked photo is streamed into the app's files, not read into memory first, so a camera's raw file no longer has to fit there. A document's photo can be in any format the device reads, not only the four that are stored, and the document picker offers them.
+- **Photos already stored are checked once.** Each device goes through its photos and photographed documents in the background after the update, and again after every restore. Any location an older version left in is removed, a photo in a format that isn't stored becomes a JPEG, and a size recorded for a picture on its side is corrected. The next backup then carries the cleaned files. If a size is corrected the photo's crop is dropped, since it was drawn on a picture of another shape.
+- **Photos on the Mac.** With the bridge in the app, the Mac adds photos from files, crops them, saves Lookup pictures and keeps photos as documents, as the phones do. Only the camera is missing.
+- **Each platform says which formats it can read.** No system reads them all: Android has no TIFF decoder, and AVIF depends on the system's version. A format a device can't read is now refused cleanly instead of failing part-way.
+- **A HEIC's own crop and rotation are read by shared code.** A HEIC keeps its rotation in its container, and can also say that only part of the coded picture is the picture (small and odd-sized pictures are coded that way). Android's decoder ignores that part, and showed padding. The shared code now reads both, and Android cuts and turns by it. Found by the suite's first run on an Android emulator.
+- **Fixed: a restore failed when a file it brought was already there with different contents.** The restore puts such a file beside the existing one under a new name, and the code that chose the name asked for a random number from a range too large for it, so it stopped with an error and changed nothing. That can happen on any device, and no test had reached it. A Mac's disk found it: file names there ignore capitals, so two names a phone tells apart can be one file on a Mac. Both cases are now tested, on every platform.
+- **A backup made on a Mac, restored on everything.** The macOS workflow makes a small backup with the Mac's own image code on every run: a HEIC, a cropped JPEG, a PNG, a TIFF, a PDF and a photographed receipt. One of them is in the repository, and the shared tests restore it on the JVM, an Android emulator, the iPhone simulator and a Mac. They check every row and file, that nothing carries a location, and that each photo rendered again on that platform comes out the same size and the same picture as the Mac made it.
+- **Tests with real photos.** Small photos with a known location, rotation and format are compiled into the shared tests, which run on the JVM, on an Android emulator, on the iPhone simulator and natively on a Mac. CI then reads the cleaned photos back with a different library (Pillow) to confirm the location has gone and the picture is unchanged. The same code was run on real photos from a Nikon camera and a Nokia phone, HEIF included, with the same result.
+
+**Not in this version**
+- **Wide-gamut and very large photos aren't in the test suite yet.** Android and Apple both convert to sRGB as they decode, by design; the photos that would prove it (Display P3, 48 megapixels) are still to make, as are AVIF and raw fixtures.
+- **Backups made on a real iPhone and a real Android phone** aren't among the test fixtures. They need the phones.
+- **The camera on the Mac**, and everything in milestones mac-3 and mac-4: menus and shortcuts, Mac wording, PDF pages in the app, reminders, the app lock, and a notarised build.
+
+## 0.7.0: Mac, milestone mac-1 (23 Nov 2026)
+
+**The Mac app**
+
+The first step of the Mac plan (`docs/MACOS_PLAN.md`): Watches as a Mac app, from the same shared code as the phones. It needs an Apple silicon Mac on macOS 13 or later. README › Mac has how to install it.
+- **A Mac app.** A new `desktopApp` module is the Mac's shell, as `androidApp` and `iosApp` are the phones'. Every screen, the three designs, the database and the backup engine are the shared code, unchanged.
+- **Backups both ways.** Backup, restore and CSV export work as on the phones, through the Mac's own open and save panels. A backup's manifest names the Mac version that made it.
+- **The collection** lives in `~/Library/Application Support/Watches/`. It stays when the app is updated or dragged to the Bin.
+- **One copy at a time.** A second copy says Watches is already open, rather than opening the same database.
+- **A collection from a newer build** is refused with a message and left untouched. A phone can't meet this, because the system won't install an older build over a newer one; a Mac can.
+- **Quitting during a backup or restore** asks first. Stopping removes a half-written backup, as Cancel does.
+- **What the Mac leaves out for now**, each with a sentence on the screen where it would be:
+  - adding and cropping photos, saving a Lookup picture, and photos as documents. Photos from a backup show as usual. The desktop's image code doesn't yet follow the phones' rules for rotation, location removal and HEIC, so the Mac writes no photos until the shared photo component is done (plan, section 5);
+  - reminders and the app lock;
+  - PDF pages inside the app. "Open with another app" opens the PDF in Preview.
+- **Not yet Mac-like:** no menus or shortcuts beyond About and Quit, and screens still say "this phone". Both are milestone mac-3.
+- **The disk image isn't notarised yet**, so macOS needs one extra step to open each build (README › Mac › Installing).
+- **One version for every platform.** `version.xcconfig` is now 0.7.0 (build 7) for Android, iPhone and Mac. The Mac's packaging tool refuses a bundle version that starts with 0, so until 1.0.0 Finder's Get Info shows 1.0.7 instead. About, the disk image's name and every backup carry 0.7.0.
+
+**Mac: tests and CI**
+- The Mac app is tested on Linux, on every push, because its code runs there. The Android workflow now compiles it, runs its tests, and keeps 18 screenshots: every design, light and dark, at phone, rail and two-pane widths.
+- `Watches --self-test` checks a build without opening a window: wiring, a collection, a backup restored into itself, a CSV and a drawn frame. CI runs it inside the packaged app, on Linux and inside the Mac disk image, because the bundled Java runtime is trimmed and a missing piece shows only when the app runs.
+- A new **macOS** workflow builds the disk image on an Apple silicon runner, runs the self-test inside it, and checks the bundle's identity, version and signature. On a `v*` tag it adds the disk image to the GitHub release, beside the APK.
+- `checkNetworkIsolation` now covers the Mac shell, and looks for Java's own networking as well as the libraries and Apple's APIs.
+- The Mac icon is the same watch at 10:10, drawn by `tools/RenderIosAppIcon.java` into the Mac's rounded-square shape.
+
+**Shared code, for all three platforms**
+- The camera button is asked for through one small function with a version per platform, because the camera launcher exists only on phones. Where there's no camera, the buttons aren't shown.
+- A platform can say what it leaves out for now (`PlatformLimits`), and the screens show its sentence in place of the buttons. The phones leave nothing out.
+- The schema version has one home, `AppDatabase.VERSION`, which the backup engine and the Mac's newer-collection check both read.
+
+**Plans**
+- `docs/MACOS_PLAN.md`: the Mac plan, and in its section 5 one photo component for Android, iPhone and Mac. Each platform has its own image code today and nothing tests that they agree; the plan moves the rules into shared code, with one test suite every platform must pass. It takes over the iPhone plan's photo items.
 
 **Android releases**
 - Every release APK is now signed, so Android installs it, with no setup. Without signing secrets it's signed with the build machine's debug key. Each CI run has a new debug key, and Android won't update an app signed with a different key, so moving to a newer build means: back up (Settings › Backup & restore), uninstall, install, restore. Your own key, which is optional, makes updates install over the top.

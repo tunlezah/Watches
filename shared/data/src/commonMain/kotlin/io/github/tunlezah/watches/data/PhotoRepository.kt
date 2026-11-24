@@ -9,19 +9,29 @@ import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.toEntity
 import io.github.tunlezah.watches.data.db.toModel
 import io.github.tunlezah.watches.data.files.FileStore
-import io.github.tunlezah.watches.data.files.ImageFormats
 import io.github.tunlezah.watches.data.files.ImageProcessor
+import io.github.tunlezah.watches.data.photos.PhotoFormat
+import io.github.tunlezah.watches.data.files.findsLocation
+import io.github.tunlezah.watches.data.photos.PhotoIntake
+import io.github.tunlezah.watches.data.photos.PhotoMetadata
+import io.github.tunlezah.watches.data.photos.StoredPhotoCheck
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
+import okio.Buffer
+import okio.Source
 import kotlin.random.Random
 
 /**
  * Photos are stored three ways: the untouched original (location stripped), a cropped display
  * rendition and a small thumbnail. Crops are non-destructive: re-cropping renders from the original.
+ *
+ * An original is always in a format every device can show, and never carries a location: the rules
+ * are shared code, so they are the same on Android, iPhone and Mac (docs/MACOS_PLAN.md, section 5).
  */
 class PhotoRepository(
     private val db: AppDatabase,
@@ -31,6 +41,7 @@ class PhotoRepository(
 ) {
     private val dao = db.photoDao()
     private val watchDao = db.watchDao()
+    private val intake = PhotoIntake(files, processor)
 
     // One import at a time keeps peak memory flat when many photos arrive together.
     private val importLock = Mutex()
@@ -41,6 +52,7 @@ class PhotoRepository(
 
     suspend fun byId(id: String): Photo? = dao.get(id)?.toModel()
 
+    /** Adds a picture to a watch. [bytes] is the file as it arrived. */
     suspend fun add(
         watchId: String,
         bytes: ByteArray,
@@ -48,12 +60,29 @@ class PhotoRepository(
         attribution: String? = null,
         attributionUrl: String? = null,
         id: String = Ids.new(),
+    ): Photo = add(watchId, Buffer().write(bytes), kind, attribution, attributionUrl, id)
+
+    /**
+     * Adds a picture to a watch from a stream, which is read to its end and closed. A picked file
+     * comes in this way, so however large it is, it is never held in memory to get here.
+     *
+     * The original the app keeps is whatever [PhotoIntake] leaves. A picture in a stored format is
+     * kept byte for byte once its location has been overwritten. Anything else is kept as a
+     * full-size JPEG made from it: a format only some devices can show (TIFF, GIF, a camera's raw
+     * file), a file whose metadata can't be followed far enough to be sure the location has gone,
+     * or one in which this platform's own reader still finds a location afterwards.
+     */
+    suspend fun add(
+        watchId: String,
+        source: Source,
+        kind: PhotoKind = PhotoKind.USER,
+        attribution: String? = null,
+        attributionUrl: String? = null,
+        id: String = Ids.new(),
     ): Photo = importLock.withLock {
         val dir = FileStore.photoDir(watchId)
-        val original = "$dir/$id-original.${ImageFormats.extension(bytes)}"
-        files.write(original, bytes)
+        val original = intake.store(source, dir, "$id-original", ORIGINALS).path
         try {
-            processor.stripLocation(files.resolve(original))
             val size = processor.size(files.resolve(original))
             val (display, thumb) = renderRenditions(dir, id, original, crop = null)
             val photo = Photo(
@@ -92,6 +121,86 @@ class PhotoRepository(
         watchDao.setCover(watchId, photoId, time.now().toEpochMilliseconds())
     }
 
+    /**
+     * Brings a photo that is already stored up to the rules a new one meets, and says whether it
+     * had to change anything ([StoredPhotoCheck] goes through them all).
+     *
+     * An original that still carries a location, or is in a format that isn't stored, goes back
+     * through the way in: the location is overwritten, or the picture re-made as a JPEG. Removing
+     * a location needs no decoder, so that works even for a photo this device can't show. If the
+     * photo's recorded size isn't the upright picture's (older image code didn't always turn it),
+     * the size is corrected and its display image and thumbnail are made again; a crop drawn on a
+     * picture of another shape means nothing by then, and is dropped.
+     */
+    suspend fun recheck(photoId: String): Boolean = importLock.withLock {
+        val photo = dao.get(photoId)?.toModel() ?: return false
+        if (!files.exists(photo.originalFile)) return false
+        val dir = FileStore.photoDir(photo.watchId)
+        val original = if (meetsTheRules(photo.originalFile)) {
+            photo.originalFile
+        } else {
+            intake.store(files.source(photo.originalFile), dir, "${photo.id}-original-${tag()}", ORIGINALS).path
+        }
+        try {
+            // A photo this device can't decode keeps the size it came with.
+            val size = try {
+                processor.size(files.resolve(original))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            val reshaped = size != null && (size.width != photo.width || size.height != photo.height)
+            if (original == photo.originalFile && !reshaped) return false
+            var current = photo.copy(originalFile = original)
+            if (size != null) {
+                val crop = photo.crop.takeUnless { reshaped }
+                val (display, thumb) = renderRenditions(dir, photo.id, original, crop)
+                current = current.copy(displayFile = display, thumbFile = thumb, width = size.width, height = size.height, crop = crop)
+            }
+            dao.upsert(current.toEntity())
+            for (old in setOf(photo.originalFile, photo.displayFile, photo.thumbFile) - setOf(current.originalFile, current.displayFile, current.thumbFile)) files.delete(old)
+            true
+        } catch (e: Throwable) {
+            if (original != photo.originalFile) withContext(NonCancellable) { files.delete(original) }
+            throw e
+        }
+    }
+
+    /** True if the file at [path] could have come through [PhotoIntake] as it is: a stored format, with no location. */
+    private suspend fun meetsTheRules(path: String): Boolean {
+        if (files.size(path) > CHECKED_IN_MEMORY) return false
+        val bytes = files.read(path)
+        val format = PhotoFormat.detect(bytes) ?: return false
+        return format.stored && !PhotoMetadata.hasLocation(bytes) && !processor.findsLocation(files.resolve(path))
+    }
+
+    /**
+     * The whole upright picture as a JPEG, for the Crop screen to show, or null if there is no such
+     * photo. Throws if this device can't read the original.
+     *
+     * The Crop screen used to hand the original to the image loader, whose decoders differ from the
+     * app's own: on an iPhone or a Mac they read no HEIC, and none of them obeys a HEIC's own crop
+     * box. The picture a crop is drawn on is now made by the codec that will make the cut, so the
+     * two can't disagree. An uncropped photo's display image is already that picture; otherwise one
+     * is made in the cache folder, which no backup includes.
+     */
+    suspend fun cropPreview(photoId: String): String? {
+        val photo = dao.get(photoId)?.toModel() ?: return null
+        if (photo.crop == null && photo.displayFile != photo.originalFile && files.exists(photo.displayFile)) return photo.displayFile
+        val preview = "$CROP_PREVIEWS/${photo.id}.jpg"
+        try {
+            processor.render(files.resolve(photo.originalFile), null, DISPLAY_EDGE, DISPLAY_QUALITY, files.resolve(preview))
+        } catch (e: Throwable) {
+            withContext(NonCancellable) { files.delete(preview) }
+            throw e
+        }
+        return preview
+    }
+
+    /** Removes what [cropPreview] made. They are quick to make again. */
+    suspend fun clearCropPreviews() = files.deleteTree(CROP_PREVIEWS)
+
     /** Applies a crop (null = full frame) by re-rendering the display image and thumbnail from the original. */
     suspend fun crop(photoId: String, crop: NormalizedRect?) {
         val current = dao.get(photoId)?.toModel() ?: return
@@ -128,8 +237,11 @@ class PhotoRepository(
     }
 
     /** Rendition names carry a random suffix so image caches never show a stale crop. */
+    /** A few random letters, so a file that replaces another never has its name. */
+    private fun tag(): String = Random.nextInt(0, 1 shl 30).toString(36)
+
     private suspend fun renderRenditions(dir: String, id: String, original: String, crop: NormalizedRect?): Pair<String, String> {
-        val tag = Random.nextInt(0, 1 shl 30).toString(36)
+        val tag = tag()
         val display = "$dir/$id-display-$tag.jpg"
         val thumb = "$dir/$id-thumb-$tag.jpg"
         try {
@@ -146,9 +258,23 @@ class PhotoRepository(
     }
 
     companion object {
+        /** A watch's photo is kept in any stored format; anything else becomes a full-size JPEG. */
+        private val ORIGINALS = PhotoIntake.Rule(
+            kept = PhotoFormat.entries.filter { it.stored }.toSet(), jpegEdge = ORIGINAL_EDGE, jpegQuality = ORIGINAL_QUALITY, tryUnknown = true,
+        )
+
+        /** As [PhotoIntake] has it: a larger file is re-made, not cleaned in memory. */
+        private const val CHECKED_IN_MEMORY = 128L * 1024 * 1024
+
+        private const val CROP_PREVIEWS = "${FileStore.CACHE_DIR}/crop"
+
         const val DISPLAY_EDGE = 2560
         const val THUMB_EDGE = 640
         const val DISPLAY_QUALITY = 88
         const val THUMB_QUALITY = 82
+
+        /** For an original that has to be re-made as a JPEG: every pixel a phone's camera gives, at high quality. */
+        const val ORIGINAL_EDGE = 16_384
+        const val ORIGINAL_QUALITY = 95
     }
 }

@@ -1,5 +1,8 @@
 package io.github.tunlezah.watches.data
 
+import io.github.tunlezah.watches.data.photos.PhotoMetadata
+import io.github.tunlezah.watches.data.photos.PhotoFixtures
+import io.github.tunlezah.watches.data.photos.PhotoFormat
 import io.github.tunlezah.watches.core.TimeSource
 import io.github.tunlezah.watches.core.model.BoxItem
 import io.github.tunlezah.watches.core.model.BoxItemState
@@ -203,6 +206,61 @@ class CareRepositoryTest {
         assertEquals("image/jpeg", doc.mimeType)
         assertTrue(doc.file.endsWith(".jpg"))
         assertEquals(listOf("${doc.id}.jpg"), names(docDir), "the HEIC original isn't kept")
+    }
+
+    @Test fun aPhotoDocumentsLocationIsGoneFromTheStoredFile() = runBlocking<Unit> {
+        val w = watches.create(watch())
+        val doc = documents.add(w.id, PhotoFixtures.bytes("gps.png"), DocumentKind.RECEIPT, "Receipt")
+        assertEquals("image/png", doc.mimeType)
+        val kept = files.read(doc.file)
+        assertFalse(PhotoMetadata.hasLocation(kept))
+        assertEquals(PhotoFixtures.bytes("gps.png").size, kept.size, "otherwise the file that arrived")
+    }
+
+    @Test fun aPhotoDocumentInAFormatOnlySomeDevicesShowIsStoredAsAJpeg() = runBlocking<Unit> {
+        val w = watches.create(watch())
+        // A document's photo comes in the way a watch's does: what this device reads is converted, the rest refused.
+        val readable = testImageProcessor().readableFormats
+        var kept = 0
+        for ((name, format) in listOf("other.gif" to PhotoFormat.GIF, "other.bmp" to PhotoFormat.BMP, "other.tiff" to PhotoFormat.TIFF)) {
+            if (format in readable) {
+                val doc = documents.add(w.id, PhotoFixtures.bytes(name), DocumentKind.RECEIPT, name)
+                assertEquals("image/jpeg", doc.mimeType, name)
+                assertTrue(doc.file.endsWith("${doc.id}.jpg"), name)
+                kept++
+            } else {
+                assertFailsWith<DocumentRepository.UnsupportedDocument>(name) { documents.add(w.id, PhotoFixtures.bytes(name), DocumentKind.RECEIPT, name) }
+            }
+        }
+        assertEquals(kept, names(files.resolve(FileStore.documentDir(w.id))).size, "one file for each document kept, and nothing else")
+    }
+
+    @Test fun aPhotoDocumentThePlatformStillFindsALocationInIsStoredAsAJpegMadeFromIt() = runBlocking<Unit> {
+        val w = watches.create(watch())
+        val doubting = object : ImageProcessor by testImageProcessor() {
+            override suspend fun hasLocation(file: Path) = true
+        }
+        val doc = DocumentRepository(db, files, doubting, watches, clock).add(w.id, PhotoFixtures.bytes("gps.png"), DocumentKind.RECEIPT, "Receipt")
+        assertEquals("image/jpeg", doc.mimeType)
+        assertEquals(listOf("${doc.id}.jpg"), names(files.resolve(FileStore.documentDir(w.id))), "only the JPEG is kept")
+        assertFalse(PhotoMetadata.hasLocation(files.read(doc.file)))
+    }
+
+    @Test fun aPhotoDocumentThatCantBeCleanedIsStoredAsAJpegMadeFromIt() = runBlocking<Unit> {
+        val w = watches.create(watch())
+        // Its XMP is marked as compressed, so the location in it can't be overwritten where it lies.
+        val png = PhotoFixtures.bytes("gps.png")
+        val keyword = "XML:com.adobe.xmp".encodeToByteArray()
+        val at = (0..png.size - keyword.size).first { i -> keyword.indices.all { png[i + it] == keyword[it] } }
+        png[at + keyword.size + 1] = 1
+        // The chunk's checksum follows its data, so the file is still a well-formed PNG.
+        val length = (0 until 4).fold(0) { acc, i -> (acc shl 8) or (png[at - 8 + i].toInt() and 0xFF) }
+        val crc = io.github.tunlezah.watches.data.backup.Crc32().apply { update(png, at - 4, 4 + length) }.value
+        for (i in 0 until 4) png[at + length + i] = (crc shr (24 - 8 * i)).toByte()
+        val doc = documents.add(w.id, png, DocumentKind.RECEIPT, "Receipt")
+        assertEquals("image/jpeg", doc.mimeType)
+        assertEquals(listOf("${doc.id}.jpg"), names(files.resolve(FileStore.documentDir(w.id))), "only the JPEG is kept")
+        assertFalse(PhotoMetadata.hasLocation(files.read(doc.file)))
     }
 
     @Test fun careSkipsWatchesNotOnHand() = runBlocking<Unit> {

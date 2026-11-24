@@ -2,6 +2,8 @@
 
 Status: **milestone iOS-1 built** (21 Nov 2026, version 0.6.0); iOS-2 to iOS-4 to come. The plan was written on 23 Oct against `f93940f` (0.5.0) and the green iOS CI run of 18 Oct. Library behaviour described below was checked in the published sources of Compose Multiplatform 1.12.1, FileKit 0.16.0 and Coil 3.6.3. Anything not yet confirmed is marked **verify**.
 
+**Photos move to the Mac plan (23 Nov).** 5.3.1 to 5.3.3 are now built as one photo component for Android, iPhone and Mac together: `docs/MACOS_PLAN.md`, section 5 and milestone mac-2. iOS-3 keeps 5.3.4 to 5.3.8.
+
 **iOS-1 as built.** All of 5.1, the test moves in 6.2, and the two Xcode test targets, as planned, with these differences:
 - **Version (5.1.4).** One file, `version.xcconfig` at the root, that Gradle and Xcode both read, instead of `gradle.properties` plus a generated xcconfig. Nothing is generated, so the two can't drift.
 - **Signing (5.1.5).** The release workflow signs manually, with a distribution certificate and an App Store profile, rather than with automatic signing through the API key. Automatic signing needs a development profile when archiving, and Apple won't create one for a team with no registered devices. The certificate can still be made without a Mac (README › iPhone › Signing and TestFlight). Without the secrets, the workflow builds and checks an unsigned archive.

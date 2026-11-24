@@ -91,9 +91,13 @@ fun CropScreen(state: CropUiState, onBack: () -> Unit, onSave: (NormalizedRect) 
         ) {
             IconAction(WatchIcons.Close, "Cancel", onBack, tint = Color.White)
             Text(t.title("Crop"), style = t.type.groupTitle, color = Color.White, modifier = Modifier.weight(1f).semantics { heading() })
-            WatchButton(if (state.saving) "Saving…" else "Done", { onSave(rect) }, kind = ButtonKind.Primary, enabled = state.loaded && !state.saving)
+            WatchButton(if (state.saving) "Saving…" else "Done", { onSave(rect) }, kind = ButtonKind.Primary, enabled = state.loaded && !state.saving && !state.unreadable)
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+            if (state.unreadable) {
+                Text("This photo's original can't be opened here, so it can't be cropped.", style = t.type.body, color = Color.White)
+                return@BoxWithConstraints
+            }
             if (!state.loaded || state.original == null) return@BoxWithConstraints
             val imageAspect = state.width.toFloat() / state.height
             Box(Modifier.aspectRatio(imageAspect, matchHeightConstraintsFirst = maxWidth / maxHeight > imageAspect)) {

@@ -11,7 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 
 @Database(
-    version = 1,
+    version = AppDatabase.VERSION,
     exportSchema = true,
     entities = [
         WatchEntity::class,
@@ -40,6 +40,9 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val FILE_NAME = "watches.db"
+
+        /** The schema version. Backups carry it, and a build refuses a database or a backup newer than its own. */
+        const val VERSION = 1
     }
 }
 

@@ -1,5 +1,11 @@
 package io.github.tunlezah.watches.data
 
+import kotlin.test.assertFailsWith
+import io.github.tunlezah.watches.data.photos.PhotoMetadata
+import io.github.tunlezah.watches.data.photos.PhotoFormat
+import io.github.tunlezah.watches.data.photos.PhotoFixtures
+import io.github.tunlezah.watches.data.photos.LocationRemoval
+import io.github.tunlezah.watches.data.files.ImageSize
 import androidx.room.execSQL
 import androidx.room.useWriterConnection
 import io.github.tunlezah.watches.core.TimeSource
@@ -16,6 +22,7 @@ import io.github.tunlezah.watches.core.settings.Direction
 import io.github.tunlezah.watches.data.db.AppDatabase
 import io.github.tunlezah.watches.data.db.FieldProvenanceEntity
 import io.github.tunlezah.watches.data.files.FileStore
+import io.github.tunlezah.watches.data.files.ImageProcessor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
@@ -25,6 +32,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -282,5 +290,141 @@ class RepositoryTest {
         assertEquals(setOf("grail"), settings.current().disabledSources)
         settings.update { it.copy(disabledSources = emptySet()) }
         assertEquals(emptySet(), settings.current().disabledSources)
+    }
+
+    @Test
+    fun aPhotosLocationIsGoneFromItsStoredOriginalAndItsTurningIsApplied() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        // A portrait photo as an iPhone writes it: stored on its side, with a location.
+        val arrived = PhotoFixtures.bytes("gps-exif-mm.jpg")
+        assertTrue(PhotoMetadata.hasLocation(arrived))
+        val photo = photos.add(w.id, PhotoFixtures.bytes("gps-exif-mm.jpg"))
+
+        assertTrue(photo.originalFile.endsWith("-original.jpg"))
+        val kept = files.read(photo.originalFile)
+        assertFalse(PhotoMetadata.hasLocation(kept), "the original is stored without its location")
+        assertEquals(arrived.size, kept.size, "and is otherwise the file that arrived")
+        // Its size, and its renditions, are of the upright picture.
+        assertEquals(64 to 48, photo.width to photo.height)
+        assertEquals(ImageSize(64, 48), processor.size(files.resolve(photo.thumbFile)))
+        assertFalse(PhotoMetadata.hasLocation(files.read(photo.displayFile)))
+    }
+
+    @Test
+    fun aPhotoFromAStreamIsStoredExactlyAsOneFromMemory() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        val arrived = PhotoFixtures.bytes("gps-exif-mm.jpg")
+        val fromMemory = photos.add(w.id, arrived.copyOf())
+        // A picked file comes in as a stream, which is closed once it has been read.
+        var closed = false
+        val stream = object : okio.ForwardingSource(okio.Buffer().write(arrived)) {
+            override fun close() {
+                closed = true
+                super.close()
+            }
+        }
+        val fromStream = photos.add(w.id, stream)
+        assertTrue(closed, "the stream was closed")
+        assertTrue(files.read(fromMemory.originalFile).contentEquals(files.read(fromStream.originalFile)), "the same original either way")
+        assertFalse(PhotoMetadata.hasLocation(files.read(fromStream.originalFile)))
+        assertEquals(fromMemory.width to fromMemory.height, fromStream.width to fromStream.height)
+        val stored = FileSystem.SYSTEM.list(files.resolve(FileStore.photoDir(w.id))).map { it.name }
+        assertEquals(6, stored.size, "two photos, three files each, and nothing left over: $stored")
+
+        // A stream that isn't a picture is closed too, and leaves nothing.
+        assertFails { photos.add(w.id, okio.Buffer().writeUtf8("not a picture at all")) }
+        assertEquals(6, FileSystem.SYSTEM.list(files.resolve(FileStore.photoDir(w.id))).size)
+    }
+
+    @Test
+    fun thePictureToCropOnIsTheWholeUprightPictureMadeByTheAppsOwnImageCode() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        // Stored on its side, as a phone writes a portrait photo.
+        val photo = photos.add(w.id, PhotoFixtures.bytes("turned-6.jpg"))
+        // Uncropped, its display image is already the whole picture.
+        assertEquals(photo.displayFile, photos.cropPreview(photo.id))
+
+        photos.crop(photo.id, NormalizedRect(0.5f, 0.5f, 1f, 1f))
+        val preview = photos.cropPreview(photo.id)!!
+        assertTrue(preview.startsWith("${FileStore.CACHE_DIR}/"), "kept where no backup looks: $preview")
+        val shown = decodePixels(files.resolve(preview))
+        assertEquals(64 to 48, shown.width to shown.height, "the whole picture, upright, not the cut")
+        val (r, g, b) = shown.at(8, 8)
+        assertTrue(r > 140 && g < 100 && b < 100, "its top left is still the red corner: $r, $g, $b")
+        // The photo itself is untouched by looking.
+        val before = photos.byId(photo.id)
+        photos.cropPreview(photo.id)
+        assertEquals(before, photos.byId(photo.id))
+
+        photos.clearCropPreviews()
+        assertFalse(files.exists(preview))
+        assertNull(photos.cropPreview("no such photo"))
+    }
+
+    @Test
+    fun aPhotoThePlatformStillFindsALocationInIsKeptAsAJpegMadeFromIt() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        // The shared code says the location has gone. This platform's reader, asked for a second opinion, disagrees.
+        val doubting = object : ImageProcessor by processor {
+            override suspend fun hasLocation(file: Path) = true
+        }
+        val arrived = PhotoFixtures.bytes("gps-exif-ii.jpg")
+        val photo = PhotoRepository(db, files, doubting, clock).add(w.id, arrived)
+
+        assertTrue(photo.originalFile.endsWith("-original.jpg"))
+        val kept = files.read(photo.originalFile)
+        assertTrue(kept.size != arrived.size, "the file that arrived isn't the one kept")
+        assertFalse(PhotoMetadata.hasLocation(kept))
+        // A JPEG made from the picture has no metadata for a location to be in.
+        assertEquals(LocationRemoval.NONE, PhotoMetadata.removeLocation(kept.copyOf()))
+        assertEquals(64 to 48, photo.width to photo.height)
+        val stored = FileSystem.SYSTEM.list(files.resolve(FileStore.photoDir(w.id))).map { it.name }
+        assertEquals(3, stored.size, "an original and two renditions, and nothing left over: $stored")
+    }
+
+    @Test
+    fun aFormatOnlySomeDevicesShowIsKeptAsAJpeg() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        // No system reads all three: Android has no TIFF decoder. What this one doesn't read it refuses.
+        val all = listOf("other.gif" to PhotoFormat.GIF, "other.bmp" to PhotoFormat.BMP, "other.tiff" to PhotoFormat.TIFF)
+        val (taken, refused) = all.partition { it.second in processor.readableFormats }
+        for ((name, _) in taken) {
+            val photo = photos.add(w.id, PhotoFixtures.bytes(name))
+            assertTrue(photo.originalFile.endsWith("-original.jpg"), "$name: ${photo.originalFile}")
+            assertEquals(PhotoFormat.JPEG, PhotoFormat.detect(files.read(photo.originalFile)), name)
+            assertEquals(64 to 48, photo.width to photo.height, name)
+        }
+        for ((name, _) in refused) assertFails(name) { photos.add(w.id, PhotoFixtures.bytes(name)) }
+        assertTrue(taken.size >= 2, "GIF and BMP are read everywhere: ${processor.readableFormats}")
+        assertEquals(taken.size, photos.forWatch(w.id).size)
+        val dir = files.resolve(FileStore.photoDir(w.id))
+        val stored = if (FileSystem.SYSTEM.exists(dir)) FileSystem.SYSTEM.list(dir).map { it.name } else emptyList()
+        assertEquals(3 * taken.size, stored.size, "an original and two renditions each, and nothing left over: $stored")
+        assertTrue(stored.none { "incoming" in it })
+    }
+
+    @Test
+    fun aPhotoWhoseMetadataCantBeFollowedIsKeptAsAJpegMadeWithoutIt() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        // The pointer to its GPS directory leads nowhere, so the location can't be found to be removed.
+        val damaged = PhotoFixtures.bytes("gps-exif-ii.jpg")
+        val pointer = (0..damaged.size - 8).first { i -> damaged[i] == 0x25.toByte() && damaged[i + 1] == 0x88.toByte() && damaged[i + 2] == 0x04.toByte() && damaged[i + 3] == 0.toByte() }
+        for (i in 8..10) damaged[pointer + i] = 0x7F
+        assertEquals(LocationRemoval.UNREADABLE, PhotoMetadata.removeLocation(damaged.copyOf()))
+
+        val photo = photos.add(w.id, damaged)
+        val kept = files.read(photo.originalFile)
+        assertFalse(PhotoMetadata.hasLocation(kept))
+        assertFalse(kept.contentEquals(damaged), "the damaged file itself isn't kept")
+        assertEquals(64 to 48, photo.width to photo.height)
+    }
+
+    @Test
+    fun somethingThatIsNotAPictureIsRefusedAndLeavesNothingBehind() = runBlocking<Unit> {
+        val w = watches.create(speedmaster)
+        assertFailsWith<Exception> { photos.add(w.id, "not a picture at all".encodeToByteArray()) }
+        val folder = files.resolve(FileStore.photoDir(w.id))
+        assertTrue(!FileSystem.SYSTEM.exists(folder) || FileSystem.SYSTEM.list(folder).isEmpty())
+        assertTrue(photos.forWatch(w.id).isEmpty())
     }
 }

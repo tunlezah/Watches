@@ -4,7 +4,7 @@ import io.github.tunlezah.watches.core.model.NormalizedRect
 import io.github.tunlezah.watches.core.model.PhotoKind
 import io.github.tunlezah.watches.data.PhotoRepository
 import io.github.vinceglb.filekit.PlatformFile
-import io.github.vinceglb.filekit.readBytes
+import io.github.tunlezah.watches.ui.backup.okioSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -35,7 +35,8 @@ class PhotoImporter(private val photos: PhotoRepository) {
         scope.launch {
             for (file in picked) {
                 val ok = try {
-                    photos.add(watchId, file.readBytes())
+                    // Streamed into the app's files: a picked photo is never read into memory to get there.
+                    photos.add(watchId, file.okioSource())
                     true
                 } catch (e: CancellationException) {
                     throw e
@@ -54,6 +55,11 @@ class PhotoImporter(private val photos: PhotoRepository) {
     }
 
     fun crop(photoId: String, rect: NormalizedRect): Deferred<Unit> = scope.async { photos.crop(photoId, rect) }
+
+    /** The Crop screen's working pictures, once it has closed. */
+    fun discardCropPreviews() {
+        scope.launch { runCatching { photos.clearCropPreviews() } }
+    }
 
     fun clearFailures(watchId: String) = bump(watchId) { it.copy(failed = 0) }
 

@@ -2,7 +2,7 @@
 
 Version 1 · written by Watches 0.4.0 and later · read by every platform build of the app.
 
-A backup is one ordinary ZIP file holding everything in the collection: every table of the database as JSON, and every photo, document and saved source page as the original file. Any unzip tool can open it, and the JSON reads in a text editor. Restoring it brings the collection back exactly, on Android or iOS.
+A backup is one ordinary ZIP file holding everything in the collection: every table of the database as JSON, and every photo, document and saved source page as the original file. Any unzip tool can open it, and the JSON reads in a text editor. Restoring it brings the collection back exactly, on Android, iPhone or Mac.
 
 ## Layout
 
@@ -78,6 +78,21 @@ Value conventions:
 - **File paths** are relative to the app's files folder. Each one names an entry under `files/` in the archive.
 
 Left out on purpose: the full-text search index, which is rebuilt after a restore, and recent lookup searches, which are short-lived and personal.
+
+## Photos
+
+What a photo in a backup is, whichever platform made it. The rules are shared code (`shared/data/.../photos`), and one set of tests holds every platform's image code to them (`PhotoConformanceTest`).
+
+- **Originals** are JPEG, PNG, WebP or HEIC, kept byte for byte as they arrived, apart from the location. A photo added in any other format (TIFF, GIF, BMP, AVIF, a camera's raw file) is kept as a full-size JPEG made from it.
+- **No file carries a location**, in EXIF or in XMP. It is overwritten where it lies, so the file keeps its length, and the capture date and everything else stay. A photo whose location can't be removed for certain is kept as a JPEG made from it.
+- **`width`, `height` and the crop** describe the upright picture: the one a person sees, after the file's own rotation is applied. For a HEIC that rotation is the container's (`irot` and `imir`), not EXIF's, and a HEIC's clean aperture (`clap`) is applied too.
+- **A crop** is four fractions of the upright picture. Which pixels that means, and the size of the result, come from one shared calculation (`RenderPlan`), so the same crop is the same pixels on every platform.
+- **Renditions** (`display_file`, `thumb_file`) are JPEG in sRGB, upright, with no metadata. Their long edges are at most 2560 and 640 pixels, and a picture is never enlarged. Transparent areas are black.
+- **A photographed document** follows the same rules. It is kept as it arrived if it is JPEG, PNG or WebP, and as a JPEG made from it otherwise.
+
+A backup from a version before 0.8.0 may hold originals that still carry a location, or a HEIC whose size was recorded on its side. A restore keeps them as they are, and the app then goes through what it brought in and puts that right (`StoredPhotoCheck`), so the next backup doesn't.
+
+A device shows any photo it restores, because the renditions come with it. It can only crop one whose original it can decode: Android reads no TIFF, for one, though none is ever stored.
 
 ## Restoring
 

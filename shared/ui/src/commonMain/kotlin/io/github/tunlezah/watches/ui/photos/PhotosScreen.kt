@@ -52,9 +52,9 @@ import io.github.tunlezah.watches.ui.theme.WatchIcons
 import io.github.tunlezah.watches.ui.theme.WatchTheme
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.dialogs.FileKitMode
-import io.github.vinceglb.filekit.dialogs.FileKitOpenCameraSettings
 import io.github.vinceglb.filekit.dialogs.FileKitType
-import io.github.vinceglb.filekit.dialogs.compose.rememberCameraPickerLauncher
+import io.github.tunlezah.watches.ui.platform.platformLimits
+import io.github.tunlezah.watches.ui.platform.rememberCameraLauncher
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 
 @Composable
@@ -78,9 +78,9 @@ fun PhotosScreen(
     val gallery = rememberFilePickerLauncher(type = FileKitType.Image, mode = FileKitMode.Multiple(maxItems = 20)) { files ->
         files?.let(onAdd)
     }
-    val camera = rememberCameraPickerLauncher(FileKitOpenCameraSettings.createDefault()) { file ->
-        file?.let { onAdd(listOf(it)) }
-    }
+    val camera = rememberCameraLauncher { file -> file?.let { onAdd(listOf(it)) } }
+    // Set where this platform can't yet take photos in to the shared rules: they are shown, not added or cropped.
+    val limit = platformLimits.photos
 
     Column(Modifier.fillMaxSize().background(c.bg)) {
         Row(
@@ -93,9 +93,17 @@ fun PhotosScreen(
                 if (state.title.isNotEmpty()) Text(state.title, style = t.type.bodySmall, color = c.fg3, maxLines = 1)
             }
         }
-        Row(Modifier.padding(horizontal = style.screenPadding, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            WatchButton("Camera", { camera.launch() }, Modifier.weight(1f), icon = WatchIcons.Camera, kind = ButtonKind.Primary)
-            WatchButton("Gallery", { gallery.launch() }, Modifier.weight(1f), icon = WatchIcons.Image)
+        if (limit != null) {
+            Text(limit, style = t.type.bodySmall, color = c.fg2, modifier = Modifier.padding(horizontal = style.screenPadding, vertical = 8.dp))
+        } else {
+            Row(Modifier.padding(horizontal = style.screenPadding, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (camera.available) {
+                    WatchButton("Camera", { camera.launch() }, Modifier.weight(1f), icon = WatchIcons.Camera, kind = ButtonKind.Primary)
+                    WatchButton("Gallery", { gallery.launch() }, Modifier.weight(1f), icon = WatchIcons.Image)
+                } else {
+                    WatchButton("Choose photos", { gallery.launch() }, Modifier.weight(1f), icon = WatchIcons.Image, kind = ButtonKind.Primary)
+                }
+            }
         }
         if (state.importing > 0) {
             Column(Modifier.padding(horizontal = style.screenPadding, vertical = 6.dp)) {
@@ -110,7 +118,15 @@ fun PhotosScreen(
             }
         }
         if (state.loaded && state.photos.isEmpty() && state.importing == 0) {
-            EmptyState("No photos yet", "Take a photo or add some from your gallery. The first one becomes the cover.", Modifier.fillMaxWidth())
+            EmptyState(
+                "No photos yet",
+                when {
+                    limit != null -> "This watch has none yet."
+                    camera.available -> "Take a photo or add some from your gallery. The first one becomes the cover."
+                    else -> "Choose some photos. The first one becomes the cover."
+                },
+                Modifier.fillMaxWidth(),
+            )
         }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(104.dp),
@@ -153,7 +169,7 @@ fun PhotosScreen(
                 IconAction(WatchIcons.Star, "Set as cover", { onSetCover(sel.id); haptics.performHapticFeedback(HapticFeedbackType.LongPress) }, enabled = !sel.isCover)
                 IconAction(WatchIcons.Left, "Move earlier", { onMove(sel.id, -1) }, enabled = index > 0)
                 IconAction(WatchIcons.Right, "Move later", { onMove(sel.id, 1) }, enabled = index < state.photos.lastIndex)
-                IconAction(WatchIcons.Crop, "Crop", { onCrop(sel.id) })
+                if (limit == null) IconAction(WatchIcons.Crop, "Crop", { onCrop(sel.id) })
                 IconAction(WatchIcons.Trash, "Delete photo", { confirmDelete = sel.id }, tint = c.danger)
             }
         }
