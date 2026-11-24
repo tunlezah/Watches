@@ -17,3 +17,6 @@ actual fun encodeJpeg(bitmap: ImageBitmap, quality: Int): ByteArray =
 actual fun systemAnimationsEnabled(): Boolean = ValueAnimator.areAnimatorsEnabled()
 
 actual fun processUptimeMillis(): Long? = SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime()
+
+// Android's photo picker.
+actual val photosArePickedAsFiles: Boolean = false

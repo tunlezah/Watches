@@ -53,9 +53,20 @@ import io.github.tunlezah.watches.ui.theme.WatchTheme
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
+import io.github.tunlezah.watches.data.photos.PhotoFormat
+import io.github.tunlezah.watches.ui.care.LocalReadableFormats
+import io.github.tunlezah.watches.ui.platform.photosArePickedAsFiles
 import io.github.tunlezah.watches.ui.platform.platformLimits
 import io.github.tunlezah.watches.ui.platform.rememberCameraLauncher
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
+
+/**
+ * What choosing photos offers: the system's photo picker on a phone. A desktop's file dialog is
+ * given the extensions of every format this device reads, [readable], because its own idea of an
+ * image leaves HEIC out.
+ */
+internal fun photoPickerType(readable: Set<PhotoFormat>, asFiles: Boolean = photosArePickedAsFiles): FileKitType =
+    if (asFiles) FileKitType.File(readable.flatMap { it.extensions }.toSet()) else FileKitType.Image
 
 @Composable
 fun PhotosScreen(
@@ -75,7 +86,7 @@ fun PhotosScreen(
     var selected by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf<String?>(null) }
 
-    val gallery = rememberFilePickerLauncher(type = FileKitType.Image, mode = FileKitMode.Multiple(maxItems = 20)) { files ->
+    val gallery = rememberFilePickerLauncher(type = photoPickerType(LocalReadableFormats.current), mode = FileKitMode.Multiple(maxItems = 20)) { files ->
         files?.let(onAdd)
     }
     val camera = rememberCameraLauncher { file -> file?.let { onAdd(listOf(it)) } }

@@ -10,3 +10,10 @@ expect fun systemAnimationsEnabled(): Boolean
 
 /** Milliseconds since this process started, when the platform can tell; used for the cold-start timing. */
 expect fun processUptimeMillis(): Long?
+
+/**
+ * True where photos are chosen as files in a file dialog (a desktop, the server), which must then be
+ * told every format the device reads: its own idea of an image leaves out HEIC, a phone's usual
+ * format. False where the system's photo picker is used (the phones).
+ */
+expect val photosArePickedAsFiles: Boolean
