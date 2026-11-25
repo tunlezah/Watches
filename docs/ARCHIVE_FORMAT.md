@@ -117,6 +117,8 @@ A backup restored onto the phone it came from writes almost nothing: files alrea
 
 ## Making a compatible archive by hand
 
+To build a backup from scratch, for example to import a collection from a spreadsheet, follow `docs/BACKUP_IMPORT_SPEC.md`: every field, the allowed values, and what the restore does with each mistake.
+
 Unzipping a backup, editing `collection.json` and zipping it again works, with these rules:
 - Update the file's `sha256` in the manifest.
 - Any ZIP tool is fine. The app reads deflated entries, data descriptors, a top-level folder around everything, and `__MACOSX` entries (which it ignores).
