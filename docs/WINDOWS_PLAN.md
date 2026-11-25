@@ -307,7 +307,7 @@ Sizes: **S** under half a day · **M** about a day · **L** two to three days.
 - The app never makes such a name. Only a hand-made archive could.
 
 **7.1.14 Docs** (S)
-- A Windows section in the README: installing, the SmartScreen step, Smart App Control, where the collection is, updating, removing.
+- A Windows section in the README: installing, the SmartScreen step, Smart App Control, where the collection is, updating, removing. Building, testing and the Windows workflow go in `docs/BUILD.md`.
 - CHANGELOG, and this plan's "as built".
 
 ### 7.2 Like a Windows app (milestone win-2)

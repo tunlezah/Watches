@@ -2,7 +2,7 @@ name: iOS release
 
 # Signs the iPhone app and uploads it to TestFlight, on version tags and on demand.
 #
-# Without the signing secrets (see README › iPhone › Signing and TestFlight) it still builds and
+# Without the signing secrets (see docs/BUILD.md › iPhone › Signing and TestFlight) it still builds and
 # checks an unsigned Release archive, so the release path stays tested before the Apple account
 # exists. Nothing is uploaded then.
 on:
