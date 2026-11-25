@@ -95,6 +95,16 @@ class PersonalBackupMaker {
                     val kind = str("kind")?.let { k -> keyedOf<PhotoKind>(k) ?: error("unknown photo kind $k") } ?: PhotoKind.USER
                     val bytes = FileSystem.SYSTEM.read(file.toPath()) { readByteArray() }
                     val added = photos.add(created.id, bytes, kind, str("credit"), str("credit_url"), str("id") ?: Ids.new())
+                    // A reused ID would put this original at the earlier backup's file name with other contents,
+                    // which app versions before 0.8.0 can't restore. Give it a tagged name, as a re-made original gets.
+                    if (str("id") != null) {
+                        val from = added.originalFile
+                        val dot = from.lastIndexOf('.')
+                        val to = "${from.substring(0, dot)}-${Ids.new().take(6)}${from.substring(dot)}"
+                        files.fileSystem.atomicMove(files.resolve(from), files.resolve(to))
+                        val photoDao = db.photoDao()
+                        photoDao.upsert(checkNotNull(photoDao.get(added.id)).copy(originalFile = to))
+                    }
                     if (p?.get("cover")?.jsonPrimitive?.booleanOrNull == true) photos.setCover(created.id, added.id)
                 }
                 // Documents can be given IDs too, for the same reason. The repository picks its own, so the row is

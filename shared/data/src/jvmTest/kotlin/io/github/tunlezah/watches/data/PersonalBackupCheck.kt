@@ -102,6 +102,11 @@ class PersonalBackupCheck {
         upgraded.backup.restore({ FileSystem.SYSTEM.source(previous) }, p4, RestoreMode.REPLACE)
         val p5 = upgraded.backup.inspect(open)
         assertTrue(p5.warnings.isEmpty(), "upgrade warnings: ${p5.warnings}")
+        // App versions before 0.8.0 fail a restore that brings a file to a name already there with other
+        // contents, so this backup must not reuse a file name of the earlier one for something else.
+        val earlier = p4.manifest.files.associate { it.path to it.sha256 }
+        val clashes = p5.manifest.files.filter { it.path != "collection.json" && earlier[it.path]?.let { sha -> sha != it.sha256 } == true }
+        assertTrue(clashes.isEmpty(), "files at the earlier backup's names with other contents: ${clashes.map { it.path }}")
         val upgrade = upgraded.backup.restore(open, p5, RestoreMode.MERGE)
         assertTrue(upgrade.kept.isEmpty(), "watches the earlier backup kept: ${upgrade.kept}")
         val after = upgraded.everything()
