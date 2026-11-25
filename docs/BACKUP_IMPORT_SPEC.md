@@ -49,16 +49,16 @@ If you read nothing else, follow these. Each one is a real way an import fails.
 7. **SHA-256 hashes are lower-case hex**, 64 characters. Upper case fails.
 8. **`manifest.json` lists `collection.json` and every file under `files/`**, each with its byte size and SHA-256. The hash of `collection.json` must be of the exact bytes in the ZIP. If you change `collection.json` after hashing, hash it again.
 9. **JSON keys are `snake_case` database column names**, exactly as in §7. A misspelt key is silently ignored, so that value is lost.
-10. **Use real JSON types.** Whole numbers have no decimal point (`300`, not `300.0`: one `300.0` makes the whole file unreadable), decimals are numbers (`41.5`), true/false are `true`/`false` (not `1`), text is in quotes. No `NaN`, no comments, no trailing commas, no byte-order mark. See §7.2.
+10. **Use real JSON types.** Whole numbers have no decimal point (`300`, not `300.0`: one `300.0` makes the whole file unreadable), decimals are numbers (`41.5`), true/false are `true`/`false` (not `1`). Text is **always** in quotes, even a reference, calibre or serial number that looks like a number (`"reference": "16610"`, not `16610`: also fatal). No `NaN`, no comments, no trailing commas, no byte-order mark. See §7.2.
 11. **Every `watch` row needs `id`, `status`, `created_at`, `updated_at` and `service_reminder`.** One missing value makes the whole backup unreadable.
-12. **Leave a value out rather than writing `""` or `0`** when it is unknown. Missing means "not set".
+12. **Leave an optional value out rather than writing `""` or `0`** when it is unknown. Missing means "not set". Required keys are never left out; the one required key that can be empty is `service_entry.work`, which is `""` when the work is unknown.
 13. **IDs are new random UUIDs** (lower case), unique across the whole collection. Never start one with `sample-`. Keep them if you might import the same watches again (§11, §12).
 14. **Timestamps are milliseconds since 1970 (UTC)**, 13 digits today (for example `1795600000000`). Dates are `YYYY-MM-DD` text.
 15. **Money is an integer number of cents** plus a 3-letter currency code: A$1,234.50 is `"price_minor": 123450, "price_currency": "AUD"`.
 16. **Enumerations are lower-case keys from §8** (`owned`, `automatic`, `full_service`). Anything else is ignored or replaced by a default.
 17. **Every file path matches** `photos|documents|snapshots/<folder>/<name>`, using only letters, digits, `.`, `_` and `-`. No spaces. Use the conventions in §10.2.
 18. **A photo needs only its original file.** Set `display_file` and `thumb_file` to the same path as `original_file`, and the app makes the smaller images itself after the restore (§10.3).
-19. **Every child row (photo, service entry, document and so on) must belong to a watch in the same backup.** Rows for other watches are skipped.
+19. **Every child row (photo, service entry, document and so on) must belong to a watch in the same backup.** Rows for other watches are skipped, and for complications, provenance, other specs and box & papers that happens **without any warning**.
 20. **Leave `setting` empty**, and tell the user that **Replace** also resets their app settings (theme, accent, units) to the defaults (§4).
 
 ---
@@ -106,7 +106,7 @@ Nothing on the device changes in this step.
 4. `collection.json` must be in the ZIP, listed in the manifest's `files`, and its SHA-256 must match. Otherwise → **"This backup is damaged and can't be restored (…)"**.
 5. It parses `collection.json`. If any row breaks the typing rules (§7.2) → **damaged ("collection.json can't be read")**.
 6. It **cleans** the data (nothing fatal here; each kind of problem becomes one warning line):
-   - Child rows whose `watch_id` isn't a watch in this backup are dropped. *Warning: "N records for watches not in the backup will be skipped."*
+   - Child rows whose `watch_id` isn't a watch in this backup are dropped. For photos, service entries, documents and snapshots: *warning "N records for watches not in the backup will be skipped."* For complications, provenance, other specs and box & papers: **dropped with no warning at all**, so check those `watch_id`s yourself.
    - A photo whose `original_file` isn't listed in the manifest, or whose path breaks the path rule (§10.1), is dropped. *Warning: "N photos missing from the backup will be skipped."*
    - A photo whose display or thumbnail file is missing or unsafe keeps its original and has those rebuilt later (no warning).
    - A document whose `file` isn't listed or is unsafe is dropped. *Warning: "N documents missing…"*
@@ -188,7 +188,7 @@ The user picks; your job is to tell them which one fits.
 | Python `zipfile` writing to a pipe or stdout | ⛔ with `ZIP_STORED`, ✅ with `ZIP_DEFLATED` (§5.3) |
 | Info-ZIP `zip -r` (Linux, macOS), default or `-0` (store), with or without a top folder | ✅ Run it inside the folder that holds `manifest.json`: `cd staging && zip -r -0 "../My import.zip" manifest.json collection.json files` |
 | macOS Finder "Compress" | ✅ (the app's own tests cover a Finder-style re-zip: deflated, data descriptors, top folder, `__MACOSX`) |
-| Windows "Send to › Compressed folder" | Deflated, ordinary headers: works under the same rules. |
+| Windows "Send to › Compressed folder" | Not tested. It writes deflated entries, which the app reads; zip the files themselves (not a folder holding them) or the top-folder rule applies. |
 
 ### 5.3 The one trap: writing a ZIP to a stream
 
@@ -235,12 +235,14 @@ Example:
   "app": "Watches import (from collection.xlsx)",
   "counts": { "watches": 2, "photos": 1, "service_entries": 1, "documents": 1, "snapshots": 0 },
   "files": [
-    { "path": "collection.json", "size": 5120, "sha256": "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b" },
-    { "path": "files/documents/7d0c2a4e-.../9b1f5c2d-....pdf", "size": 81234, "sha256": "…" },
-    { "path": "files/photos/7d0c2a4e-.../4e2b8a1c-...-original.jpg", "size": 2381177, "sha256": "…" }
+    { "path": "collection.json", "size": 3184, "sha256": "<64 lower-case hex characters: the SHA-256 of collection.json>" },
+    { "path": "files/documents/7d0c2a4e-5f1b-4c3a-9e8d-2b6f1a0c9e47/9b1f5c2d-6e4a-4d8b-9c3f-7a2e1b0d4c58.pdf", "size": 81234, "sha256": "<SHA-256 of the PDF>" },
+    { "path": "files/photos/7d0c2a4e-5f1b-4c3a-9e8d-2b6f1a0c9e47/4e2b8a1c-0d3f-4b6e-8a7c-1f2e3d4c5b6a-original.jpg", "size": 2381177, "sha256": "<SHA-256 of the JPEG>" }
   ]
 }
 ```
+
+The `<…>` values are placeholders: compute every hash from the real bytes. This is the manifest of the §16 example.
 
 ---
 
@@ -265,7 +267,7 @@ One JSON object. Each key is a table name, each value is an array of rows. Each 
 }
 ```
 
-- A table you have nothing for can be `[]` or left out.
+- A table you have nothing for is `[]` or left out, **never `null`** (`"photo": null` makes the whole file unreadable).
 - Unknown table names and unknown column names are ignored (so a typo loses that data without any error).
 - The app inserts parents before children, so the order of rows and tables doesn't matter.
 - Two rows with the same primary key: the later one wins.
@@ -276,9 +278,9 @@ The app reads this file with a strict JSON parser (kotlinx.serialization, non-le
 
 | Column type in the tables below | Write it as | Don't |
 | --- | --- | --- |
-| **text** | a JSON string: `"Omega"` | numbers or booleans without quotes for a text column; empty strings `""` (leave the key out instead) |
-| **whole** (Int/Long) | a JSON integer: `300`, `1795600000000` | `300.0` or `3e2` (⛔ the whole file is refused); `"300"` (happens to work, don't rely on it) |
-| **decimal** | a JSON number: `41`, `41.5` | `NaN`, `Infinity` (⛔); `"41.5"` (happens to work, don't rely on it) |
+| **text** | a JSON string: `"Omega"`, and **always** in quotes, even when it looks like a number: `"reference": "16610"`, `"caliber": "8800"`, `"serial_number": "87654321"` | `"reference": 16610` or `"brand": true` (⛔ the whole file is refused); empty strings `""` (leave the key out instead) |
+| **whole** (Int/Long) | a JSON integer: `300`, `1795600000000` | `300.0` (⛔ the whole file is refused); `""` (⛔); `3e2` or `"300"` (happen to work, don't rely on them) |
+| **decimal** | a JSON number: `41`, `41.5` | `NaN`, `Infinity`, `""` (⛔); `"41.5"` (happens to work, don't rely on it) |
 | **true/false** | `true` or `false` | `1`, `"yes"` (⛔); `"true"` (happens to work, don't rely on it) |
 | **date** | text `"YYYY-MM-DD"`: `"2021-05-01"` | `"01/05/2021"`, `"May 2021"`, `"2021-5-1"` |
 | **timestamp** | whole number of milliseconds since 1970-01-01 UTC | seconds (`1795600000`), decimals, ISO text |
@@ -418,7 +420,7 @@ For facts that fit no field in §7.3 ("Certification: COSC", "Bracelet taper: 20
 | `watch_id` | text | **yes** | |
 | `serviced_on` | date | **yes** | `"2024-02-01"`. If the day is unknown use the 1st and say so in `notes`. |
 | `serviced_by` | text | no | "Omega Service Centre Sydney" |
-| `work` | text | **yes** | Keys from §8.6 joined by commas, no spaces: `"full_service,gaskets"`. Use `""` if unknown (the key itself is required). |
+| `work` | text | **yes** | Keys from §8.6 joined by commas, **no spaces**: `"full_service,gaskets"` (a space stops a full service counting towards the next-service date). Use `""` if unknown: the key itself is required. |
 | `cost_minor` | whole | no | Cents. |
 | `cost_currency` | text | no | ISO 4217. If left out while `cost_minor` is set, `AUD` is assumed. |
 | `warranty_months` | whole | no | Warranty on this work. |
@@ -541,7 +543,7 @@ An unknown key shows as no movement type.
 Anything else: `custom:<Label>`, e.g. `custom:Helium valve`, `custom:Tide indicator`.
 
 ### 8.5 Photo kind (`photo.kind`)
-`user` (Your photo), `reference` (Reference image). A reference image is never picked as the cover automatically. An unknown kind is treated as `user`.
+`user` (Your photo), `reference` (Reference image). A reference image is never picked as the cover automatically. An unknown kind (even `"User"`) shows as `user` on the watch's own page, but is never picked as the cover in the grid or the Service tab.
 
 ### 8.6 Service work (`service_entry.work`, comma-separated)
 `full_service`, `regulation`, `crystal`, `gaskets`, `battery`, `polish`, `other`. Unknown keys are dropped.
@@ -699,6 +701,10 @@ Rows on the device that the backup doesn't have are left alone, even for an Upda
 - **Corrected import:** reuse every ID from the first import, and set every changed watch's `updated_at` to **now** (later than the first import's). Unchanged watches can keep their old `updated_at`.
   - If the user edited a watch in the app after the first import, the device's `updated_at` is newer: the device's version is Kept unless your `updated_at` is later still. Tell the user.
   - A photo with a **new ID** is added beside the old one, not instead of it. To replace a photo, keep its ID, give its file a new path (§11.4), and make sure its watch is Updated.
+  - What needs which `updated_at` raised:
+    - a changed field on the watch, or changed complications, box & papers, provenance or other specs → the **watch's** `updated_at`;
+    - a changed photo or document (same ID) → the **watch's** `updated_at` (they follow their watch);
+    - a changed service entry (same ID) → **that entry's own** `updated_at`. Raising only the watch's isn't enough: the change is silently lost.
 - **Adding photos, service history or documents to watches already on the device** (watches the user typed in, not ones you imported): you need those watches' IDs, and the backup must include **their `watch` rows**. Child rows for a watch that isn't in the backup are skipped (✅ §13). Ask the user for a backup made in the app (Settings › Backup & restore › Back up now), copy the `watch` rows (and their complication, provenance, other-spec and box & papers rows) **unchanged**, and add your new photo, service-entry and document rows with new IDs. The watch then counts as Unchanged and your new rows are added. (✅ §13)
 
 ---
@@ -742,9 +748,13 @@ Legend: ⛔ fatal (nothing restored) · ⚠️ restored, with a warning on scree
 | A trailing comma (`[ … ],` before `}`) | ⛔ can't be read |
 | Pretty-printed or all on one line | ✅ |
 | A whole-number field with a decimal point: `"water_resistance_m": 300.0` | ⛔ can't be read |
+| A text field holding an unquoted number or boolean: `"reference": 16610`, `"brand": true` | ⛔ can't be read |
+| An empty string in a number field: `"year_from": ""` | ⛔ can't be read |
+| A whole table set to `null`: `"source_snapshot": null` | ⛔ can't be read |
+| A whole number written with an exponent: `"water_resistance_m": 3e2` | 🔧 read as 300. Don't rely on it. |
 | A timestamp as a decimal: `"created_at": 1790000000.5` | ⛔ can't be read |
 | `true` written as `1` | ⛔ can't be read |
-| A required key missing (`service_reminder`, `updated_at`, a child row's `watch_id`) | ⛔ can't be read |
+| A required key missing (`service_reminder`, `updated_at`, a service entry's `work`, a child row's `watch_id`) | ⛔ can't be read |
 | A required key set to `null` (`"status": null`) | ⛔ can't be read |
 | An optional key set to `null` | ✅ same as leaving it out |
 | Unknown keys in a row, an unknown table | 🔧 ignored |
@@ -760,11 +770,12 @@ Legend: ⛔ fatal (nothing restored) · ⚠️ restored, with a warning on scree
 | Only a `watch` table, with only the required keys and a brand and model | ✅ the smallest working import |
 | `status` `"collection"`, `movement_type` `"mechanical"`, `condition` `"used"` (not keys) | 🔧 stored as written, shown as **Owned**, no movement type, no condition |
 | `acquired_on` `"01/05/2021"` | 🔧 stored, shown as **no date** |
-| `work` `"Full Service, battery"` | 🔧 only `battery` survives: keys are case-sensitive, spaces are trimmed |
+| `work` `"Full Service, battery"` | 🔧 only `battery` is shown: keys are case-sensitive. Spaces are trimmed for display only: the Service tab looks for `,full_service,` exactly, so `"battery, full_service"` shows "Full service" but **doesn't count it** for the next-service date. No spaces. |
 | Complication `"Helium valve"` without `custom:` | 🔧 shown as "Helium valve", but it isn't the app's form: use `custom:Helium valve` |
 | A watch's `cover_photo_id` naming another watch's photo | 🔧 cleared; the first own photo is used |
 | A document's `service_entry_id` naming no service entry | 🔧 the link is removed |
 | A photo whose `watch_id` is no watch in the backup | ⚠️ "1 record for watches not in the backup will be skipped." |
+| A complication, provenance, other-spec or box & papers row whose `watch_id` is no watch in the backup | 🔧 dropped **with no warning** (read from the code: the warning is counted before these four tables are filtered) |
 | A crop outside 0–1 | 🔧 ignored: the photo shows uncropped |
 | `setting` rows `ui.accent` and `device.app_lock` | 🔧 `ui.accent` restored, `device.app_lock` dropped |
 | Replace onto a device that had settings, with `setting: []` | 🔧 the device's settings are all removed (back to defaults) |
@@ -814,8 +825,9 @@ Follow in order.
 
 **Step 4: Build each `watch` row.**
 - Start with the five required keys: `id`, `status`, `created_at`, `updated_at`, `service_reminder` (`false`).
-- `created_at` = `updated_at` = the current time in ms. To keep the user's order under "Recently added", give each watch 1 ms (or 1 s) more than the one before, in the order the user lists them.
+- `created_at` = `updated_at` = the current time in ms. "Recently added" lists the **newest first**, so to show the user's list in their order there, count **down**: the first row gets the latest time, and each later row 1 s (1000 ms) less. (The app's default sort is by brand, so this only matters if the user sorts by Recently added.)
 - Add each known field with the right type and unit (§7.3, §9). Leave out unknown ones. Don't write `""`, `null`, `0` or `"N/A"` for unknown values.
+- Text fields are JSON strings even when the value is a number: `"reference": "16610"`. A spreadsheet or CSV reader often hands you `16610` (an int) or `16610.0` (a float) for such a column: convert it to text first, without the `.0`.
 - Map statuses, movement types and conditions to keys (§8). Put anything that doesn't fit in `private_notes`.
 
 **Step 5: Complications** → `watch_complication` rows (§7.4).
@@ -844,7 +856,7 @@ Follow in order.
 
 **Step 14: Write the ZIP to a file on disk:** `manifest.json`, `collection.json`, then each `files/…` entry, stored (§5, §15).
 
-**Step 15: Check it** with §18. If you have a JDK, run the in-repo checker (§20.2).
+**Step 15: Check it** with §18. If you have a JDK, you can also run the in-repo checker (§20.2), but only on a backup where **every watch has photos and an explicit `cover_photo_id`**. It fails any other backup on purpose, even a valid one (such as §16's, whose wishlist Tudor has no photo). Don't "fix" a valid backup to please it.
 
 **Step 16: Hand it over** and tell the user: copy the `.zip` to the device (Files, a cloud folder, AirDrop, USB), open Watches › Settings › Backup & restore › Restore from a backup, choose the file, check the preview, pick Merge or Replace as agreed. Save the ID map if they may want a corrected import later.
 
@@ -896,7 +908,7 @@ def write_watches_backup(out_path, collection, files, made_by="Watches import"):
 ```
 
 Notes:
-- `allow_nan=False` makes Python refuse a `NaN` rather than write invalid JSON. Values from pandas or a CSV reader are often `NaN` for empty cells, or floats for whole numbers: drop empty values and convert whole-number columns with `int()` **before** building rows.
+- `allow_nan=False` makes Python refuse a `NaN` rather than write invalid JSON. Values from pandas or a CSV reader are often `NaN` for empty cells, floats for whole numbers, and ints for text columns that look numeric. **Before** building rows: drop empty values; convert whole-number columns with `int()`; convert text columns (reference, calibre, serial number, model names like "5513") with `str()`, removing any `.0` a float added.
 - `hexdigest()` is already lower case.
 - Python writes JSON `true`/`false`/numbers correctly from `True`/`False`/`int`/`float`.
 
@@ -921,8 +933,8 @@ Assume the current time is `1795600000000` (2026-11-25), the IDs below are fresh
     {
       "id": "7d0c2a4e-5f1b-4c3a-9e8d-2b6f1a0c9e47",
       "status": "owned",
-      "created_at": 1795600000000,
-      "updated_at": 1795600000000,
+      "created_at": 1795600001000,
+      "updated_at": 1795600001000,
       "cover_photo_id": "4e2b8a1c-0d3f-4b6e-8a7c-1f2e3d4c5b6a",
       "brand": "Omega",
       "collection": "Seamaster",
@@ -941,8 +953,8 @@ Assume the current time is `1795600000000` (2026-11-25), the IDs below are fresh
     {
       "id": "c81f6d20-3b9a-4e57-a1d4-6e0b2f9c7a13",
       "status": "wishlist",
-      "created_at": 1795600001000,
-      "updated_at": 1795600001000,
+      "created_at": 1795600000000,
+      "updated_at": 1795600000000,
       "brand": "Tudor",
       "collection": "Black Bay",
       "model_name": "Black Bay 58",
@@ -1013,7 +1025,8 @@ Things to notice:
 - "Feb 2024" had no day, so `serviced_on` is the 1st and `notes` says so.
 - "(want one)" became `"status": "wishlist"`. A wishlist watch has no purchase details.
 - `diameter_mm` is `42`: a whole number is fine for a decimal field. `water_resistance_m` must be a whole number.
-- The Tudor's `created_at` is 1 s later, so "Recently added" shows it first.
+- The Omega (row 1) has the later `created_at`, by 1 s, so "Recently added" (newest first) shows the two in the user's order.
+- `reference` values are strings. One that is all digits, such as Rolex's 16610, is still written `"16610"`.
 
 ZIP contents, in this order:
 
@@ -1140,11 +1153,15 @@ Check every item. The first group are the ones that make the whole restore fail.
 - [ ] Every file under `files/` that a row uses is both listed and present.
 - [ ] Neither JSON file starts with a BOM; both parse with a strict JSON parser.
 - [ ] Every `watch` row has `id`, `status`, `created_at`, `updated_at`, `service_reminder`, with the right types.
-- [ ] Every row of every other table has its required keys (§7), with the right types.
-- [ ] Whole-number fields hold integers without `.0`; booleans are `true`/`false`; no `NaN`.
+- [ ] Every row of every other table has its required keys (§7), with the right types. Every `service_entry` has `work` (`""` if unknown).
+- [ ] Whole-number fields hold integers without `.0`; booleans are `true`/`false`; no `NaN`; no `""` in a number field.
+- [ ] Every text field is a quoted string, including references, calibres and serial numbers made of digits.
+- [ ] No table is `null` (use `[]` or leave it out).
 
 **Data quietly lost if wrong**
-- [ ] Every child row's `watch_id` is a watch in this backup.
+- [ ] Every child row's `watch_id` is a watch in this backup. (Complication, provenance, other-spec and box & papers rows that fail this vanish without a warning.)
+- [ ] `service_entry.work` has no spaces.
+- [ ] Every `photo.kind` is exactly `user` or `reference`.
 - [ ] Every file path follows the §10.1 rule.
 - [ ] Column names are spelt exactly as in §7 (`dial_colour`, not `dial_color`).
 - [ ] Enum values are keys from §8.
@@ -1158,7 +1175,7 @@ Check every item. The first group are the ones that make the whole restore fail.
 - [ ] `display_file` = `thumb_file` = `original_file` for each photo (unless you made renditions to the §10.3 rules).
 - [ ] Documents are PDF/JPEG/PNG/WebP with exact `size_bytes` and matching `mime_type`.
 - [ ] `setting` and `source_snapshot` are `[]`.
-- [ ] No empty strings; unknown values are left out.
+- [ ] No empty strings in optional fields; unknown values are left out. (`service_entry.work` is the one required key that may be `""`.)
 - [ ] You told the user whether to pick Merge or Replace, and that Replace resets settings.
 
 ---
@@ -1172,7 +1189,7 @@ Check every item. The first group are the ones that make the whole restore fail.
 | "This backup is damaged and can't be restored (collection.json is missing). Nothing on this phone was changed." | `collection.json` not in the ZIP, or not in the same folder as `manifest.json`. |
 | "… (collection.json isn't listed) …" | No `{"path": "collection.json", …}` in the manifest's `files`. |
 | "… (collection.json doesn't match its checksum) …" | Wrong or upper-case hash, or the file changed after hashing. |
-| "… (collection.json can't be read) …" | Invalid JSON, a BOM, a missing required key, `null` in a required key, or a wrong type (§7.2, §13). |
+| "… (collection.json can't be read) …" | Invalid JSON, a BOM, a missing required key (often `service_entry.work`), `null` in a required key, a table set to `null`, or a wrong type: most often an unquoted number in a text field (`"reference": 16610`), `300.0` in a whole-number field, or `""` in a number field (§7.2, §13). |
 | "… (photos/…/x.jpg doesn't match its checksum) …" | A media file's hash is wrong, or the file was changed after hashing. |
 | "… (N files are missing) …" | Files listed in the manifest and used by rows, but not in the ZIP. |
 | "… (x is stored without its size) …" | A media file stored with a data descriptor: the ZIP was written to a stream (§5.3). (On `manifest.json` this shows as "isn't a Watches backup".) |
@@ -1214,7 +1231,7 @@ The catalogue format:
       "fields": {
         "brand": "Omega", "collection": "Seamaster", "model_name": "Seamaster Diver 300M",
         "reference": "210.30.42.20.03.001", "diameter_mm": 42, "water_resistance_m": 300,
-        "movement_type": "automatic", "hacking": true,
+        "caliber": "8800", "movement_type": "automatic", "hacking": true,
         "complications": ["date", "custom:Helium valve"]
       },
       "sourced": { "movement.caliber": { "source": "grail", "url": "https://…" } },
@@ -1231,6 +1248,7 @@ The catalogue format:
 
 - `fields` takes these keys only: `brand`, `collection`, `model_name`, `reference`, `nickname`, `year_from`, `year_to`, `limited_total`, `case_material`, `diameter_mm`, `thickness_mm`, `lug_to_lug_mm`, `lug_width_mm`, `bezel`, `crystal`, `case_back`, `crown`, `water_resistance_m`, `dial_colour`, `dial_finish`, `indices`, `hands`, `lume`, `caliber`, `base_caliber`, `movement_type`, `jewels`, `frequency_bph`, `power_reserve_h`, `hacking`, `hand_winding`, `complications` (array), `strap_type`, `strap_material`, `clasp`, `fitted_strap`, `private_notes`, `story`, `service_interval_months`.
 - **Limits:** every watch is `owned`; there is no way to give status, `acquired_on`, `acquired_from`, price, condition, serial number, warranty, `limited_number`, service history or box & papers. The first `user` photo becomes the cover unless one is marked `"cover": true`. For those, use the hand-made route in this document, or restore the maker's output and finish in the app.
+- **Two kinds of key:** `fields` uses column names (`caliber`, `diameter_mm`), while `sourced` uses the dotted field keys from §7.3 (`movement.caliber`, `case.diameter_mm`). A `sourced` entry only counts when that field has a value in `fields`; otherwise it's ignored.
 - `id` (watch) is required. Photo and document `id`s are optional; give the earlier backup's IDs to make a corrected backup that Merge applies over the earlier one (§12).
 
 ### 20.2 `PersonalBackupCheck`: test any backup before handing it over
@@ -1244,7 +1262,7 @@ WATCHES_BACKUP_CHECK=/absolute/path/out.zip \
 
 Add `WATCHES_BACKUP_PREVIOUS=/absolute/path/earlier.zip` to also check that restoring this backup with Merge over an earlier one leaves exactly this one's collection, and that no file name of the earlier backup is reused for other contents (§11.4).
 
-It expects **every watch to have a cover photo** and photos without a location, so a backup of watches without photos fails it on purpose. The JVM's image code reads JPEG and PNG, not HEIC.
+It was written for one personal collection, so it expects **every watch to have a `cover_photo_id` naming one of its photos** (the app's "first own photo" fallback doesn't count) and photos without a location. A valid backup with a watch that has no photo, or no explicit cover, fails it. That doesn't mean the backup is broken. The JVM's image code reads JPEG and PNG, not HEIC.
 
 ---
 
