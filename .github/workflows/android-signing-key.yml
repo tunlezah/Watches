@@ -2,7 +2,7 @@ name: Make Android signing key
 
 # Optional. Without it, the Android workflow signs with each run's throwaway debug key, so builds
 # install but not over each other. Run this once, by hand, to make a key of your own instead,
-# without installing anything. README › Release APK and signing › Optional: your own key has the steps.
+# without installing anything. docs/BUILD.md › Release APK and signing › Optional: your own key has the steps.
 #
 # A workflow can't save repository secrets, so the key comes back as a download (deleted after a
 # day) for you to paste into the WATCHES_KEYSTORE_BASE64 secret and keep. It's locked with the

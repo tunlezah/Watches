@@ -188,7 +188,7 @@ jobs:
 
       # Named for its version, like the APK. "not-notarised" until the build is signed with a
       # Developer ID and notarised (docs/MACOS_PLAN.md, 8.4.3): macOS then needs one extra step to
-      # open it (README › Mac).
+      # open it (README › Get the app › Mac).
       - name: Name the disk image
         id: name
         run: |

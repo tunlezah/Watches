@@ -2,7 +2,7 @@
 
 Version 1 · written by Watches 0.4.0 and later · read by every platform build of the app.
 
-A backup is one ordinary ZIP file holding everything in the collection: every table of the database as JSON, and every photo, document and saved source page as the original file. Any unzip tool can open it, and the JSON reads in a text editor. Restoring it brings the collection back exactly, on Android, iPhone or Mac.
+A backup is one ordinary ZIP file holding everything in the collection: every table of the database as JSON, and every photo, document and saved source page as the original file. Any unzip tool can open it, and the JSON reads in a text editor. Restoring it brings the collection back exactly, on Android, iPhone, Mac or the home server.
 
 ## Layout
 
@@ -116,6 +116,8 @@ All database changes happen in one transaction. Incoming files are written next 
 A backup restored onto the phone it came from writes almost nothing: files already there with the same SHA-256 are reused.
 
 ## Making a compatible archive by hand
+
+To build a backup from scratch, for example to import a collection from a spreadsheet, follow `docs/BACKUP_IMPORT_SPEC.md`: every field, the allowed values, and what the restore does with each mistake.
 
 Unzipping a backup, editing `collection.json` and zipping it again works, with these rules:
 - Update the file's `sha256` in the manifest.

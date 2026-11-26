@@ -1,315 +1,222 @@
 # Watches
 
-A private, offline-first watch collection app for one collector. Kotlin Multiplatform with Compose Multiplatform: Android first, iPhone and Mac from the same code, and a home server (such as TrueNAS) that shows it in a browser.
+**A private catalogue for your watch collection.** Every watch, with its photos, full specifications, service history, box & papers and documents, kept on your own phone, Mac or home server. No account, no cloud, no ads.
 
-- Everything lives on the phone. No accounts, servers, analytics, ads or crash reporting.
-- The network is used by Lookup only, and only when you press Search, open a result or save a picture. Every request is listed in Settings › Request log.
-- Service history, reminders, box & papers, warranties, and documents such as manuals, quick start guides, receipts and invoices.
-- Backup to one .zip you save wherever you like, restore by merging or replacing, CSV export for spreadsheets, and an optional app lock.
-- Designed for 500+ watches with photos.
+<p align="center">
+  <img src="docs/screenshots/collection-atelier-dark.png" width="250" alt="The collection as a grid of catalogue plates, in the Atelier design, dark">
+  <img src="docs/screenshots/detail-instrument-dark.png" width="250" alt="An Omega Speedmaster's page, in the Instrument design, dark">
+  <img src="docs/screenshots/collection-gallery-light.png" width="250" alt="The collection in the Gallery design, light">
+</p>
 
-Plan and decisions: [`docs/PLAN.md`](docs/PLAN.md), with the iPhone in [`docs/IOS_PLAN.md`](docs/IOS_PLAN.md), the Mac in [`docs/MACOS_PLAN.md`](docs/MACOS_PLAN.md) and the home server in [`docs/SELF_HOSTING_PLAN.md`](docs/SELF_HOSTING_PLAN.md). Data sources: [`docs/SOURCES.md`](docs/SOURCES.md). Changes: [`CHANGELOG.md`](CHANGELOG.md).
+<p align="center"><sub>Screenshots show sample watches. A watch without a photo yet is drawn by the app.</sub></p>
 
-## Project layout
+<p align="center">For <b>Android</b> and <b>iPhone</b>, with previews for <b>Mac</b> and a <b>home server</b> you use from a browser.<br>
+<a href="#get-the-app">Get the app</a> · <a href="#what-it-does">What it does</a> · <a href="#private-by-design">Privacy</a> · <a href="#backups-and-moving-between-devices">Backups</a> · <a href="#questions">Questions</a></p>
 
-| Module | What it holds |
-| --- | --- |
-| `shared/core` | Domain model, the spec-field registry, units and formatting, collection queries. Pure Kotlin. |
-| `shared/data` | Room database (schema exported to `shared/data/schemas`), repositories, file storage, photo pipeline, sample catalogue. |
-| `shared/search` | Spec-source adapters and HTTP. The only module allowed to use the network. |
-| `shared/ui` | Design system (three designs: Atelier, Instrument, Gallery; see [`docs/DESIGN.md`](docs/DESIGN.md)), screens, view models, navigation. Produces the iOS framework `WatchApp`. |
-| `androidApp` | Android shell: activity, manifest, signing, screenshot tests. |
-| `iosApp` | SwiftUI shell, generated with XcodeGen, with its app-hosted and UI tests. |
-| `desktopApp` | Mac shell on Compose's desktop target: one window, packaging, the self-test, desktop tests and screenshots. |
-| `macBridge` | The Mac bridge: the iPhone's image code (`shared/data`'s `appleMain`) built as a small native library, which the Mac app loads because Java can't call the Mac's own frameworks. |
-| `docker` | The home server image: the desktop app's Linux build in a container that shows it in a web page, and a compose file for TrueNAS. |
+## What it does
 
-Shared tests live in `commonTest`, so the same tests run on the JVM (as Android host tests in `shared/ui`) and on the iOS simulator. The shared modules' JVM target runs those fast tests, and it is also what the Mac app runs on. The app's version, for both phones, is in [`version.xcconfig`](version.xcconfig).
+### Your collection, at a glance
 
-## Build
+Browse your watches as a grid of photos or a compact list. Search as you type, sort by brand, date acquired, case size or recently added, and filter by brand, movement, complications or case size. Tabs keep owned watches, your wishlist, incoming watches, watches away for service, sold watches and the archive apart.
 
-Requirements: JDK 21 and the Android SDK (compile SDK 37). Gradle is provided by the wrapper.
+It's built to stay quick with 500 watches or more, photos and all.
 
-```sh
-./gradlew :androidApp:assembleDebug          # debug APK
-./gradlew :shared:core:jvmTest :shared:data:jvmTest :shared:search:jvmTest :shared:ui:testAndroidHostTest   # shared tests
-WATCHES_LIVE_TESTS=1 ./gradlew :shared:search:jvmTest --tests '*LiveSourcesTest*'   # one real lookup per source
-./gradlew :androidApp:recordRoborazziDebug   # screenshots of every design -> androidApp/build/outputs/roborazzi
-./gradlew checkNetworkIsolation              # fails if core, data, ui or the Mac shell can reach the network, by library or Apple's or Java's APIs
-./gradlew checkIosProject                    # checks the iOS project spec, version, icon and privacy manifest (works on Linux)
-./gradlew :shared:ui:compileTestKotlinIosSimulatorArm64   # checks shared code and its tests compile for iOS (works on Linux)
-./gradlew :shared:ui:iosSimulatorArm64Test   # the shared tests on an iOS simulator (macOS only; CI runs every module)
-./gradlew :desktopApp:run :desktopApp:test   # the Mac app on this computer, and its tests (see Mac, below)
-```
+### Every detail of every watch
 
-### Release APK and signing
+Each watch has a page of its own: its photos, then a spec sheet in the groups a collector expects: identity, case, dial, movement, strap & bracelet, ownership, and service & warranty. Sizes are in millimetres, water resistance in metres with ATM or bar beside it, beat rate in vibrations per hour with hertz, and power reserve in hours (and days, from three days up). Long-press any value to copy it. The serial number stays hidden until you tap it.
 
-Every release APK is signed, so Android installs it. Without a key of your own, it's signed with the debug key of the machine that builds it. Each GitHub Actions run is a new machine with a new debug key, and Android won't install an update signed with a different key over the app. So to move to a newer build: back up your collection (Settings › Backup & restore), uninstall the app, install the new APK, then restore.
+Add a watch by hand with a form that knows watches: brands already in your collection are suggested as you type, common answers (sapphire, Super-LumiNova, folding clasp…) are one tap away, number fields understand units, and complications are a tick-list. Or start from Lookup, below.
 
-```sh
-./gradlew :androidApp:assembleRelease   # -> androidApp/build/outputs/apk/release/androidApp-release.apk
-```
+<p align="center">
+  <img src="docs/screenshots/detail-atelier-light.png" width="250" alt="A watch's page in Atelier, light: photo, title, status and the start of the spec sheet">
+  <img src="docs/screenshots/specs-instrument-light.png" width="250" alt="A full spec sheet in Instrument, light, with numbered sections">
+</p>
 
-Its version name and code come from `version.xcconfig`, which the iPhone build reads too.
+### Photos
 
-The Android workflow builds the release APK on every push and keeps it for 14 days as the run's `watches-release-apk` artifact, named `Watches-<version>-<build>.apk`. The run's summary says which key signed it, and its certificate's SHA-256.
+Take photos with the camera or pick them from your library. Reorder them, choose the cover, and crop. **The location is removed from every photo** you add, and the picture itself is kept as it was. iPhone photos (HEIC) are fine.
 
-#### Optional: your own key, so updates install over the top
+### Look up specs
 
-Signed with your own key, every build matches, so new builds install over the app and keep its data. The key is never stored in this repository. Provide it via environment variables (or the matching `watches.*` Gradle properties in `~/.gradle/gradle.properties`):
+Search by name, reference or calibre, and Watches looks the watch up in public references:
+- **Wikidata and Wikipedia**, for the brand, the model's history and its introduction;
+- **Ranfft DB**, for calibres, with its owner's permission;
+- **Grail Watch Reference**, for movements: jewels, beat rate, power reserve and more.
 
-| Variable | Meaning |
-| --- | --- |
-| `WATCHES_KEYSTORE` | Path to the `.jks` keystore |
-| `WATCHES_KEYSTORE_PASSWORD` | Keystore password |
-| `WATCHES_KEY_ALIAS` | Key alias (default `watches`) |
-| `WATCHES_KEY_PASSWORD` | Key password (defaults to the keystore password) |
+You review every value before it's saved, and tick the ones you want. **Anything you typed yourself is never replaced unless you tick it.** Each looked-up value remembers where and when it came from. Freely licensed pictures from Wikimedia Commons can be saved to a watch, with their credit.
 
-For CI, make the key once, in either of two ways. Both use the alias `watches`, the default above.
+<p align="center">
+  <img src="docs/screenshots/lookup-results-instrument.png" width="250" alt="Lookup results from Wikidata, Ranfft DB and Grail Watch Reference, in Instrument">
+  <img src="docs/screenshots/lookup-result-gallery.png" width="250" alt="One result's spec sheet, from Ranfft DB, in Gallery">
+  <img src="docs/screenshots/lookup-apply-atelier.png" width="250" alt="Reviewing looked-up values, one tick box per field, with your own values unticked, in Atelier">
+</p>
 
-**On GitHub, with nothing to install.** GitHub can make the key, but a workflow can't save secrets, so you paste it in yourself:
+### Service, box & papers and warranty
 
-1. Add a repository secret (Settings › Secrets and variables › Actions) named `WATCHES_KEYSTORE_PASSWORD`: a password of at least 16 characters that you make up and save in a password manager. It locks the key.
-2. Run Actions › Make Android signing key › Run workflow.
-3. Download `watches-signing-key` from the run's page and follow its `README.txt`: paste the contents of `WATCHES_KEYSTORE_BASE64.txt` into a new secret of that name, keep `watches-release.jks` with the password, then delete the download.
+- **Service history**, with who did it, what they did, the cost and the invoice.
+- **When the next service is due**, worked out from the service interval and the last full service. The Service tab lists every watch that's overdue or due soon, and warranties that are ending.
+- **Reminders**, if you want them: a notification at 9 am on the day a watch is due. Off unless you switch it on for that watch.
+- **Box & papers**: a checklist of inner and outer box, warranty card, manual, hang tags, extra links and receipt. A watch with everything gets a **Full set** badge.
+- **Warranty**: when it started and how long it lasts.
 
-The download is deleted after a day anyway. While this repository is public, anyone signed in to GitHub can fetch a run's downloads, so until then only the password protects the key. The workflow won't make another key once `WATCHES_KEYSTORE_BASE64` exists.
+<p align="center">
+  <img src="docs/screenshots/service-due-instrument.png" width="250" alt="Service due: overdue and upcoming services and ending warranties, in Instrument">
+  <img src="docs/screenshots/service-history-atelier.png" width="250" alt="A watch's service interval, reminder and history, in Atelier">
+  <img src="docs/screenshots/box-papers-atelier-light.png" width="250" alt="The box and papers checklist, in Atelier, light">
+</p>
 
-**On your own computer**, with a JDK or Android Studio (both include `keytool`). It asks for a password and a name:
+### Documents
 
-```sh
-keytool -genkeypair -v -keystore watches-release.jks -alias watches -keyalg RSA -keysize 4096 -validity 10000
-```
+Keep a watch's manual, quick start guide, receipts, invoices, warranty and certificates with it, as PDFs or pictures. Read them in the app and share them. Manuals and quick start guides come first, and can be reused for another watch of the same model.
 
-Then add these repository secrets. Encode the keystore with `base64 -w0 watches-release.jks` on Linux, or `base64 -i watches-release.jks` on a Mac.
+<p align="center">
+  <img src="docs/screenshots/documents-gallery.png" width="250" alt="A watch's documents: manual, quick start guide, receipt, certificate and a service invoice, in Gallery">
+</p>
 
-| Secret | Value |
-| --- | --- |
-| `WATCHES_KEYSTORE_BASE64` | `watches-release.jks`, base64-encoded |
-| `WATCHES_KEYSTORE_PASSWORD` | Its password |
-| `WATCHES_KEY_ALIAS` | Optional: the alias, if not `watches` |
-| `WATCHES_KEY_PASSWORD` | Optional: the key's password, if not the keystore's (`keytool` uses one password for both) |
+### Three designs
 
-Keep the `.jks` and its password somewhere private, such as a password manager, and keep a second copy. Without them no later build installs over the app: the only way on is to uninstall it, which deletes its data unless you've saved a backup.
+Choose the look that suits you, in Settings › Appearance. Each has light and dark modes and seven accent colours.
 
-#### Releasing
+- **Atelier**, the catalogue: serif titles on warm graphite or ivory, quiet hairlines, like a fine-watch auction catalogue.
+- **Instrument**, the data sheet: expanded capitals, mono figures and dotted leaders, like a tool watch's spec sheet. True black at night.
+- **Gallery**, the white room: light type, soft cards and plenty of air, like a calm Scandinavian gallery.
 
-To publish an APK that stays downloadable, tag the commit with its version from `version.xcconfig` and push the tag:
+<p align="center">
+  <img src="docs/screenshots/appearance-atelier-dark.png" width="250" alt="Settings › Appearance, showing each design as a specimen in its own style">
+  <img src="docs/screenshots/settings-instrument-dark.png" width="250" alt="Settings, in Instrument, dark">
+</p>
 
-```sh
-git tag v0.8.0 && git push origin v0.8.0
-```
+### Backup, restore and export
 
-The Android workflow then publishes a GitHub release with the APK attached and that version's changelog entry as its notes, which start with the uninstall-first steps when it's signed with a debug key. It refuses an unsigned APK, and a tag that doesn't match `version.xcconfig`. A tag with a suffix, such as `v0.7.0-rc1`, is published as a pre-release. Running the workflow again on the same tag replaces the APK. The same tag also starts the iOS release workflow, and the macOS workflow adds the Mac disk image to the release.
+Back up your whole collection, photos and documents included, to a single file saved wherever your device's file picker reaches: a folder, a USB stick, or a cloud drive such as Google Drive or iCloud Drive. Restore it on the same device or another one, by replacing what's there or merging the two. Export a spreadsheet (CSV) of every watch and every field.
 
-## Sideload on Android
+<p align="center">
+  <img src="docs/screenshots/backup-atelier.png" width="250" alt="Backup & restore, showing the last backup and what it holds, in Atelier">
+  <img src="docs/screenshots/restore-review-gallery.png" width="250" alt="Restoring a backup: merge or replace, and which watches differ, in Gallery">
+</p>
 
-1. On the phone, open the repository's Releases page and download the latest `Watches-….apk`. Or download a build's `watches-release-apk` artifact and copy the APK inside it to the phone.
-2. Open it. Android asks once to allow installs from that app (Files, Chrome, etc.). Allow it.
-3. Install. If Android says the app isn't installed because it conflicts with the existing one, the new build is signed with a different key: back up in Settings › Backup & restore, uninstall Watches, install the new APK, then restore. With your own key, later builds install over the top and keep your data.
+### App lock
 
-The app needs Android 11 or newer.
+Lock Watches with your fingerprint, face or the phone's PIN, at launch and after a time away that you choose. Off unless you turn it on.
 
-Permissions:
-- internet and network state, for Lookup only;
-- notifications, for service reminders, asked for only when you switch one on;
-- the biometric prompt, for the optional app lock (Android shows no permission prompt for this one);
-- wake lock and "run at start-up", which WorkManager adds so reminders survive a restart.
+## Private by design
 
-None of these is a location, contacts, storage or camera permission. Photos are taken with the phone's camera app, and backups are saved through the system file picker.
+- **Everything stays on your device.** No accounts, servers, analytics, ads or crash reporting.
+- **Online only when you search.** Lookup is the only feature that uses the internet, and only when you press Search, open a result or save a picture. Settings › Lookup sources › Request log lists every request.
+- **Polite to the sites it asks.** Lookups say who they are, wait at least a second between requests to a site, follow each site's rules for automated access, and never get around a block.
+- **Not in cloud backups.** Your collection is left out of Android's and iCloud's own backups, so the only copies that leave your device are the backup files you save.
+- **Few permissions.** On Android: internet (for Lookup), notifications (asked for only when you switch on a reminder) and biometrics (for the app lock). No location, contacts, storage or camera permission: photos are taken with the camera app, and backups are saved through the system's file picker. iPhone asks for the camera, notifications and Face ID only when you first use each.
 
-## iPhone
+<p align="center">
+  <img src="docs/screenshots/settings-privacy-gallery-light.png" width="250" alt="Settings › Privacy & security: the app lock and what stays on the phone, in Gallery, light">
+  <img src="docs/screenshots/request-log-atelier-light.png" width="250" alt="The request log, listing every request Lookup made, in Atelier, light">
+</p>
 
-The same app runs on iPhone: the shared Kotlin code, every screen included, inside a small SwiftUI shell. The plan for finishing it is [`docs/IOS_PLAN.md`](docs/IOS_PLAN.md); milestone iOS-1 is built.
+## Get the app
 
-### Building and testing
+| | Android | iPhone | Mac | Home server |
+| --- | --- | --- | --- | --- |
+| **Status** | Complete | Works; iPhone polish to come | Preview | Preview |
+| **Needs** | Android 11 or newer | iOS 17 or newer, and TestFlight | Apple silicon, macOS 13 or newer | Docker on an x86-64 Linux server, such as TrueNAS SCALE 24.10 or newer |
+| **From** | The APK on the [Releases](https://github.com/tunlezah/Watches/releases) page | TestFlight | The disk image on the [Releases](https://github.com/tunlezah/Watches/releases) page | The image `ghcr.io/tunlezah/watches` |
 
-Building for iOS needs a Mac with Xcode 26. The Xcode project is generated from `iosApp/project.yml`:
+If the Releases page has no version yet (none has been published so far), the latest Android and Mac builds are on the repository's [Actions](https://github.com/tunlezah/Watches/actions) page: open the latest green run of the **Android** workflow (for the APK) or the **macOS** workflow (for the Mac), and download from its **Artifacts**. Builds are kept there for 14 days. The home server's image isn't on either page: the server pulls it from GitHub's container registry, where every change to the main branch publishes it as `latest`, and each release as its version.
 
-```sh
-brew install xcodegen
-cd iosApp && xcodegen generate && open iosApp.xcodeproj
-```
+### Android
 
-The Xcode build phase compiles the shared Kotlin framework (`:shared:ui:embedAndSignAppleFrameworkForXcode`). To run it on your own phone from Xcode, pick your team under Signing & Capabilities.
+1. On the phone, open the [Releases](https://github.com/tunlezah/Watches/releases) page and download the latest `Watches-….apk`.
+2. Open it. Android asks once to allow installs from that app (Files, Chrome or similar). Allow it.
+3. Install.
 
-Two GitHub Actions workflows use a macOS runner. They run only when needed, because macOS minutes count ten times on a private repo (while this repository is public, they're free):
-- **iOS** runs every module's shared tests on the simulator, builds the app, and runs the tests hosted in the app (`iosAppTests`, which check what the bundle contains) and the UI tests (`iosAppUITests`, which launch the app to its welcome screen). It also checks the privacy manifest against the binary and saves a screenshot. It runs when iOS code or the build changes, on `v*` tags, and on demand. A run takes about 16 minutes. The first after a dependency change, or after a week without runs, takes about 26, because Kotlin/Native builds every library for the simulator again; the workflow keeps that build in the Actions cache.
-- **iOS release** archives a Release build and uploads it to TestFlight, on `v*` tags and on demand (Actions › iOS release › Run workflow). Until the signing secrets below exist, it builds and checks an unsigned archive instead.
+If Android says the app wasn't installed because it conflicts with one already there, the new build was signed with a different key. See [Updating](#updating).
 
-The Android workflow compiles the shared code and its tests for iOS on every push, and runs `checkIosProject`.
+### iPhone
 
-The app icon is drawn from the Android one: after changing `ic_launcher_foreground.xml`, run `java tools/RenderIosAppIcon.java`.
+The iPhone app isn't on the App Store. It's installed through Apple's TestFlight, from an Apple Developer account that builds and uploads it ([BUILD.md](docs/BUILD.md#signing-and-testflight) has the one-time setup). Once a build is uploaded:
 
-### Signing and TestFlight
+1. In App Store Connect, add yourself to an internal group under TestFlight › Internal Testing.
+2. Install the TestFlight app on the iPhone, and install Watches from it.
 
-Builds reach the iPhone through TestFlight. That needs a paid Apple Developer Program membership, but no Mac. Once:
+Later builds install over it and keep your data. Each TestFlight build stops opening 90 days after it was uploaded, so a new one is needed at least that often. Your data stays on the phone in the meantime.
 
-1. Enrol in the [Apple Developer Program](https://developer.apple.com/programs/) as an individual. Your Team ID is under Account › Membership details.
-2. In Certificates, Identifiers & Profiles › Identifiers, register an App ID with the explicit bundle ID `io.github.tunlezah.watches`. It needs no capabilities.
-3. Make a distribution certificate. On any computer with OpenSSL, using your own email address:
-   ```sh
-   openssl req -new -newkey rsa:2048 -nodes -keyout watches-distribution.key -out watches-distribution.csr -subj "/emailAddress=you@example.com/CN=Watches distribution"
-   ```
-   Upload the `.csr` under Certificates › + › Apple Distribution, and download the certificate. Then join the two into a `.p12`, choosing a password when asked. `-legacy` (OpenSSL 3) writes a `.p12` that macOS's keychain can read; leave it out on OpenSSL 1.1.
-   ```sh
-   openssl x509 -inform DER -in distribution.cer -out distribution.pem
-   openssl pkcs12 -export -legacy -inkey watches-distribution.key -in distribution.pem -out watches-distribution.p12
-   ```
-4. Under Profiles › + › App Store Connect (Distribution), make a profile for that App ID and certificate, and download it.
-5. In [App Store Connect](https://appstoreconnect.apple.com), create the app (Apps › +): iOS, the bundle ID above, and a name no other app uses, such as "Watches – Collection". The home screen still says "Watches".
-6. Under Users and Access › Integrations › App Store Connect API, make a team key with the App Manager role (the first time, the Account Holder requests API access there). Note its Key ID and the Issuer ID, and download the `.p8`, which can be downloaded only once.
-7. Add these repository secrets (Settings › Secrets and variables › Actions). Encode files with `base64 -i file` on a Mac, or `base64 -w0 file` on Linux.
+Everything works on iPhone, with a few rough edges still to smooth ([the plan](docs/IOS_PLAN.md) has them all):
+- **Stay in the app while a backup or restore runs.** iOS pauses an app soon after you leave it, which stops a long backup.
+- **The app switcher shows the app's contents**, even with the app lock on.
+- **Some wording is Android's**, such as "fingerprint or phone PIN".
 
-| Secret | Value |
-| --- | --- |
-| `APPLE_TEAM_ID` | Your Team ID |
-| `IOS_DIST_P12_BASE64` | `watches-distribution.p12`, base64-encoded |
-| `IOS_DIST_P12_PASSWORD` | The `.p12`'s password |
-| `IOS_PROFILE_BASE64` | The profile (`.mobileprovision`), base64-encoded |
-| `ASC_KEY_ID` | The API key's Key ID |
-| `ASC_ISSUER_ID` | The Issuer ID |
-| `ASC_KEY_P8_BASE64` | The `.p8`, base64-encoded |
+### Mac
 
-Keep the key, the `.p12` and the `.p8` somewhere private, such as a password manager. They're never committed.
-
-Then run Actions › iOS release › Run workflow, or push a `v*` tag. Once App Store Connect has processed the build (a few minutes), add yourself to an internal group under TestFlight › Internal Testing, install the TestFlight app on the iPhone, and install Watches from it. Later builds install over it and keep your data, as long as the bundle ID and team stay the same.
-
-Each TestFlight build stops opening 90 days after it was uploaded, so release at least that often. Your data stays on the phone in the meantime.
-
-### Privacy on iPhone
-
-- iOS asks for the camera when you first take a photo, for notifications when you first switch on a reminder, and for Face ID when you turn on the app lock. The photo picker needs no permission: it hands over only the photos you pick.
-- `iosApp/iosApp/PrivacyInfo.xcprivacy` declares that nothing is tracked or collected, and explains the system APIs Apple asks about. `tools/check-privacy-symbols.py` compares it with the built app in CI.
-- App data lives in the app's Application Support folder, which iCloud and computer backups skip: your backups are the files you save.
-
-## Mac
-
-The same app runs on a Mac: the shared Kotlin code, every screen included, in a small desktop shell (`desktopApp`) on Compose's desktop target. It needs an Apple silicon Mac on macOS 13 or later. The plan is [`docs/MACOS_PLAN.md`](docs/MACOS_PLAN.md); milestones mac-1 and mac-2 are built.
-
-What the Mac build does today:
-- The collection, search, Lookup, service history, box & papers, documents, and the three designs.
-- Photos: adding them from files, cropping, saving a Lookup picture, and photos as documents. The Mac handles a photo with the same image code as the iPhone (Apple's own decoders, HEIC included), which the app reaches through a small native library, the Mac bridge (`macBridge`).
-- Backup, restore and CSV export. A backup made on a phone restores on the Mac, and one made on the Mac restores on a phone.
-
-What it leaves out for now, and says so on the screen:
-- **Taking a photo with the camera.** Add photos from files instead.
-- **Reminders and the app lock.**
-- **PDF pages inside the app.** A PDF opens in Preview instead.
-- **Menus, shortcuts and Mac wording.** Screens still say "this phone".
-
-### Installing
-
-1. Download `Watches-<version>-<build>-not-notarised.dmg`. A tagged version has it on its GitHub release, beside the APK. Any other build has it on its run of the **macOS** workflow (Actions › macOS › the run › Artifacts), for 14 days.
+1. Download `Watches-<version>-<build>-not-notarised.dmg`.
 2. Open it and drag Watches to Applications.
-3. The build isn't notarised by Apple yet, so the first time macOS refuses to open it. Go to System Settings › Privacy & Security, find the message about Watches, and choose Open Anyway. That is needed once for each build.
+3. The build isn't notarised by Apple yet, so the first time, macOS refuses to open it. Go to System Settings › Privacy & Security, find the message about Watches, and choose **Open Anyway**. That's needed once for each new build.
 
-Where things are, and how updating works:
-- The collection is in `~/Library/Application Support/Watches/`.
-- To update, drag a newer Watches over the old one. The collection stays.
-- Dragging the app to the Bin leaves the collection where it is. Delete that folder to remove it.
-- Only one copy of the app runs at a time.
-- A build won't open a collection made by a newer build. It says so and changes nothing.
+<p align="center">
+  <img src="docs/screenshots/mac-collection-gallery-light.png" width="760" alt="Watches on a Mac: a navigation rail, the collection grid, and room for the chosen watch beside it, in Gallery, light">
+</p>
 
-### Building and testing
+The Mac app is a preview. It has the collection, search, Lookup, service history, box & papers, documents, photos from files, backups and the three designs. For now it leaves out, and says so on screen:
+- **taking a photo with the camera**: add photos from files instead;
+- **reminders and the app lock**;
+- **reading PDFs inside the app**: they open in Preview;
+- **menus, shortcuts and Mac wording**: some screens still say "this phone".
 
-The desktop target also runs on Linux and Windows, which is how CI tests the Mac app without a Mac:
+Your collection is kept in `~/Library/Application Support/Watches/`. Dragging the app to the Bin leaves it there; delete that folder to remove it too. Only one copy of the app runs at a time.
 
-```sh
-./gradlew :desktopApp:run                              # the app, on this computer
-WATCHES_DATA_DIR=/tmp/try ./gradlew :desktopApp:run    # the same, with its collection in another folder
-./gradlew :desktopApp:test                             # wiring, the shell's rules, the self-test, and screenshots
-./gradlew :desktopApp:createDistributable              # the app with its own Java runtime, for this computer
-./gradlew :desktopApp:packageDmg                       # the Mac disk image (on a Mac only)
-./gradlew :macBridge:linkReleaseSharedMacosArm64       # the Mac bridge on its own (on a Mac only)
-```
+### Home server
 
-Photos need the Mac bridge, which only a Mac can build, and which the disk image carries. `:desktopApp:run` and a build on Linux have plain-Java image code instead. On Linux it reads HEIC and WebP through the system's libheif and libwebp where they're installed, as in the server image, and then takes photos in. Without them it shows photos but doesn't take new ones in, and says so. `WATCHES_SYSTEM_IMAGE_LIBS=off` checks that case on a machine that has them. To run the shared tests on a Mac through the bridge, as the macOS workflow does, give them the library: `WATCHES_BRIDGE=$PWD/macBridge/build/bin/macosArm64/releaseShared/libwatchesbridge.dylib ./gradlew :shared:data:jvmTest`.
+Watches can also run on a home server, such as a TrueNAS box, and be used from any browser on your home network. It's the Mac app's Linux build in a container that shows its window in a web page, behind a login. A laptop's browser gets the wide layout and a phone's the phone layout. It's a 220 MB download and uses about 300 MB of memory.
 
-- **Screenshots.** `:desktopApp:test` draws the app in every design, light and dark, at three window widths, into `desktopApp/build/outputs/screenshots`. It needs no display.
-- **Self-test.** `Watches --self-test [folder]` checks a build without opening a window: it starts the app's wiring in a temporary folder, makes sample watches, backs them up and restores the backup, exports a CSV and draws a frame. CI runs it inside the packaged app, because the bundled Java runtime is trimmed to the modules the app needs, and a missing one shows only when the app runs.
-- **Icon.** `java tools/RenderIosAppIcon.java` also writes `desktopApp/icons/Watches.icns`.
+[SELF_HOSTING.md](docs/SELF_HOSTING.md) has the steps for TrueNAS, using [`docker/compose.yaml`](docker/compose.yaml). In short: make the datasets, install the app from the compose file with your own password, and open `https://<your-server>:5800`.
 
-Two workflows cover it:
-- **Android**, on Linux and on every push, compiles the Mac app, runs its tests, keeps the screenshots, packages it and runs the packaged app's self-test.
-- **macOS** builds the disk image on an Apple silicon runner, runs the self-test inside it, and checks the bundle's identity and signature. It runs when the Mac shell or the build changes, on `v*` tags, and on demand. On a tag it adds the disk image to the GitHub release.
+Photos and documents reach the server through the page's file manager or an SMB share, into its import folder. iPhone photos (HEIC) and WebP are read, and the location is removed, as on the phones. As on the Mac, it leaves out the camera, reminders, the app lock (the page's login stands in for it) and PDF pages in the app. Keep it on your home network, and reach it from outside through a VPN rather than an open port.
 
-## Home server (TrueNAS)
+## Backups and moving between devices
 
-The Mac app's Linux build also runs on a home server and is used from a browser: [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) has the steps for TrueNAS. It is a container (`docker/`) that shows the app's window in a web page, behind a login. A phone's browser gets the phone layout, and a laptop's the wide one. Backups made on it restore on the phones and the Mac, and theirs restore on it. It's a 220 MB download and uses about 300 MB of memory.
+**Back up regularly.** Settings › Backup & restore › Back up now saves one `.zip` file with everything in it. Settings shows when you last backed up.
 
-- **Photos** in HEIC and WebP come from the system's libheif and libwebp, which the image carries, through the same shared photo rules and conformance suite as every other platform.
-- **Not there yet**, as on the Mac: the camera, reminders and the app lock (the page's login stands in for it), and PDF pages in the app.
-- **CI** (the Android workflow) builds the image from the Linux package, checks every library it loads is present, runs the self-test inside it and starts it. Pushes to the default branch publish `ghcr.io/tunlezah/watches:latest`, and `v*` tags the version.
+**To restore**, open Settings › Backup & restore, choose the file, and pick one of:
+- **Replace**: the backup becomes your collection, and your settings come with it. Use this to move to a new device, or to go back to an earlier backup.
+- **Merge**: the backup is added to what's there. Each watch in both is matched up, and the most recently edited version wins. Afterwards you get a list of every watch that differed.
 
-```sh
-./gradlew :desktopApp:createDistributable
-docker build -f docker/Dockerfile --build-arg VERSION=0.9.0 -t watches .
-docker run --rm --entrypoint /opt/watches/bin/Watches watches --self-test /tmp/self-test   # checks the image without a window
-```
+Merge never deletes. A watch you deleted on one device comes back if you merge in a backup that still has it. To carry a deletion across, use Replace.
 
-## Performance checks on the phone
+**Moving between Android, iPhone, Mac and the home server** works the same way: back up on one, and restore on the other. The simplest habit with more than one device is to edit on one, then back up there and restore everywhere else.
 
-Settings › Diagnostics shows cold-start, search and detail-open timings measured on the device against the brief's targets. It can also add 500 realistic sample watches, each with a generated photo, and remove them again afterwards.
+The app lock and the last-backup date belong to each device, and don't travel in a backup.
 
-## Designs
+### Updating
 
-There are three complete designs, chosen in Settings › Appearance, where each is shown as a live specimen in its own style:
-- **Atelier**, the catalogue: serif titles, warm graphite or ivory, a thick–thin masthead rule, catalogue numbers and accent dashes.
-- **Instrument**, the data sheet: expanded capitals, mono figures, a minute-track rule with a lume pip, dotted leaders and focus brackets.
-- **Gallery**, the white room: light type, soft lifted cards and pills, and a floating navigation bar.
+- **iPhone:** TestFlight installs new builds over the old one.
+- **Mac:** drag a newer Watches over the old one in Applications. Your collection stays. A build won't open a collection made by a newer build: it says so and changes nothing.
+- **Home server:** take a TrueNAS snapshot, then change the image's tag (or pull a newer `latest`). [SELF_HOSTING.md](docs/SELF_HOSTING.md#updating) explains going back.
+- **Android:** builds signed with the same key install over the top and keep your data. A build signed with a different key won't install over the app. Then: back up (Settings › Backup & restore), uninstall Watches, install the new APK, and restore your backup with Replace. The [release notes](https://github.com/tunlezah/Watches/releases) say when that's needed. To make every build install over the top, set up a signing key of your own: see [BUILD.md](docs/BUILD.md#optional-your-own-key-so-updates-install-over-the-top).
 
-Each design suggests four of the seven accents, with its house colour first. The full brief is in [`docs/DESIGN.md`](docs/DESIGN.md).
+## Questions
 
-In code, each design is one `DirectionStyle` plus a type scale and palette (`shared/ui/.../theme`), and components only read those tokens. `DesignContrastTest` checks every design, mode and accent against the contrast rules.
+**Does it need the internet?**
+No. Everything works offline except Lookup. Without a connection, Lookup says so and sends nothing.
 
-## How Lookup behaves
+**Where are my photos and documents?**
+Inside the app's own storage on the device, not in your photo library. A backup file carries all of them.
 
-- **Sources:** Wikidata and Wikipedia (identity and history), Ranfft DB (calibres, with the owner's permission) and Grail Watch Reference (movements). WatchBase has a connection test only until its pages can be checked. Details and terms are in [`docs/SOURCES.md`](docs/SOURCES.md).
-- **Politeness:** every request goes through `PoliteHttpClient` in `shared/search`.
-  - Honest User-Agent (`WatchCollection/1.0 (+https://github.com/tunlezah)`), and no cookies. The contact link is the owner's GitHub profile, which stays public even though the repository may not.
-  - At least 1 second between requests to the same host, and a 10 s timeout.
-  - `robots.txt` is checked first and cached for a day. Wikimedia's API endpoints follow its API policy instead, and are marked "(API)" in the log.
-  - `Retry-After` is honoured. A bot-protection page is reported, never bypassed.
-- **Your values win:** in the review screen, any value you typed or edited starts unticked. A lookup replaces it only if you tick it. Applied values record their source, page and fetch date. Changing one later marks it "Edited".
-- **Pictures:** pictures from Ranfft and Grail are shown, never saved. Freely licensed Wikimedia Commons pictures can be saved to a watch with their credit. They never become the cover unless you choose it.
+**Can I try it with sample watches?**
+Yes. Settings › About Watches › Diagnostics adds 500 realistic sample watches, each with a generated photo, and removes them again afterwards. It also shows how fast the app opens, searches and opens a watch on your device.
 
-## Service, box & papers and documents
+**I'm moving from another app, or I keep a spreadsheet. Can I bring my collection?**
+The app has no spreadsheet import. Instead, a list of watches can be turned into a Watches backup file, which you then restore. [BACKUP_IMPORT_SPEC.md](docs/BACKUP_IMPORT_SPEC.md) explains exactly how, step by step, for a developer or an AI assistant to follow.
 
-- **When a service is due:** one interval after the last *full* service, or after the date acquired if none is logged. Other work (battery, regulation, a crystal) is recorded as the last service but doesn't move the due date. "Due soon" means within 90 days. The rules are in `CarePlan` (`shared/core/.../care`) and its tests.
-- **Reminders:** per watch, off by default. `ReminderSync` watches the collection and keeps one local notification per watch on hand (owned or at the watchmaker, not archived) at 9 am on the due date. Android uses WorkManager, initialised on demand rather than at launch. iOS uses `UNUserNotificationCenter`. Only future times are scheduled, so an overdue watch isn't re-announced on every launch. The Service tab lists it instead. On Android a job that is due but held back by Doze is left to run. On iOS the app delegate installs the notification delegate at launch, so a tap that launches the app still opens the right screen.
-- **Full set:** every checklist item is recorded, none is missing and at least one is present.
-- **Documents:** PDFs and images (JPEG, PNG, WebP, HEIC) up to 50 MB, identified by their content rather than their name. HEIC is converted to JPEG when stored. They are stored in app-private storage under `documents/<watchId>/`. Location data is stripped from images. A document can belong to a service entry, and when that entry is deleted you choose whether its documents go too.
-- **Manuals and quick start guides** are document kinds of their own. They are shown first on the watch, can be reused from another watch, and are copied when a watch is duplicated.
-- **Viewer and sharing:** PDFs render on the phone, with `PdfRenderer` on Android and PDFKit on iOS. Share hands one file to the system share sheet. On Android it goes through a `FileProvider` limited to the documents folder.
+**Is there a Windows version?**
+Not yet. There's a [plan](docs/WINDOWS_PLAN.md) for one.
 
-## Adding a spec source
+## More
 
-1. Check the site's terms and `robots.txt`. Record the result in `docs/SOURCES.md`, and skip any site that forbids automated access.
-2. Implement `SpecSource` in `shared/search/.../sources`. Use one search request and one detail request per lookup, always through `PoliteHttpClient`. Keep parsing in pure `parseSearch`/`parseDetail` functions.
-3. Map every value to a key from `SpecFields` (core), converting units with `UnitParser` and words with `Vocabulary`. Anything without a field goes in `extras`.
-4. Save trimmed fixtures under `shared/search/src/commonTest/fixtures/<source>/` (see the README there) and add a parser test. Parser tests run on the JVM and on the iOS simulator.
-5. Add the source to `searchModule`. Its switch appears in Settings automatically.
-
-## Backup, restore and export
-
-Settings › Backup & restore.
-- **Back up now** writes one ZIP through the system save dialog. The manifest comes first, then `collection.json` (every table, keys = column names), then every photo, document and saved source page. The full format is in [`docs/ARCHIVE_FORMAT.md`](docs/ARCHIVE_FORMAT.md). The code is in `shared/data/.../backup`: a streaming ZIP64 writer and reader written for this app, with no extra library.
-- **Restoring** checks every file's SHA-256 before the database changes, and commits in one transaction.
-  - Incoming files are written beside existing ones. After the commit, only the files the restore itself stopped using are removed (worked out inside the transaction), so a photo being added at the same time is never touched.
-  - A journal undoes an interrupted restore at the next launch, or finishes one that was saved but not tidied up (search index, photo renditions).
-  - **Replace** swaps the collection and settings. **Merge** matches on IDs, never deletes, lets the more recently edited side win each watch, and reports every watch that differed.
-- **CSV export** gives one row per watch with every registry field. It's UTF-8 with a BOM, quoted per RFC 4180, with formula-like text neutralised.
-- **Device-only settings** (`device.*`: the app lock and the last-backup date) never travel in a backup.
-- **Long jobs** run in an app-wide coordinator (`ui/backup/BackupCoordinator.kt`), so leaving the screen doesn't stop them.
-
-## App lock
-
-Settings › Privacy & security. It's optional and uses the phone's own unlock: Android's `BiometricPrompt` (strong biometrics or the device PIN), or LocalAuthentication on iOS.
-- The app locks at launch, and again after a chosen delay in the background. Time spent in the unlock prompt doesn't count.
-- Turning it on requires one successful unlock.
-- The lock screen is a full-screen window of its own, above any open dialog or sheet, and takes the back gesture.
-- If the phone's own screen lock is removed, the app lock pauses instead of locking its owner out, and resumes once one is set up again.
-- On Android 13+ the app switcher shows a blank card while the lock is on.
-
-The rules are in `ui/security/AppLock.kt`, and `AppLockTest` covers them.
+| | |
+| --- | --- |
+| [CHANGELOG.md](CHANGELOG.md) | What changed in each version |
+| [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) | Running Watches on a home server, such as TrueNAS |
+| [docs/BUILD.md](docs/BUILD.md) | Building from source, tests, signing, releasing and CI |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the app works inside: modules, Lookup, photos, backups, the app lock |
+| [docs/DESIGN.md](docs/DESIGN.md) | The three designs in detail |
+| [docs/SOURCES.md](docs/SOURCES.md) | Lookup's sources, their terms and what each covers |
+| [docs/ARCHIVE_FORMAT.md](docs/ARCHIVE_FORMAT.md) | The backup file's format |
+| [docs/PLAN.md](docs/PLAN.md), [IOS_PLAN.md](docs/IOS_PLAN.md), [MACOS_PLAN.md](docs/MACOS_PLAN.md), [SELF_HOSTING_PLAN.md](docs/SELF_HOSTING_PLAN.md), [WINDOWS_PLAN.md](docs/WINDOWS_PLAN.md) | Plans and decisions, for each platform |

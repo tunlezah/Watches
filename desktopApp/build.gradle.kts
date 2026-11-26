@@ -93,8 +93,12 @@ dependencies {
 tasks.withType<Test>().configureEach {
     // No display in CI: the tests draw off-screen.
     systemProperty("java.awt.headless", "true")
-    // Screens drawn by DesktopScreenshotTest, kept by CI for review like the Android ones.
-    systemProperty("watches.screenshots", layout.buildDirectory.dir("outputs/screenshots").get().asFile.absolutePath)
+    // Screens drawn by DesktopScreenshotTest, kept by CI for review like the Android ones. Declared as
+    // an output, so a test run the build cache restores, when nothing it depends on has changed, brings
+    // the screenshots back too.
+    val screenshots = layout.buildDirectory.dir("outputs/screenshots")
+    systemProperty("watches.screenshots", screenshots.get().asFile.absolutePath)
+    outputs.dir(screenshots).withPropertyName("screenshots")
     testLogging { events("failed", "skipped") }
 }
 

@@ -698,7 +698,7 @@ Touch ID and the password fallback, a reminder arriving with the app closed, Air
 ### 10.1 Accounts (you, once)
 
 1. The Apple Developer Program membership from iPhone plan D1.
-2. A **Developer ID Application** certificate. It's made the way the README makes the iPhone's distribution certificate: a request from `openssl`, uploaded on Apple's developer website, then joined into a `.p12`. No Mac is needed. Only the account holder can create this kind.
+2. A **Developer ID Application** certificate. It's made the way docs/BUILD.md makes the iPhone's distribution certificate: a request from `openssl`, uploaded on Apple's developer website, then joined into a `.p12`. No Mac is needed. Only the account holder can create this kind.
 3. Two new repository secrets, `MAC_DEVELOPER_ID_P12_BASE64` and `MAC_DEVELOPER_ID_P12_PASSWORD`. Notarisation uses the App Store Connect API key the iPhone release already has (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`). **Verify** that key's role is enough for `notarytool`.
 
 **Without the certificate,** builds still work but aren't notarised. The first time you open each one, macOS refuses. You then allow it in System Settings › Privacy & Security › Open Anyway. That is fine for trying mac-1, and tedious as a habit.

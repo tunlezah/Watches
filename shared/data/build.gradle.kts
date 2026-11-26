@@ -130,7 +130,11 @@ tasks.withType<Test>().configureEach {
     inputs.property("watches.bridge", bridge ?: "")
     if (bridge != null) systemProperty("watches.bridge", bridge)
     inputs.property("watches.systemImageLibs", providers.environmentVariable("WATCHES_SYSTEM_IMAGE_LIBS").orElse(""))
-    // The photos LocationRemovalTest cleaned, which CI reads back with Pillow. Declared, so that a test
-    // run restored from the build cache brings them back too, rather than leaving the check nothing to read.
-    outputs.dir(layout.projectDirectory.dir("build/outputs/cleaned-photos")).optional()
+}
+
+// LocationRemovalTest keeps the photos it cleaned in build/outputs/cleaned-photos, and CI then reads
+// them back with another library (tools/photo_fixtures.py). Declared as an output, so a test run the
+// build cache restores, when nothing it depends on has changed, brings the photos back too.
+tasks.named<Test>("jvmTest") {
+    outputs.dir(layout.buildDirectory.dir("outputs/cleaned-photos")).withPropertyName("cleanedPhotos")
 }
