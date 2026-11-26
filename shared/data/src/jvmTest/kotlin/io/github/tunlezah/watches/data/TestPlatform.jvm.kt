@@ -6,6 +6,7 @@ import io.github.tunlezah.watches.data.db.configure
 import io.github.tunlezah.watches.data.files.ImageProcessor
 import io.github.tunlezah.watches.data.files.JvmImageProcessor
 import io.github.tunlezah.watches.data.files.MacBridge
+import io.github.tunlezah.watches.data.files.SystemImageLibraries
 import io.github.tunlezah.watches.data.photos.CodecImageProcessor
 import okio.Path
 import okio.Path.Companion.toOkioPath
@@ -21,7 +22,15 @@ actual fun openTestDatabase(file: Path): AppDatabase = Room.databaseBuilder<AppD
 
 // On a Mac that was given the bridge, these tests run against Apple's codec through it, exactly as the
 // Mac app does. A bridge that was named but can't be used fails them, rather than quietly falling back.
-actual fun testImageProcessor(): ImageProcessor = MacBridge.imageCodec()?.let(::CodecImageProcessor) ?: JvmImageProcessor()
+// On Linux the plain-Java codec takes HEIC and WebP from the system's libraries where they're installed,
+// as the server does; CI installs them and says they're required, so they can't go missing unnoticed.
+actual fun testImageProcessor(): ImageProcessor {
+    MacBridge.imageCodec()?.let { return CodecImageProcessor(it) }
+    if (SystemImageLibraries.required) {
+        check(SystemImageLibraries.heic != null && SystemImageLibraries.webp != null) { "The system's image libraries are required but didn't load: ${SystemImageLibraries.problems}" }
+    }
+    return JvmImageProcessor()
+}
 
 actual fun testJpeg(width: Int, height: Int, red: Int, green: Int, blue: Int): ByteArray {
     val img = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)

@@ -20,12 +20,16 @@ import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
 
 /**
- * The plain-Java codec, on the JDK's own image readers. It runs the shared tests on any machine,
- * and it is what the desktop app has until the Mac's own codec arrives (docs/MACOS_PLAN.md, 8.2.5).
- * It reads the formats the JDK does (JPEG, PNG, GIF, BMP, TIFF, but not WebP or HEIC) and decodes
- * the whole picture at once, which is why the Mac doesn't take photos in yet.
+ * The plain-Java codec, on the JDK's own image readers. It runs the shared tests on any machine.
+ * It reads the formats the JDK does (JPEG, PNG, GIF, BMP, TIFF), plus any [decoders] for the
+ * formats the JDK can't: on Linux, HEIC and WebP from the system's libheif and libwebp where they
+ * are installed ([SystemImageLibraries]). With those, it is the server's codec
+ * (docs/SELF_HOSTING_PLAN.md, srv-2). A Mac uses Apple's codec through the bridge instead.
+ *
+ * The JDK's readers decode a whole picture at once, which a server's memory allows. The system
+ * decoders average the picture down while they copy it out, when it is far larger than needed.
  */
-class JvmImageCodec : ImageCodec {
+class JvmImageCodec(private val decoders: List<PictureDecoder> = SystemImageLibraries.decoders) : ImageCodec {
 
     override val formats: Set<PhotoFormat> by lazy {
         val names = ImageIO.getReaderFormatNames().map { it.lowercase() }.toSet()
@@ -35,18 +39,28 @@ class JvmImageCodec : ImageCodec {
             if ("gif" in names) add(PhotoFormat.GIF)
             if ("bmp" in names) add(PhotoFormat.BMP)
             if ("tiff" in names || "tif" in names) add(PhotoFormat.TIFF)
+            decoders.forEach { add(it.format) }
         }
     }
 
+    /** The decoder for the format [head] starts, when one of [decoders] reads it; null for the JDK's own. */
+    private fun decoderFor(head: ByteArray): PictureDecoder? = PhotoFormat.detect(head)?.let { format -> decoders.firstOrNull { it.format == format } }
+
     override suspend fun probe(file: Path): ImageInfo = withContext(Dispatchers.IO) {
-        val stream = ImageIO.createImageInputStream(File(file.toString())) ?: error("Not a readable image")
+        val source = File(file.toString())
+        // The JDK has no metadata reader of its own, so the turning and the location come from the shared one.
+        val bytes = source.readBytes()
+        decoderFor(bytes)?.let { decoder ->
+            val (width, height) = decoder.size(source)
+            val orientation = if (decoder.turnsItself) Orientation.NORMAL else PhotoMetadata.orientation(bytes)
+            return@withContext ImageInfo(width, height, orientation, hasLocation = PhotoMetadata.hasLocation(bytes))
+        }
+        val stream = ImageIO.createImageInputStream(source) ?: error("Not a readable image")
         stream.use {
             val reader = ImageIO.getImageReaders(stream).asSequence().firstOrNull() ?: error("Not a readable image")
             try {
                 reader.input = stream
-                // The JDK's readers hand pixels over as stored, and the JDK has no metadata reader of its
-                // own, so the turning and the location both come from the shared one.
-                val bytes = File(file.toString()).readBytes()
+                // The JDK's readers hand pixels over as stored.
                 ImageInfo(reader.getWidth(0), reader.getHeight(0), PhotoMetadata.orientation(bytes), hasLocation = PhotoMetadata.hasLocation(bytes))
             } finally {
                 reader.dispose()
@@ -55,18 +69,26 @@ class JvmImageCodec : ImageCodec {
     }
 
     override suspend fun render(source: Path, plan: RenderPlan, quality: Int, dest: Path) = withContext(Dispatchers.Default) {
-        val image = ImageIO.read(File(source.toString())) ?: error("Not a readable image")
+        val file = File(source.toString())
         val stored = plan.storedRegion
-        val part = image.getSubimage(stored.left, stored.top, stored.width, stored.height)
+        // The size the stored part ends up, before it is turned upright.
+        val (endWidth, endHeight) = if (plan.orientation.swapsAxes) plan.outHeight to plan.outWidth else plan.outWidth to plan.outHeight
+        val head = file.inputStream().use { it.readNBytes(PhotoFormat.HEAD_BYTES) }
+        val part = decoderFor(head)
+            // Averaged down while copied out, to no smaller than needed, so a large photo never sits in memory at full size.
+            ?.decode(file, stored, step = maxOf(1, minOf(stored.width / endWidth, stored.height / endHeight)))
+            ?: (ImageIO.read(file) ?: error("Not a readable image")).getSubimage(stored.left, stored.top, stored.width, stored.height)
+        val reduced = halveTowards(part, endWidth, endHeight)
         val out = BufferedImage(plan.outWidth, plan.outHeight, BufferedImage.TYPE_INT_RGB)
         out.createGraphics().apply {
             // Transparent areas come out black, as on every platform.
             color = Color.BLACK
             fillRect(0, 0, plan.outWidth, plan.outHeight)
             setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
-            val place = AffineTransform.getScaleInstance(plan.outWidth.toDouble() / plan.region.width, plan.outHeight.toDouble() / plan.region.height)
-            place.concatenate(upright(plan.orientation, stored.width.toDouble(), stored.height.toDouble()))
-            drawImage(part, place, null)
+            val (uprightWidth, uprightHeight) = if (plan.orientation.swapsAxes) reduced.height to reduced.width else reduced.width to reduced.height
+            val place = AffineTransform.getScaleInstance(plan.outWidth.toDouble() / uprightWidth, plan.outHeight.toDouble() / uprightHeight)
+            place.concatenate(upright(plan.orientation, reduced.width.toDouble(), reduced.height.toDouble()))
+            drawImage(reduced, place, null)
             dispose()
         }
         val writer = ImageIO.getImageWritersByFormatName("jpg").next()
@@ -79,6 +101,26 @@ class JvmImageCodec : ImageCodec {
             writer.write(null, IIOImage(out, null, null), params)
             writer.dispose()
         }
+    }
+
+    /**
+     * Halves [image] for as long as it stays at least twice [width] by [height]. Each halving
+     * averages two by two pixels, so a photo shrunk a long way, such as to a thumbnail, keeps its
+     * fine detail smooth where one large bilinear step would skip most of the pixels.
+     */
+    private fun halveTowards(image: BufferedImage, width: Int, height: Int): BufferedImage {
+        var current = image
+        while (current.width >= 2 * width && current.height >= 2 * height) {
+            val type = if (current.colorModel.hasAlpha()) BufferedImage.TYPE_INT_ARGB else BufferedImage.TYPE_INT_RGB
+            val half = BufferedImage(current.width / 2, current.height / 2, type)
+            half.createGraphics().apply {
+                setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+                drawImage(current, 0, 0, half.width, half.height, null)
+                dispose()
+            }
+            current = half
+        }
+        return current
     }
 
     /** Takes a point of the stored part, [w] wide and [h] high, to where it belongs in the upright part. */
@@ -94,5 +136,8 @@ class JvmImageCodec : ImageCodec {
     }
 }
 
-/** The shared photo rules on the plain-Java codec: what the tests and, for now, the desktop app use. */
+/**
+ * The shared photo rules on the plain-Java codec: what the tests use, and the desktop app wherever
+ * there is no Mac bridge. With the system's HEIC decoder (the server image), that app takes photos in.
+ */
 class JvmImageProcessor : CodecImageProcessor(JvmImageCodec())

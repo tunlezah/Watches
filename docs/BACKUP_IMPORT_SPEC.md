@@ -4,7 +4,7 @@
 
 **What it covers:** exactly what a backup file is, how the app reads and restores one, every field it holds, the allowed values, what breaks a restore, and a step-by-step recipe with a worked example.
 
-**It applies to:** backup format version 1, database schema version 1, Watches app 0.8.0 (the version in `version.xcconfig`). The rules come from the app's own code, which is listed in §21. Where this file and `docs/ARCHIVE_FORMAT.md` overlap they agree; this file goes further, for people making a backup by hand.
+**It applies to:** backup format version 1, database schema version 1, Watches app 0.8.0 and 0.9.0 (the version in `version.xcconfig`; 0.9.0 added the home server and changed nothing this file covers). The rules come from the app's own code, which is listed in §21. Where this file and `docs/ARCHIVE_FORMAT.md` overlap they agree; this file goes further, for people making a backup by hand.
 
 **Verified, not guessed:** every case in §13 was checked by building a hand-made backup and restoring it with the app's own restore code (the shared Kotlin code that every platform runs). The example in §16, packaged with the code in §15, restores without a warning. "(✅ §13)" elsewhere points to one of those checks.
 

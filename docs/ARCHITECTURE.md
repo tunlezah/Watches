@@ -11,6 +11,7 @@ The code's layout, and the rules each feature follows. For what the app does, se
 - [Backup, restore and export](#backup-restore-and-export)
 - [App lock](#app-lock)
 - [The Mac shell](#the-mac-shell)
+- [The home server](#the-home-server)
 - [Performance](#performance)
 - [Tests](#tests)
 - [Other documents](#other-documents)
@@ -29,6 +30,7 @@ Watches is Kotlin Multiplatform with Compose Multiplatform. Nearly all the code 
 | `iosApp` | SwiftUI shell, generated with XcodeGen, with its app-hosted and UI tests. |
 | `desktopApp` | Mac shell on Compose's desktop target: one window, packaging, the self-test, desktop tests and screenshots. |
 | `macBridge` | The Mac bridge: the iPhone's image code (`shared/data`'s `appleMain`) built as a small native library, which the Mac app loads because Java can't call the Mac's own frameworks. |
+| `docker` | The home server image: the desktop app's Linux build in a container that shows it in a web page, and a compose file for TrueNAS. |
 
 The shared modules also have a JVM target. It runs the fast shared tests, and it is what the Mac app runs on.
 
@@ -82,13 +84,13 @@ In code, each design is one `DirectionStyle` (layout and ornament), a `WatchTypo
 
 ## Photos
 
-One photo component serves Android, iPhone and Mac. The rules are shared code; each platform keeps only a decoder. The design is in [MACOS_PLAN.md](MACOS_PLAN.md), section 5.
+One photo component serves Android, iPhone, Mac and the home server. The rules are shared code; each platform keeps only a decoder. The design is in [MACOS_PLAN.md](MACOS_PLAN.md), section 5.
 
 - **One way in.** A watch's photos and a document's photos come in through the same steps (`PhotoIntake`). A picked photo is streamed into the app's files, not read into memory first.
 - **Location removed by shared code.** It finds the GPS data in a file's EXIF and XMP and overwrites it where it lies, in JPEG, PNG, WebP and HEIC. The file keeps its length, and the picture, the capture date and everything else are untouched. Then the platform's own reader is asked whether it still finds a location (Android's `ExifInterface`, Apple's ImageIO). If it does, or if the metadata can't be followed far enough to be sure, the app keeps a full-size JPEG made from the photo instead, which carries no metadata.
 - **Formats.** JPEG, PNG, WebP and HEIC are stored as they are, told apart by their bytes (`PhotoFormat`). TIFF, GIF, BMP or camera raw are stored as a full-size JPEG made from them, so a restored copy shows on every device. A format a device can't read is refused cleanly.
 - **Renditions.** Each photo has a display rendition (2560 px on its long edge) and a thumbnail (640 px). What a crop means in pixels is shared arithmetic (`RenderPlan`), so every platform cuts the same rectangle at the same size.
-- **Decoders.** Android uses its own decoders, with region decoding. The iPhone and the Mac share `AppleImageCodec` (ImageIO), which reads a photo's size and rotation without decoding it and decodes straight to the size needed. The Mac reaches it through the bridge. Where there's no bridge (Linux, and `:desktopApp:run`), plain-Java code stands in for tests and screenshots, and the app takes no new photos.
+- **Decoders.** Android uses its own decoders, with region decoding. The iPhone and the Mac share `AppleImageCodec` (ImageIO), which reads a photo's size and rotation without decoding it and decodes straight to the size needed. The Mac reaches it through the bridge. Where there's no bridge, the plain-Java codec (`JvmImageCodec`) stands in. On Linux it reads HEIC and WebP through the system's libheif and libwebp over JNA (`SystemImageLibraries`), as the home server image does: libheif applies a HEIC's own turning and crop, and both average a large photo down as it leaves the decoder. With them, the app takes photos in as the phones do; without them (and on a Mac run without the bridge, such as `:desktopApp:run`), it is for tests and screenshots, and takes no new photos.
 - **Photos already stored are checked once** after an update and after every restore: any location an older version left is removed, and a size recorded for a picture on its side is corrected.
 
 ## Service, box & papers and documents
@@ -138,6 +140,15 @@ The rules are in `ui/security/AppLock.kt`, and `AppLockTest` covers them.
 - Quitting during a backup or restore asks first. Stopping removes a half-written backup.
 - What the Mac leaves out for now (camera, reminders, app lock, PDF pages in the app, menus and Mac wording) is declared per platform in `PlatformLimits`, and each screen shows a sentence in place of the missing control.
 
+## The home server
+
+The same desktop app, built for Linux, in a container on jlesage's GUI base (`docker/`), which shows its one window in a web page behind a login. How to run it is in [SELF_HOSTING.md](SELF_HOSTING.md), and the decisions in [SELF_HOSTING_PLAN.md](SELF_HOSTING_PLAN.md).
+
+- The collection is in `/data`; backups go to `/backups`, and photos and documents arrive through `/import`. The file dialogs are GTK's, open where the backups are, and list Backups and Import.
+- The page resizes the app's screen to fit the browser, so a phone gets the phone layout. The window's minimum size applies on the Mac only, or it would push the app's edge off a phone's screen.
+- Photos come from the system's libheif and libwebp (above). The image carries them, and `WATCHES_SYSTEM_IMAGE_LIBS=required` makes the self-test fail if either doesn't load.
+- `PlatformLimits` says "this computer" rather than "this Mac" on Linux. The camera, reminders, the app lock and PDF pages are left out, as on the Mac.
+
 ## Performance
 
 The app is designed for 500+ watches with photos. The targets, for a Motorola Edge 60 Fusion (120 Hz), are a cold start to the collection under 1 second, a smooth grid, a search update under 100 ms and opening a watch under 150 ms. The approach (no work on the main thread before the first frame, pre-sized thumbnails, FTS search) is in [PLAN.md](PLAN.md), section 9.
@@ -158,6 +169,7 @@ How to run each is in [BUILD.md](BUILD.md).
 | Document | What it covers |
 | --- | --- |
 | [BUILD.md](BUILD.md) | Building, testing, signing, releasing, CI |
+| [SELF_HOSTING.md](SELF_HOSTING.md) | Running Watches on a home server |
 | [DESIGN.md](DESIGN.md) | The three designs |
 | [SOURCES.md](SOURCES.md) | Lookup sources: terms, `robots.txt`, what each covers |
 | [ARCHIVE_FORMAT.md](ARCHIVE_FORMAT.md) | The backup file format |
@@ -165,5 +177,6 @@ How to run each is in [BUILD.md](BUILD.md).
 | [PLAN.md](PLAN.md) | The original plan, decisions, stack and schema |
 | [IOS_PLAN.md](IOS_PLAN.md) | Finishing the iPhone app |
 | [MACOS_PLAN.md](MACOS_PLAN.md) | The Mac app, and the shared photo component |
+| [SELF_HOSTING_PLAN.md](SELF_HOSTING_PLAN.md) | The home server image |
 | [WINDOWS_PLAN.md](WINDOWS_PLAN.md) | A Windows app (plan only) |
 | [CHANGELOG.md](../CHANGELOG.md) | What changed in each version |

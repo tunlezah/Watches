@@ -1,0 +1,5 @@
+# The image needs only the packaged app, its own files and the icon; everything else stays out of the build context.
+*
+!desktopApp/build/compose/binaries/main/app/Watches
+!docker/rootfs
+!iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png

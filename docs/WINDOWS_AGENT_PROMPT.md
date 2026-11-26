@@ -182,6 +182,8 @@ Don't claim more than the runs showed. If something failed and you couldn't fix 
 
 Status: **plan only** (25 Nov 2026). Nothing is built. Written against `7effdc1` (0.8.0, with Mac milestones mac-1 and mac-2 built).
 
+**Since this was written:** 0.9.0 (milestones srv-1 and srv-2, [SELF_HOSTING_PLAN.md](SELF_HOSTING_PLAN.md)) took the version planned for win-1, and built part of section 4 for Linux. `shared/data`'s `jvmMain` has `SystemImageLibraries`, which reads HEIC and WebP through the system's libheif and libwebp over JNA, on Linux only, and `JvmImageCodec` takes its decoders, averaging a large photo down as it leaves the decoder. It is switched by `WATCHES_SYSTEM_IMAGE_LIBS` (`required`, `off`, or unset), not the `WATCHES_HEIF` and `watches.heif` named here, and the Android workflow already installs Ubuntu's libheif, its HEVC plugin and libwebp, and runs the photo suite with them required and again without them. Items 7.1.4, 7.1.5 and 7.1.12 build on that code rather than beside it, and win-1 and win-2 take the next two versions after 0.9.0, as the brief ([WINDOWS_AGENT_PROMPT.md](WINDOWS_AGENT_PROMPT.md), section 1) says.
+
 **Decided so far** (section 6): the PC is Windows 11 on an Intel or AMD processor. The first hand-off covers two milestones, win-1 and win-2. iPhone photos (HEIC) are read by a bundled libheif, built from source in CI. The Windows-like work is shared code and is built for the Mac in the same change. A coding agent in a cloud session does the work, with GitHub's Windows runner as its only Windows machine.
 
 **What was checked for the plan**

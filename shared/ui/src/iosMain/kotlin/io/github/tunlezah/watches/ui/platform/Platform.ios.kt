@@ -13,3 +13,6 @@ actual fun encodeJpeg(bitmap: ImageBitmap, quality: Int): ByteArray =
 actual fun systemAnimationsEnabled(): Boolean = !UIAccessibilityIsReduceMotionEnabled()
 
 actual fun processUptimeMillis(): Long? = null
+
+// The system's photo picker (PHPicker).
+actual val photosArePickedAsFiles: Boolean = false

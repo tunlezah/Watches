@@ -1,6 +1,6 @@
 # Building, testing and releasing
 
-How to build Watches from source, run its tests, and publish a release for Android, iPhone and Mac. To use the app, see the [README](../README.md). For how the code is organised and how each feature works inside, see [ARCHITECTURE.md](ARCHITECTURE.md).
+How to build Watches from source, run its tests, and publish a release for Android, iPhone and Mac, and the home server image. To use the app, see the [README](../README.md). For how the code is organised and how each feature works inside, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - [Requirements](#requirements)
 - [What builds where](#what-builds-where)
@@ -8,6 +8,7 @@ How to build Watches from source, run its tests, and publish a release for Andro
 - [Android](#android)
 - [iPhone](#iphone)
 - [Mac](#mac)
+- [Home server image](#home-server-image)
 - [Continuous integration](#continuous-integration)
 - [Versions](#versions)
 
@@ -15,6 +16,7 @@ How to build Watches from source, run its tests, and publish a release for Andro
 
 - **JDK 21.** Gradle itself comes with the wrapper (`./gradlew`).
 - **The Android SDK**, with compile SDK 37. Point Gradle at it with `ANDROID_HOME`, or with `sdk.dir` in a `local.properties` file at the root (it is ignored by git).
+- **For the home server image:** Docker. Build it with JDK 21 from Temurin, whose Java runtime carries its own image libraries.
 - **For the iPhone app and the Mac disk image:** a Mac with Xcode 26 and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`). The Mac bridge needs an Apple silicon Mac.
 
 ## What builds where
@@ -30,6 +32,7 @@ Everything except the iPhone app, the Mac disk image and the Mac bridge builds a
 | iPhone app (Xcode) | | ✅ |
 | Mac app: run, tests, screenshots, self-test | ✅ (with plain-Java image code) | ✅ |
 | Mac bridge and disk image | | ✅ (Apple silicon) |
+| Home server image | ✅ (Linux, with Docker) | |
 
 ## Commands at a glance
 
@@ -46,6 +49,7 @@ WATCHES_LIVE_TESTS=1 ./gradlew :shared:search:jvmTest --tests '*LiveSourcesTest*
 ./gradlew :desktopApp:run                                # the Mac app, on this computer
 ./gradlew :desktopApp:test                               # the Mac app's tests and screenshots
 ./gradlew :desktopApp:packageDmg                         # the Mac disk image (Mac only)
+docker build -f docker/Dockerfile --build-arg VERSION=0.9.0 -t watches .   # the home server image, after :desktopApp:createDistributable on Linux
 ```
 
 Everything the Android workflow checks, in one go:
@@ -242,7 +246,9 @@ WATCHES_DATA_DIR=/tmp/try ./gradlew :desktopApp:run    # the same, with its coll
 
 Photos on the Mac go through the iPhone's image code (Apple's own decoders, HEIC included), built as a small native library by the `macBridge` module, because Java can't call the Mac's own frameworks. Only a Mac can build it, and the disk image carries it.
 
-`:desktopApp:run` and any build on Linux use plain-Java image code instead: they show photos but don't take new ones in, and say so.
+`:desktopApp:run` and any build on Linux use plain-Java image code instead. On Linux it reads HEIC and WebP through the system's libheif and libwebp where they're installed (`SystemImageLibraries`), as in the home server image, and then takes photos in. Without them, and on a Mac without the bridge, it shows photos but doesn't take new ones in, and says so.
+
+`WATCHES_SYSTEM_IMAGE_LIBS` chooses how Linux uses those libraries: unset, where present; `required`, a library that doesn't load fails the tests and the self-test (the server image and the Android workflow set it); `off`, not at all, to check the fallback on a machine that has them. On Ubuntu they're `libheif1 libheif-plugin-libde265 libwebp7`.
 
 To run the shared tests on a Mac through the bridge, as the macOS workflow does, give them the library:
 
@@ -255,13 +261,25 @@ WATCHES_BRIDGE=$PWD/macBridge/build/bin/macosArm64/releaseShared/libwatchesbridg
 
 The disk image is signed ad hoc and not notarised, so macOS asks once per build before it opens it (README › [Mac](../README.md#mac)). Signing with a Developer ID and notarising is milestone mac-4 in the plan.
 
+## Home server image
+
+The Mac app's Linux build, in a container that shows its window in a web page ([SELF_HOSTING.md](SELF_HOSTING.md) has how to run it, and [SELF_HOSTING_PLAN.md](SELF_HOSTING_PLAN.md) the decisions). Everything for it is in `docker/`: the `Dockerfile`, on jlesage's GUI base, the start script and window rules in `rootfs/`, and the `compose.yaml` for TrueNAS.
+
+```sh
+./gradlew :desktopApp:createDistributable
+docker build -f docker/Dockerfile --build-arg VERSION=0.9.0 -t watches .
+docker run --rm --entrypoint /opt/watches/bin/Watches watches --self-test /tmp/self-test   # checks the image without a window
+```
+
+The build fails if a native library the app loads is missing from the image. The self-test makes a collection, adds a HEIC photo, backs it up and restores it, and draws a frame.
+
 ## Continuous integration
 
 Six GitHub Actions workflows. macOS minutes count ten times against a private repository's free allowance, so the workflows on macOS runners run only when their part of the code changes, on `v*` tags, and on demand. While the repository is public they cost nothing.
 
 | Workflow | Runs on | When | What it does |
 | --- | --- | --- | --- |
-| **Android** (`android.yml`) | Linux | Every push and pull request | Network isolation and iOS project checks; every shared test on the JVM; the Mac app's tests, screenshots, packaging and self-test; the shared code compiled for iOS and the Mac; Android screenshots; the signed release APK. An independent check (Pillow) that photos the tests cleaned carry no location. On a `v*` tag, publishes the GitHub release. |
+| **Android** (`android.yml`) | Linux | Every push and pull request | Network isolation and iOS project checks; every shared test on the JVM; the Mac app's tests, screenshots, packaging and self-test; the shared code compiled for iOS and the Mac; Android screenshots; the signed release APK. An independent check (Pillow) that photos the tests cleaned carry no location. The photo suite once more without the system's image libraries. The home server image: built from the Linux package, the self-test run inside it, and started; published to `ghcr.io/tunlezah/watches` as `latest` from the default branch and as the version from `v*` tags. On a `v*` tag, publishes the GitHub release. |
 | **iOS** (`ios.yml`) | macOS | iOS code, the build or the version changes; tags; on demand | Every module's shared tests on the iPhone simulator; builds the app and runs its own tests and UI tests; checks the privacy manifest against the binary; launches the app and saves a screenshot. About 16 minutes, or 26 after a dependency change or a week without runs. |
 | **iOS release** (`ios-release.yml`) | macOS | Tags; on demand | Archives a Release build and uploads it to TestFlight. Without the signing secrets, builds and checks an unsigned archive. |
 | **macOS** (`macos.yml`) | macOS (Apple silicon) | The Mac shell, the bridge, shared photo or data code, or the build changes; tags; on demand | The shared data tests natively on the Mac and again through the bridge; builds the bridge and the disk image; runs the self-test inside it; checks the bundle's identity, version and signature; makes the reference backup. On a tag, adds the disk image to the release. |
@@ -281,9 +299,11 @@ Artifacts each run keeps for 14 days:
 | `reference-archive` | macOS | A backup made with the Mac's image code |
 | `test-reports`, `ios-test-results`, `android-device-test-reports` | Each | Test reports, when something fails |
 
+`watches-linux-app`, the Linux package the Android workflow's container job builds the server image from, is kept for 3 days.
+
 ### Test outputs and the build cache
 
-The Gradle build cache is on (`gradle.properties`), and CI keeps it between runs. When a push changes nothing a test depends on (a docs-only change, say), Gradle restores the test task from the cache instead of running it. A test that writes files for a later CI step must declare that folder as an output of its task, or the restored task leaves it empty and the later step fails. `:shared:data:jvmTest` declares `build/outputs/cleaned-photos`, and `:desktopApp:test` declares `build/outputs/screenshots`. The Roborazzi plugin declares its own.
+The Gradle build cache is on (`gradle.properties`), and CI keeps it between runs. When a push changes nothing a test depends on (a docs-only change, say), Gradle restores the test task from the cache instead of running it. A test that writes files for a later CI step must declare that folder as an output of its task, or the restored task leaves it empty and the later step fails. `:shared:data:jvmTest` declares `build/outputs/cleaned-photos`, and `:desktopApp:test` declares `build/outputs/screenshots`. The Roborazzi plugin declares its own. In the other direction, an environment variable that changes what a test does must be declared as an input, or a result from one setting is reused for another: `:shared:data`'s test tasks declare `WATCHES_BRIDGE` and `WATCHES_SYSTEM_IMAGE_LIBS`.
 
 ## Versions
 

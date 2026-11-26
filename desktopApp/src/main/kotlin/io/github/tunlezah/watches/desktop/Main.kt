@@ -76,7 +76,7 @@ fun main(args: Array<String>) {
             val dark = isSystemInDarkTheme()
             SideEffect {
                 window.background = if (dark) Color(0x12, 0x11, 0x10) else Color(0xF5, 0xF1, 0xE8)
-                window.minimumSize = Dimension(420, 600)
+                window.minimumSize = minimumWindowSize()
             }
             // Screens keep their view models here for as long as the window lives.
             val owner = remember { WindowViewModels() }
@@ -86,6 +86,14 @@ fun main(args: Array<String>) {
     }
     instance.close()
 }
+
+/**
+ * A Mac window is kept from being dragged smaller than the narrowest layout. On the server
+ * (docs/SELF_HOSTING.md) the window fills a screen the browser sizes, a phone's included, upright
+ * or on its side: a minimum larger than that would push the app's edge off the screen.
+ */
+internal fun minimumWindowSize(os: String = System.getProperty("os.name").orEmpty()): Dimension =
+    if (os.startsWith("Mac")) Dimension(420, 600) else Dimension(300, 300)
 
 private class WindowViewModels : ViewModelStoreOwner {
     override val viewModelStore = ViewModelStore()

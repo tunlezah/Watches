@@ -17,6 +17,9 @@ actual fun systemAnimationsEnabled(): Boolean = true
 actual fun processUptimeMillis(): Long? =
     ProcessHandle.current().info().startInstant().map { System.currentTimeMillis() - it.toEpochMilli() }.orElse(null)
 
+// The Mac's open panel, or GTK's dialog on the server: FileKit's image type there means PNG, JPEG, GIF and BMP only.
+actual val photosArePickedAsFiles: Boolean = true
+
 /**
  * A desktop doesn't suspend a running app, but a Mac left alone goes to sleep. While this is shown,
  * macOS's own `caffeinate` holds idle sleep off. It is told to watch this process, so it can't outlive the app.

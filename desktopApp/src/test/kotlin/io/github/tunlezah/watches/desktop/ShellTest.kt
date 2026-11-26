@@ -31,6 +31,14 @@ class ShellTest {
         assertEquals(File("/tmp/try"), AppPaths.dataDir(os = "Mac OS X", home = "/Users/someone", env = { null }, override = "/tmp/try"))
     }
 
+    @Test fun theServersWindowFitsAPhonesScreenUprightOrOnItsSide() {
+        // An iPhone 13's browser is 390 by 664 upright, and 844 by 340 or so on its side.
+        val server = minimumWindowSize(os = "Linux")
+        assertTrue(server.width <= 340 && server.height <= 340, "$server")
+        // A Mac window stays no narrower than the narrowest layout.
+        assertEquals(java.awt.Dimension(420, 600), minimumWindowSize(os = "Mac OS X"))
+    }
+
     @Test fun aSecondCopyDoesNotGetTheCollection() {
         val dir = tempDir()
         val first = assertNotNull(SingleInstance.acquire(dir))

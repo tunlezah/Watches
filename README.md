@@ -1,6 +1,6 @@
 # Watches
 
-**A private catalogue for your watch collection.** Every watch, with its photos, full specifications, service history, box & papers and documents, kept on your own phone or Mac. No account, no cloud, no ads.
+**A private catalogue for your watch collection.** Every watch, with its photos, full specifications, service history, box & papers and documents, kept on your own phone, Mac or home server. No account, no cloud, no ads.
 
 <p align="center">
   <img src="docs/screenshots/collection-atelier-dark.png" width="250" alt="The collection as a grid of catalogue plates, in the Atelier design, dark">
@@ -10,7 +10,7 @@
 
 <p align="center"><sub>Screenshots show sample watches. A watch without a photo yet is drawn by the app.</sub></p>
 
-<p align="center">For <b>Android</b> and <b>iPhone</b>, with a preview for <b>Mac</b>.<br>
+<p align="center">For <b>Android</b> and <b>iPhone</b>, with previews for <b>Mac</b> and a <b>home server</b> you use from a browser.<br>
 <a href="#get-the-app">Get the app</a> · <a href="#what-it-does">What it does</a> · <a href="#private-by-design">Privacy</a> · <a href="#backups-and-moving-between-devices">Backups</a> · <a href="#questions">Questions</a></p>
 
 ## What it does
@@ -114,13 +114,13 @@ Lock Watches with your fingerprint, face or the phone's PIN, at launch and after
 
 ## Get the app
 
-| | Android | iPhone | Mac |
-| --- | --- | --- | --- |
-| **Status** | Complete | Works; iPhone polish to come | Preview |
-| **Needs** | Android 11 or newer | iOS 17 or newer, and TestFlight | Apple silicon, macOS 13 or newer |
-| **From** | The APK on the [Releases](https://github.com/tunlezah/Watches/releases) page | TestFlight | The disk image on the [Releases](https://github.com/tunlezah/Watches/releases) page |
+| | Android | iPhone | Mac | Home server |
+| --- | --- | --- | --- | --- |
+| **Status** | Complete | Works; iPhone polish to come | Preview | Preview |
+| **Needs** | Android 11 or newer | iOS 17 or newer, and TestFlight | Apple silicon, macOS 13 or newer | Docker on an x86-64 Linux server, such as TrueNAS SCALE 24.10 or newer |
+| **From** | The APK on the [Releases](https://github.com/tunlezah/Watches/releases) page | TestFlight | The disk image on the [Releases](https://github.com/tunlezah/Watches/releases) page | The image `ghcr.io/tunlezah/watches` |
 
-If the Releases page has no version yet (none has been published so far), the latest Android and Mac builds are on the repository's [Actions](https://github.com/tunlezah/Watches/actions) page: open the latest green run of the **Android** workflow (for the APK) or the **macOS** workflow (for the Mac), and download from its **Artifacts**. Builds are kept there for 14 days.
+If the Releases page has no version yet (none has been published so far), the latest Android and Mac builds are on the repository's [Actions](https://github.com/tunlezah/Watches/actions) page: open the latest green run of the **Android** workflow (for the APK) or the **macOS** workflow (for the Mac), and download from its **Artifacts**. Builds are kept there for 14 days. The home server's image isn't on either page: the server pulls it from GitHub's container registry, where every change to the main branch publishes it as `latest`, and each release as its version.
 
 ### Android
 
@@ -162,6 +162,14 @@ The Mac app is a preview. It has the collection, search, Lookup, service history
 
 Your collection is kept in `~/Library/Application Support/Watches/`. Dragging the app to the Bin leaves it there; delete that folder to remove it too. Only one copy of the app runs at a time.
 
+### Home server
+
+Watches can also run on a home server, such as a TrueNAS box, and be used from any browser on your home network. It's the Mac app's Linux build in a container that shows its window in a web page, behind a login. A laptop's browser gets the wide layout and a phone's the phone layout. It's a 220 MB download and uses about 300 MB of memory.
+
+[SELF_HOSTING.md](docs/SELF_HOSTING.md) has the steps for TrueNAS, using [`docker/compose.yaml`](docker/compose.yaml). In short: make the datasets, install the app from the compose file with your own password, and open `https://<your-server>:5800`.
+
+Photos and documents reach the server through the page's file manager or an SMB share, into its import folder. iPhone photos (HEIC) and WebP are read, and the location is removed, as on the phones. As on the Mac, it leaves out the camera, reminders, the app lock (the page's login stands in for it) and PDF pages in the app. Keep it on your home network, and reach it from outside through a VPN rather than an open port.
+
 ## Backups and moving between devices
 
 **Back up regularly.** Settings › Backup & restore › Back up now saves one `.zip` file with everything in it. Settings shows when you last backed up.
@@ -172,7 +180,7 @@ Your collection is kept in `~/Library/Application Support/Watches/`. Dragging th
 
 Merge never deletes. A watch you deleted on one device comes back if you merge in a backup that still has it. To carry a deletion across, use Replace.
 
-**Moving between Android, iPhone and Mac** works the same way: back up on one, and restore on the other. The simplest habit with more than one device is to edit on one, then back up there and restore everywhere else.
+**Moving between Android, iPhone, Mac and the home server** works the same way: back up on one, and restore on the other. The simplest habit with more than one device is to edit on one, then back up there and restore everywhere else.
 
 The app lock and the last-backup date belong to each device, and don't travel in a backup.
 
@@ -180,6 +188,7 @@ The app lock and the last-backup date belong to each device, and don't travel in
 
 - **iPhone:** TestFlight installs new builds over the old one.
 - **Mac:** drag a newer Watches over the old one in Applications. Your collection stays. A build won't open a collection made by a newer build: it says so and changes nothing.
+- **Home server:** take a TrueNAS snapshot, then change the image's tag (or pull a newer `latest`). [SELF_HOSTING.md](docs/SELF_HOSTING.md#updating) explains going back.
 - **Android:** builds signed with the same key install over the top and keep your data. A build signed with a different key won't install over the app. Then: back up (Settings › Backup & restore), uninstall Watches, install the new APK, and restore your backup with Replace. The [release notes](https://github.com/tunlezah/Watches/releases) say when that's needed. To make every build install over the top, set up a signing key of your own: see [BUILD.md](docs/BUILD.md#optional-your-own-key-so-updates-install-over-the-top).
 
 ## Questions
@@ -204,9 +213,10 @@ Not yet. There's a [plan](docs/WINDOWS_PLAN.md) for one.
 | | |
 | --- | --- |
 | [CHANGELOG.md](CHANGELOG.md) | What changed in each version |
+| [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) | Running Watches on a home server, such as TrueNAS |
 | [docs/BUILD.md](docs/BUILD.md) | Building from source, tests, signing, releasing and CI |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the app works inside: modules, Lookup, photos, backups, the app lock |
 | [docs/DESIGN.md](docs/DESIGN.md) | The three designs in detail |
 | [docs/SOURCES.md](docs/SOURCES.md) | Lookup's sources, their terms and what each covers |
 | [docs/ARCHIVE_FORMAT.md](docs/ARCHIVE_FORMAT.md) | The backup file's format |
-| [docs/PLAN.md](docs/PLAN.md), [IOS_PLAN.md](docs/IOS_PLAN.md), [MACOS_PLAN.md](docs/MACOS_PLAN.md), [WINDOWS_PLAN.md](docs/WINDOWS_PLAN.md) | Plans and decisions, for each platform |
+| [docs/PLAN.md](docs/PLAN.md), [IOS_PLAN.md](docs/IOS_PLAN.md), [MACOS_PLAN.md](docs/MACOS_PLAN.md), [SELF_HOSTING_PLAN.md](docs/SELF_HOSTING_PLAN.md), [WINDOWS_PLAN.md](docs/WINDOWS_PLAN.md) | Plans and decisions, for each platform |
