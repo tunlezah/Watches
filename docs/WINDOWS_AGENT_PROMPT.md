@@ -17,7 +17,7 @@ Not yours to build: the app lock, reminders, code signing, Windows on ARM, AVIF,
 
 ## 2. Before you write code
 
-1. Read `README.md`, `CHANGELOG.md` (the top two entries), `docs/MACOS_PLAN.md` (the status notes at the top, then sections 5, 6 and 8.3) and `docs/DESIGN.md`. The Mac plan is the specification for every shared item in win-2.
+1. Read `README.md`, `docs/BUILD.md`, `docs/ARCHITECTURE.md`, `CHANGELOG.md` (the top two entries), `docs/MACOS_PLAN.md` (the status notes at the top, then sections 5, 6 and 8.3) and `docs/DESIGN.md`. The Mac plan is the specification for every shared item in win-2.
 2. Read the desktop shell (`desktopApp/src/main`, all eight files), the `jvmMain` source sets of `shared/data`, `shared/search` and `shared/ui`, `shared/data/.../photos/ImageCodec.kt`, `RenderPlan.kt` and `PhotoConformanceTest.kt`, and the three workflows in `.github/workflows` that touch the desktop (`android.yml`, `macos.yml`, `photos.yml`).
 3. If `docs/WINDOWS_PLAN.md` is not in your checkout, create it from Part 2 of this brief, word for word, as your first commit ("Add the Windows app plan").
 4. Run `./gradlew :desktopApp:test` and see it pass before you change anything. That is your baseline.
@@ -62,7 +62,7 @@ These come from the project. Breaking one is a failed task even if CI is green.
 - Then carry straight on from win-1 to win-2. Don't wait for a review between them.
 - **Commits** are small and each leaves the build green. Follow the repository's style: a plain sentence as the subject ("Photos through libheif, on Windows and Linux"), then a body that says why and what was found. Look at `git log` first. Add whatever attribution lines your session's instructions ask for.
 - **Pull request descriptions** say what was built, what the Windows runner proved, what nobody has checked on a real PC, and any difference from the plan. Use the repository's pull request template if there is one.
-- **Docs** are part of each milestone, in the house style: plain English, short sentences, British spelling ("licence", "colour"), no marketing. Each milestone ends with a `CHANGELOG.md` entry, the plan's status line and "as built" notes, the README, and green CI.
+- **Docs** are part of each milestone, in the house style: plain English, short sentences, British spelling ("licence", "colour"), no marketing. Each milestone ends with a `CHANGELOG.md` entry, the plan's status line and "as built" notes, the README (for people using the app) and `docs/BUILD.md` (for building it), and green CI.
 
 ## 6. Milestone win-1, in order
 
@@ -141,7 +141,7 @@ In `android.yml` (Linux), install Ubuntu's libheif and its plugin and set `WATCH
 
 **Step 13: names a backup may not use (7.1.13).** In `ArchivePaths`, refuse a segment whose name before the first dot is `CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9` or `LPT1` to `LPT9`, in any case, and a segment that ends in a dot. Test it in `commonTest`, with a restore of a hand-made archive that carries one.
 
-**Step 14: finish win-1.** Set `version.xcconfig` to `0.9.0` and build `9`. Write the CHANGELOG entry, the README's Windows section (plan 7.1.14) and the plan's "win-1 as built" notes. Update the README's project layout table and `docs/ARCHIVE_FORMAT.md`'s list of platforms. Confirm every workflow is green on the final commit. Open pull request 1.
+**Step 14: finish win-1.** Set `version.xcconfig` to `0.9.0` and build `9`. Write the CHANGELOG entry, the README's Windows section and a Windows section in `docs/BUILD.md` (plan 7.1.14), and the plan's "win-1 as built" notes. Update the project layout table in `docs/ARCHITECTURE.md`, the README's platform table, and `docs/ARCHIVE_FORMAT.md`'s list of platforms. Confirm every workflow is green on the final commit. Open pull request 1.
 
 ## 7. Milestone win-2, in order
 
@@ -487,7 +487,7 @@ Sizes: **S** under half a day · **M** about a day · **L** two to three days.
 - The app never makes such a name. Only a hand-made archive could.
 
 **7.1.14 Docs** (S)
-- A Windows section in the README: installing, the SmartScreen step, Smart App Control, where the collection is, updating, removing.
+- A Windows section in the README: installing, the SmartScreen step, Smart App Control, where the collection is, updating, removing. Building, testing and the Windows workflow go in `docs/BUILD.md`.
 - CHANGELOG, and this plan's "as built".
 
 ### 7.2 Like a Windows app (milestone win-2)

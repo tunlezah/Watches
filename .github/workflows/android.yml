@@ -1,6 +1,6 @@
 name: Android
 
-# Checks, tests and a signed release APK on every push. Without the signing secrets (README › Release
+# Checks, tests and a signed release APK on every push. Without the signing secrets (docs/BUILD.md › Release
 # APK and signing) it's signed with the run's throwaway debug key: it installs, but not over an
 # earlier build. On a v* tag the APK is also published as a GitHub release.
 #
